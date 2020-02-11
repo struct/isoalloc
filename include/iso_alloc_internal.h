@@ -159,8 +159,8 @@ uint32_t g_page_size;
 /* isoalloc makes a number of default zones for common
  * allocation sizes. Anything above these sizes will
  * be created and initialized on demand */
-static uint32_t default_zones[] = {ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
-                                   ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
+static uint32_t default_zones[] = { ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
+                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192 };
 
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
@@ -170,7 +170,11 @@ static uint32_t default_zones[] = {ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_51
  * which security mitigations should be applied to
  * all allocations within the zone */
 typedef struct {
-    uint8_t random_allocation_pattern;
+    bool random_allocation_pattern;
+    bool adjacent_cookie_verification_on_alloc;
+    bool adjacent_cookie_verification_on_free;
+    bool clear_chunk_on_free;
+    bool double_free_detection;
 } iso_alloc_zone_configuration;
 
 typedef struct {
