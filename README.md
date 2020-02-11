@@ -1,4 +1,4 @@
-![](/iso_alloc_logo.png?raw=true)
+![](/misc/iso_alloc_logo.png?raw=true)
 
 # Isolation Alloc
 
