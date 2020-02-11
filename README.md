@@ -2,7 +2,7 @@
 
 # Isolation Alloc
 
-IsoAlloc is a memory allocator written in C. It's security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation strategy is best summed as keeping objects of different sizes or types separate from one another. The space afforded by a 64bit process makes this possible, therefore isoalloc does not support a 32 bit target.
+Isolation Alloc is a secure and fast(ish) memory allocator written in C. It's security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed as keeping objects of different sizes or types separate from one another. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets.
 
 ## Design
 
