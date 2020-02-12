@@ -37,13 +37,12 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int64_t bit_position;
     int32_t was_used = 0;
-    was_used -= zone->canary_count;
 
     for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
         for(size_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
             int32_t bit = GET_BIT(bm[i], j);
 
-            if((GET_BIT(bm[i], (j + 1))) == 1) {
+            if((GET_BIT(bm[i], j)) == 0 && (GET_BIT(bm[i], (j + 1))) == 1) {
                 was_used++;
             }
 
@@ -57,7 +56,6 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
                 if(check_canary_no_abort(zone, leak) == ERR) {
                     total_leaks++;
-                    was_used--;
                     LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, i, leak, bit_position);
                 }
             }

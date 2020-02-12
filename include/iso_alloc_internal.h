@@ -1,7 +1,10 @@
 /* iso_alloc_internal.h - A secure memory allocator
  * Copyright 2020 - chris.rohlf@gmail.com */
 
+#ifndef CPP_SUPPORT
 #define _GNU_SOURCE
+#endif
+
 #include <errno.h>
 #include <limits.h>
 #include <stdbool.h>

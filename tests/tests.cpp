@@ -1,4 +1,4 @@
-/* iso_alloc tests.c
+/* iso_alloc tests.cpp
  * Copyright 2020 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"
@@ -19,18 +19,12 @@ int allocate(size_t array_size, size_t allocation_size) {
         if(allocation_size == 0) {
             allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
         }
-#if USE_MALLOC
-        p[i] = malloc(allocation_size);
-#else
-        p[i] = iso_alloc(allocation_size);
-#endif
+
+        p[i] = new uint8_t[allocation_size];
+
         /* Randomly free some allocations */
         if((rand() % 5) > 1) {
-#if USE_MALLOC
-            free(p[i]);
-#else
-            iso_free(p[i]);
-#endif
+            delete[] (uint8_t *) p[i];
             p[i] = NULL;
         }
     }
@@ -38,11 +32,7 @@ int allocate(size_t array_size, size_t allocation_size) {
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
         if(p[i] != NULL) {
-#if USE_MALLOC
-            free(p[i]);
-#else
-            iso_free(p[i]);
-#endif
+            delete[] (uint8_t *) p[i];
         }
     }
 
@@ -60,31 +50,7 @@ int main(int argc, char *argv[]) {
         allocate(array_sizes[i], 0);
     }
 
-#ifndef USE_MALLOC
-    void *p = iso_calloc(10, 2);
-
-    if(p == NULL) {
-        LOG_AND_ABORT("isocalloc failed")
-    }
-
-    iso_free(p);
-
-    p = iso_alloc(128);
-
-    if(p == NULL) {
-        LOG_AND_ABORT("isoalloc failed")
-    }
-
-    p = iso_realloc(p, 1024);
-
-    if(p == NULL) {
-        LOG_AND_ABORT("isorealloc failed")
-    }
-
-    iso_free(p);
-#endif
-
-    iso_verify_zones();
+    //iso_verify_zones();
 
     return 0;
 }
