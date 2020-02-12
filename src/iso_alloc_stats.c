@@ -5,6 +5,7 @@
 
 INTERNAL_HIDDEN int32_t _iso_alloc_detect_leaks() {
     int32_t total_leaks = 0;
+
     for(size_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
@@ -29,6 +30,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_detect_leaks() {
  * free'd by the time this destructor runs! */
 INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     int32_t total_leaks = 0;
+    total_leaks -= zone->canary_count;
 
 #if LEAK_DETECTOR
     if(zone == NULL) {
@@ -38,6 +40,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int64_t bit_position;
     int32_t was_used = 0;
+    was_used -= zone->canary_count;
 
     for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
         for(size_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
@@ -47,11 +50,18 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
                 was_used++;
             }
 
+            /* Theres no difference between a leaked and previously
+             * used chunk (11) and a canary chunk (11). So in order
+             * to accurately report on leaks we need to verify the
+             * canary value */
             if(bit != 0) {
-                total_leaks++;
                 bit_position = (i * BITS_PER_DWORD) + j;
                 void *leak = (zone->user_pages_start + ((bit_position / BITS_PER_CHUNK) * zone->chunk_size));
-                LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, i, leak, bit_position);
+                if(check_canary_no_abort(zone, leak) == ERR) {
+                    total_leaks++;
+                    was_used--;
+                    LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, i, leak, bit_position);
+                }
             }
         }
     }

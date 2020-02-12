@@ -13,6 +13,7 @@ typedef void iso_alloc_zone_handle;
 EXTERNAL_API void *iso_alloc(size_t size);
 EXTERNAL_API void *iso_calloc(size_t nmemb, size_t size);
 EXTERNAL_API void iso_free(void *p);
+EXTERNAL_API void iso_free_permanently(void *p);
 EXTERNAL_API void *iso_realloc(void *p, size_t size);
 EXTERNAL_API size_t iso_chunksz(void *p);
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(size_t size, iso_alloc_zone_handle *zone);

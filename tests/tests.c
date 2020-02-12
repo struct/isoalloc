@@ -4,10 +4,12 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
-uint32_t allocation_sizes[] = {ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
-                               ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
+uint32_t allocation_sizes[] = {ZONE_32, ZONE_64, ZONE_128,
+                               ZONE_256, ZONE_512, ZONE_1024,
+                               ZONE_2048, ZONE_4096, ZONE_8192};
 
-uint32_t array_sizes[] = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536};
+uint32_t array_sizes[] = {32, 64, 128, 256, 512, 1024,
+                          2048, 4096, 8192, 16384, 32768, 65536};
 
 int allocate(size_t array_size, size_t allocation_size) {
     void *p[array_size];
@@ -15,7 +17,9 @@ int allocate(size_t array_size, size_t allocation_size) {
 
     for(int i = 0; i < array_size; i++) {
         if(allocation_size == 0) {
-            allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
+            allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) /
+                                                sizeof(uint32_t))] +
+                              (rand() % 32);
         }
 #if USE_MALLOC
         p[i] = malloc(allocation_size);

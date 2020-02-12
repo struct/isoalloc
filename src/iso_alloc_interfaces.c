@@ -13,14 +13,18 @@ EXTERNAL_API void *iso_calloc(size_t nmemb, size_t size) {
 }
 
 EXTERNAL_API void iso_free(void *p) {
-    _iso_free(p);
+    _iso_free(p, false);
+    return;
+}
+
+EXTERNAL_API void iso_free_permanently(void *p) {
+    _iso_free(p, true);
     return;
 }
 
 EXTERNAL_API void *iso_realloc(void *p, size_t size) {
-
     if(p != NULL && size == 0) {
-        _iso_free(p);
+        _iso_free(p, false);
         return NULL;
     }
 
@@ -37,7 +41,7 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
     }
 
     memcpy(r, p, size);
-    _iso_free(p);
+    _iso_free(p, false);
     return r;
 }
 
@@ -108,7 +112,7 @@ EXTERNAL_API int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     return _iso_alloc_zone_leak_detector(zone);
 }
 
-/* Check for leaks in all zones 
+/* Check for leaks in all zones
  * Returns total count of leaks found */
 EXTERNAL_API int32_t iso_alloc_detect_leaks() {
     return _iso_alloc_detect_leaks();

@@ -3,6 +3,46 @@
 
 #include "iso_alloc_internal.h"
 
+/* Select a random number of chunks to be canaries. These
+ * can be verified anytime by calling check_canary()
+ * or check_canary_no_abort() */
+INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
+    /* Canary chunks are only for default zone sizes. This
+     * is because larger zones would waste a lot of memory
+     * if we set aside some of their chunks as canaries */
+    if(zone->chunk_size > MAX_DEFAULT_ZONE_SZ) {
+        return;
+    }
+
+    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int32_t max_bitmap_idx = zone->bitmap_size / sizeof(int32_t);
+    int64_t bit_slot = 0;
+
+    zone->canary_count = (rand() % 10);
+
+    /* This function is only ever called during zone
+     * initialization so we don't need to check the
+     * current state of any chunks, they're all free.
+     * It's possible the call to rand() above picked
+     * the same index twice, we can live with that
+     * collision as canary chunks only provide a small
+     * security property anyway */
+    for(int32_t i = 0; i < zone->canary_count; i++) {
+        int32_t bm_idx = ALIGN_SZ_DOWN((rand() % max_bitmap_idx));
+
+        if(0 > bm_idx) {
+            bm_idx = 0;
+        }
+
+        /* Set both bits as 1 */
+        SET_BIT(bm[bm_idx], 0);
+        SET_BIT(bm[bm_idx], 1);
+        bit_slot = (bm_idx * BITS_PER_DWORD);
+        void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
+        write_canary(zone, p);
+    }
+}
+
 /* Pick a random index in the bitmap and start looking
  * for free bit slots we can add to the cache. The random
  * bitmap index is to protect against biasing the free
@@ -272,8 +312,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_RANDOM);
 
     new_zone->index = _root->zones_used;
-    new_zone->canary_secret = rand() % 0xffffffffffffffff;
-    new_zone->pointer_mask = rand() % 0xffffffffffffffff;
+    new_zone->canary_secret = (rand() % 0xffffffffffffffff);
+    new_zone->pointer_mask = (rand() % 0xffffffffffffffff);
+
+    /* This should be the only place we call this function */
+    create_canary_chunks(new_zone);
 
     /* When we create a new zone its an opportunity to
      * populate our free list cache with random entries */
@@ -479,7 +522,7 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
     int32_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_DWORD);
     int64_t remainder = (free_bit_slot % BITS_PER_DWORD);
 
-    void *p = (void *) zone->user_pages_start + ((free_bit_slot / BITS_PER_CHUNK) * zone->chunk_size);
+    void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int32_t b = bm[dwords_to_bit_slot];
 
@@ -489,8 +532,16 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
     }
 
     if((GET_BIT(b, remainder)) != 0) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %zu Cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld",
-                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot);
+        LOG_AND_ABORT("Zone[%d] for chunk size %zu Cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, remainder was %ld",
+                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, remainder);
+    }
+
+    /* This chunk was previously allocated and free'd which
+     * means it must have a canary written in its first dword.
+     * Here we check the validity of that canary and abort
+     * if its been corrupted */
+    if((GET_BIT(b, (remainder + 1))) == 1) {
+        check_canary(zone, p);
     }
 
     SET_BIT(b, remainder);
@@ -537,12 +588,31 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
  * the start and end of their chunks. These cookies
  * are verified when adjacent chunks are allocated,
  * freed, or when the API requests validation */
-INTERNAL_HIDDEN INLINE void write_cookie(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = zone->canary_secret ^ (uint64_t) p;
     memcpy(p, &canary, 8);
 }
 
-INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p) {
+/* Verify the canary value in an allocation */
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
+    uint64_t c = (uint64_t) * (uint64_t *) p;
+
+    if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
+        LOG_AND_ABORT("Canary at chunk %p has been corrupted! %lx %lx", p, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+    }
+}
+
+INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+    uint64_t c = (uint64_t) * (uint64_t *) p;
+
+    if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
+        return ERR;
+    }
+
+    return OK;
+}
+
+INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
 
     if(chunk_offset % zone->chunk_size != 0) {
@@ -565,7 +635,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p) {
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int32_t b = bm[dwords_to_bit_slot];
 
-    /* Is this chunk already free? */
+    /* Double free detection */
     /* TODO: make configurable */
     if((GET_BIT(b, remainder)) == 0) {
         LOG_AND_ABORT("Double free of chunk %p detected from zone %d (remainder = %d) dwords_to_bit_slot=%ld bit_position=%ld", p, zone->index, remainder, dwords_to_bit_slot, bit_position);
@@ -574,11 +644,16 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p) {
     /* Set the next bit so we know this chunk was used */
     SET_BIT(b, (remainder + 1));
 
-    /* Unset the bit and write the value into the bitmap */
-    UNSET_BIT(b, remainder);
+    /* Unset the bit and write the value into the bitmap
+     * if this is not a permanent free. A permanent free
+     * means this chunk will be marked as if it is a canary */
+    if(permanent == false) {
+        UNSET_BIT(b, remainder);
+    }
+
     bm[dwords_to_bit_slot] = b;
 
-    write_cookie(zone, p);
+    write_canary(zone, p);
 
     insert_free_bit_slot(zone, bit_position);
     zone->is_full = false;
@@ -586,7 +661,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p) {
     return;
 }
 
-INTERNAL_HIDDEN void _iso_free(void *p) {
+INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     if(p == NULL) {
         return;
     }
@@ -600,7 +675,7 @@ INTERNAL_HIDDEN void _iso_free(void *p) {
     LOCK_ZONE_MUTEX(zone);
     UNMASK_ZONE_PTRS(zone);
 
-    iso_free_chunk_from_zone(zone, p);
+    iso_free_chunk_from_zone(zone, p, permanent);
 
     MASK_ZONE_PTRS(zone);
     UNLOCK_ZONE_MUTEX(zone);

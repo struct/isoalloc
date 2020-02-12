@@ -7,21 +7,24 @@ Isolation Alloc is a secure and fast(ish) memory allocator written in C. It's se
 ## Design
 
 IsoAlloc is for 64 bit Linux only. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to mmap allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux but that is also untested at this time.
+
 ```
-       _Contains Root structure
-      |          
-      |       _ Meta data for Zones
-      |      |                        _ Zone user data
-      |      |                       |                             _ Zone bitmap data
+      Contains Root structure
+      |
+      |      Meta data for Zones
+      |      |                       Zone user data               Zone bitmap data
       |      |                       |                            |
       v      v                       v                            v
 [GP][root [zone0..zoneN]][GP]..[GP][zone0 user chunks][GP]..[GP][zone0 bitmap][GP]
+ ^
+ |___ Guard page
 ```
+
 There is one iso_alloc_root structure which contains a fixed number of iso_alloc_zone structures. These iso_alloc_zone structures are referred to as zones. Zones manage user chunks and a bitmap that is used to manage those chunks. Both of these allocations are done separately, the zone only maintains pointers to them. These pointers are masked in between alloc and free operations. The bitmap contains 2 bits per user chunk. The current bit value specification is as follows:
 
- * 0X free
- * 1X in use
- * X1 was used
- * XX reserved/unused
+* 00 free chunk
+* 10 currently in use
+* 01 was used but is now free<
+* 11 canary chunk
 
  All user chunk pages and bitmap pages are surrounded by guard page allocations with the PROT_NONE permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Zones managed by isoalloc will live for the entire lifetime of the process, but zones created via the API can be destroyed.
