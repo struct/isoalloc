@@ -86,5 +86,7 @@ int main(int argc, char *argv[]) {
     iso_free(p);
 #endif
 
+    iso_verify_zones();
+
     return 0;
 }

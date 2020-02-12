@@ -62,6 +62,8 @@
 
 #define BITS_PER_DWORD 32
 
+#define CANARY_SIZE 8
+
 #define ALIGNMENT 8
 
 #define GET_BIT(n, k) \
@@ -152,7 +154,7 @@
 #define BAD_BIT_SLOT -1
 
 /* Calculate the user pointer given a zone and a bit slot */
-#define POINTER_FROM_BITSLOT(zone, bit_slot)    \
+#define POINTER_FROM_BITSLOT(zone, bit_slot) \
     ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
 /* This global is used by the page rounding macros.
@@ -236,6 +238,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);
 INTERNAL_HIDDEN int64_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_new_root();
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
+INTERNAL_HIDDEN void verify_all_zones();
 INTERNAL_HIDDEN int64_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);

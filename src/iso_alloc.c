@@ -15,8 +15,8 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     }
 
     int32_t *bm = (int32_t *) zone->bitmap_start;
-    int32_t max_bitmap_idx = zone->bitmap_size / sizeof(int32_t);
-    int64_t bit_slot = 0;
+    int32_t max_bitmap_idx = (zone->bitmap_size / sizeof(int32_t));
+    int64_t bit_slot;
 
     zone->canary_count = (rand() % 10);
 
@@ -34,13 +34,54 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
             bm_idx = 0;
         }
 
-        /* Set both bits as 1 */
+        /* Set the 1st and 2nd bits as 1 */
         SET_BIT(bm[bm_idx], 0);
         SET_BIT(bm[bm_idx], 1);
         bit_slot = (bm_idx * BITS_PER_DWORD);
         void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
         write_canary(zone, p);
     }
+}
+
+/* Verify the integrity of all canary chunks and the
+ * canary written to all free chunks. This function
+ * either aborts or returns nothing */
+INTERNAL_HIDDEN void verify_all_zones() {
+    for(size_t i = 0; i < _root->zones_used; i++) {
+        iso_alloc_zone *zone = &_root->zones[i];
+
+        if(zone == NULL) {
+            break;
+        }
+
+        verify_zone(zone);
+    }
+}
+
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+    LOCK_ZONE_MUTEX(zone);
+    UNMASK_ZONE_PTRS(zone);
+    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int64_t bit_slot;
+    int32_t bit;
+
+    for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
+        for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
+            bit_slot = (i * BITS_PER_DWORD);
+            bit = GET_BIT(bm[i], (j+1));
+
+            /* Chunk is free but was used, it should have a canary */
+            if(bit == 1) {
+                void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
+                check_canary(zone, p);
+            }
+        }
+    }
+
+    MASK_ZONE_PTRS(zone);
+    UNLOCK_ZONE_MUTEX(zone);
+
+    return;
 }
 
 /* Pick a random index in the bitmap and start looking
@@ -222,14 +263,8 @@ __attribute__((destructor)) void iso_alloc_dtor() {
             break;
         }
 
-        LOCK_ZONE_MUTEX(zone);
-        UNMASK_ZONE_PTRS(zone);
-
         _iso_alloc_zone_leak_detector(zone);
         mb += _iso_alloc_zone_mem_usage(zone);
-
-        MASK_ZONE_PTRS(zone);
-        UNLOCK_ZONE_MUTEX(zone);
     }
 
 #if MEM_USAGE
@@ -245,6 +280,7 @@ __attribute__((destructor)) void iso_alloc_dtor() {
             break;
         }
 
+        verify_zone(zone);
         _iso_alloc_destroy_zone(zone);
     }
 
@@ -542,9 +578,18 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
      * if its been corrupted */
     if((GET_BIT(b, (remainder + 1))) == 1) {
         check_canary(zone, p);
+        memset(p, 0x0, CANARY_SIZE);
     }
 
+    /* Set the in-use bit */
     SET_BIT(b, remainder);
+
+    /* The second bit is flipped to 0 while in use. This
+     * is because a previously in use chunk would have
+     * a bit pattern of 11 which makes it looks the same
+     * as a canary chunk. This bit is set again upon free. */
+    UNSET_BIT(b, (remainder+1));
+
     bm[dwords_to_bit_slot] = b;
 
     MASK_ZONE_PTRS(zone);
@@ -564,7 +609,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
         }
 
         if(i == _root->zones_used) {
-            LOG_AND_ABORT("%d zoneidx=%d Passed a pointer that wasn't allocated by isoalloc %p start=%p end=%p", i, zone->index, p, zone->user_pages_start, zone->user_pages_end);
+            LOG_AND_ABORT("Passed a pointer that wasn't allocated by iso_alloc %p start=%p end=%p", p, zone->user_pages_start, zone->user_pages_end);
         }
 
         UNMASK_ZONE_PTRS(zone);
@@ -584,13 +629,13 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     return NULL;
 }
 
-/* All free chunks get a cookie written at both
- * the start and end of their chunks. These cookies
+/* All free chunks get a canary written at both
+ * the start and end of their chunks. These canaries
  * are verified when adjacent chunks are allocated,
  * freed, or when the API requests validation */
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = zone->canary_secret ^ (uint64_t) p;
-    memcpy(p, &canary, 8);
+    memcpy(p, &canary, CANARY_SIZE);
 }
 
 /* Verify the canary value in an allocation */
@@ -598,7 +643,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t c = (uint64_t) * (uint64_t *) p;
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG_AND_ABORT("Canary at chunk %p has been corrupted! %lx %lx", p, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at chunk %p has been corrupted! 0x%lx 0x%lx", p, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
     }
 }
 
@@ -681,12 +726,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     UNLOCK_ZONE_MUTEX(zone);
 }
 
-/* Disable all use of isoalloc by protecting the _root */
+/* Disable all use of iso_alloc by protecting the _root */
 INTERNAL_HIDDEN void _iso_alloc_protect_root() {
     mprotect(_root, sizeof(iso_alloc_root), PROT_NONE);
 }
 
-/* Unprotect all use of isoalloc by allowing R/W of the _root */
+/* Unprotect all use of iso_alloc by allowing R/W of the _root */
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root() {
     mprotect(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
 }

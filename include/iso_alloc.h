@@ -26,3 +26,5 @@ EXTERNAL_API int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone);
 EXTERNAL_API int32_t iso_alloc_detect_leaks();
 EXTERNAL_API int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone);
 EXTERNAL_API int32_t iso_alloc_mem_usage();
+EXTERNAL_API void iso_verify_zones();
+EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone);
