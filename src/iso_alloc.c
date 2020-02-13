@@ -440,8 +440,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
              * requested allocation size then we would be wasting
              * a lot memory by using it. Lets force the creation
              * of a new zone instead. We only do this for sizes
-             * beyond the max default zone size */
-            if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > MAX_DEFAULT_ZONE_SZ) {
+             * beyond ZONE_1024 bytes */
+            if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > ZONE_1024) {
                 MASK_ZONE_PTRS(zone);
                 return NULL;
             }

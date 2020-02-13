@@ -12,8 +12,8 @@ failure=0
 succeeded=0
 
 for t in "${tests[@]}"; do
-    echo -n "Running $t"
-    build/$t > test_output.txt 2>&1
+    echo -n "Running $t test"
+    $(build/$t >> test_output.txt 2>&1)
     ret=$?
 
     if [ $ret -ne 0 ]; then
@@ -28,7 +28,7 @@ done
 vuln_tests=("double_free" "heap_overflow" "heap_underflow")
 
 for t in "${vuln_tests[@]}"; do
-    echo -n "Running $t"
+    echo -n "Running $t test"
     $(build/$t >> test_output.txt 2>&1)
     ret=$?
 
