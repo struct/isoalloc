@@ -24,7 +24,7 @@ There is one iso_alloc_root structure which contains a fixed number of iso_alloc
 
 * 00 free chunk
 * 10 currently in use
-* 01 was used but is now free<
+* 01 was used but is now free
 * 11 canary chunk
 
  All user chunk pages and bitmap pages are surrounded by guard page allocations with the PROT_NONE permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Zones managed by isoalloc will live for the entire lifetime of the process, but zones created via the API can be destroyed.
