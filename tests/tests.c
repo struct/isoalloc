@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     void *p = iso_calloc(10, 2);
 
     if(p == NULL) {
-        LOG_AND_ABORT("isocalloc failed")
+        LOG_AND_ABORT("iso_calloc failed")
     }
 
     iso_free(p);
@@ -72,13 +72,13 @@ int main(int argc, char *argv[]) {
     p = iso_alloc(128);
 
     if(p == NULL) {
-        LOG_AND_ABORT("isoalloc failed")
+        LOG_AND_ABORT("iso_alloc failed")
     }
 
     p = iso_realloc(p, 1024);
 
     if(p == NULL) {
-        LOG_AND_ABORT("isorealloc failed")
+        LOG_AND_ABORT("iso_realloc failed")
     }
 
     iso_free(p);

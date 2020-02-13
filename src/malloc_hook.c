@@ -16,7 +16,7 @@ EXTERNAL_API void *malloc(size_t size) {
 }
 
 EXTERNAL_API void free(void *p) {
-    _iso_free(p);
+    _iso_free(p, false);
     return;
 }
 

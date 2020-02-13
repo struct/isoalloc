@@ -16,9 +16,11 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
 
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int32_t max_bitmap_idx = (zone->bitmap_size / sizeof(int32_t));
+    int32_t chunk_count = (ZONE_USER_SIZE / zone->chunk_size);
     int64_t bit_slot;
 
-    zone->canary_count = (rand() % 10);
+    /* Roughly %1 of the chunks in this zone will become a canary */
+    zone->canary_count = (chunk_count / CANARY_COUNT_DIV);
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -68,7 +70,7 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
         for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
             bit_slot = (i * BITS_PER_DWORD);
-            bit = GET_BIT(bm[i], (j+1));
+            bit = GET_BIT(bm[i], (j + 1));
 
             /* Chunk is free but was used, it should have a canary */
             if(bit == 1) {
@@ -488,7 +490,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
 
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
     if(nmemb > (nmemb * size)) {
-        LOG_AND_ABORT("Call to calloc() will overflow nmemb=%ld size=%ld", nmemb, size);
+        LOG_AND_ABORT("Call to calloc() will overflow nmemb=%zu size=%zu", nmemb, size);
         return NULL;
     }
 
@@ -588,7 +590,7 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
      * is because a previously in use chunk would have
      * a bit pattern of 11 which makes it looks the same
      * as a canary chunk. This bit is set again upon free. */
-    UNSET_BIT(b, (remainder+1));
+    UNSET_BIT(b, (remainder + 1));
 
     bm[dwords_to_bit_slot] = b;
 
@@ -683,7 +685,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     /* Double free detection */
     /* TODO: make configurable */
     if((GET_BIT(b, remainder)) == 0) {
-        LOG_AND_ABORT("Double free of chunk %p detected from zone %d (remainder = %d) dwords_to_bit_slot=%ld bit_position=%ld", p, zone->index, remainder, dwords_to_bit_slot, bit_position);
+        LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%ld bit_position=%ld", p, zone->index, dwords_to_bit_slot, bit_position);
     }
 
     /* Set the next bit so we know this chunk was used */

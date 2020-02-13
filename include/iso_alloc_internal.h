@@ -40,15 +40,25 @@
 #define LOG(msg, ...)                                                                  \
     fprintf(stdout, "[LOG][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);
-#else
-#define LOG_ERROR(msg, ...)
-#define LOG(msg, ...)
-#endif
 
+/* fprintf will call malloc and if we are hooking
+ * malloc then the allocator will likely dead lock
+ * while waiting for a zone mutex. This is bad
+ * and we want to avoid it. We also want to
+ * avoid a reentrant malloc thats aborting for
+ * a reason! So only attempt to print logs in
+ * a debug build of the library */
 #define LOG_AND_ABORT(msg, ...)                                                             \
     fprintf(stdout, "[ABORTING][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);                                                                         \
     abort();
+
+#else
+#define LOG_ERROR(msg, ...)
+#define LOG(msg, ...)
+#define LOG_AND_ABORT(zone, msg, ...)                                                       \
+    abort();
+#endif
 
 #define ROUND_PAGE_UP(N) ((((N) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
 #define ROUND_PAGE_DOWN(N) (ROUND_PAGE_UP(N) - g_page_size)
@@ -66,6 +76,8 @@
 #define BITS_PER_DWORD 32
 
 #define CANARY_SIZE 8
+
+#define CANARY_COUNT_DIV 100
 
 #define ALIGNMENT 8
 
@@ -119,7 +131,7 @@
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
 
-/* This is the maximum number of zones isoalloc can
+/* This is the maximum number of zones iso_alloc can
  * create. This is a completely arbitrary number but
  * it does correspond to the size of the _root.zones
  * array that lives in global memory */
@@ -165,7 +177,7 @@
  * preferred but we need this to setup the root. */
 uint32_t g_page_size;
 
-/* isoalloc makes a number of default zones for common
+/* iso_alloc makes a number of default zones for common
  * allocation sizes. Anything above these sizes will
  * be created and initialized on demand */
 static uint32_t default_zones[] = {ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
@@ -205,14 +217,14 @@ typedef struct {
     int32_t canary_count;                               /* Number of canaries in this zone */
     uint64_t canary_secret;                             /* Each zone has its own canary secret */
     uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
-    bool internally_managed;                            /* Zones can be managed by isoalloc or custom */
+    bool internally_managed;                            /* Zones can be managed by iso_alloc or custom */
     bool is_full;                                       /* Indicates whether this zone is full to avoid expensive free bit slot searches */
 #if THREAD_SUPPORT
     pthread_mutex_t mutex; /* Each zone has its own mutex which protects both allocations and frees */
 #endif
 } iso_alloc_zone;
 
-/* There is only one isoalloc root per-process.
+/* There is only one iso_alloc root per-process.
  * It contains an array of zone structures. Each
  * Zone represents a number of contiguous pages
  * that hold chunks containing caller data */

@@ -96,12 +96,12 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     return zone;
 }
 
-/* Disable all use of isoalloc by protecting the _root */
+/* Disable all use of iso_alloc by protecting the _root */
 EXTERNAL_API void iso_alloc_protect_root() {
     _iso_alloc_protect_root();
 }
 
-/* Unprotect all use of isoalloc by allowing R/W of the _root */
+/* Unprotect all use of iso_alloc by allowing R/W of the _root */
 EXTERNAL_API void iso_alloc_unprotect_root() {
     _iso_alloc_unprotect_root();
 }

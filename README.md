@@ -6,7 +6,7 @@ Isolation Alloc is a secure and fast(ish) memory allocator written in C. It's se
 
 ## Design
 
-IsoAlloc is for 64 bit Linux only. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to mmap allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux but that is also untested at this time.
+IsoAlloc is designed for 64 bit Linux only, although it does currently compile and run on Mac OS. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to mmap allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux but that is also untested at this time.
 
 ```
       Contains Root structure
