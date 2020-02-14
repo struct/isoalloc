@@ -40,6 +40,7 @@ tests: clean library_debug
 	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/heap_underflow.c -o $(BUILD_DIR)/heap_underflow -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test -L$(BUILD_DIR) -lisoalloc
 	utils/run_tests.sh
 
 ## Build a non-debug library with performance

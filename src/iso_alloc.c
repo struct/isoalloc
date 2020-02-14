@@ -67,12 +67,14 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     int64_t bit_slot;
     int32_t bit;
 
-    for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
+    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
         for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
             bit_slot = (i * BITS_PER_DWORD);
             bit = GET_BIT(bm[i], (j + 1));
 
-            /* Chunk is free but was used, it should have a canary */
+            /* If this bit is set it is either a free chunk or
+             * a canary chunk. Either way it should have a
+             * canary we can verify */
             if(bit == 1) {
                 void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
@@ -95,7 +97,7 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int64_t bit_slot;
-    int32_t max_bitmap_idx = zone->bitmap_size / sizeof(int32_t);
+    int32_t max_bitmap_idx = (zone->bitmap_size / sizeof(int32_t));
 
     /* This gives us an arbitrary spot in the bitmap to 
      * start searching but may mean we end up with a smaller
@@ -135,7 +137,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
 #if DEBUG
-    for(int32_t i = 0; i < sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t); i++) {
+    for(int32_t i = 0; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
         if(zone->free_bit_slot_cache[i] == bit_slot) {
             LOG_AND_ABORT("bit slot %ld already in zone %d slot cache index=%d (free_bit_slot_cache_index=%d free_bit_slot_cache_usable=%d", bit_slot, zone->index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_usable);
             return;
@@ -211,7 +213,7 @@ __attribute__((constructor)) void iso_alloc_ctor() {
 
     iso_alloc_new_root();
 
-    for(size_t i = 0; i < sizeof(default_zones) / sizeof(uint32_t); i++) {
+    for(size_t i = 0; i < (sizeof(default_zones) / sizeof(uint32_t)); i++) {
         if(!(iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
@@ -378,7 +380,7 @@ INTERNAL_HIDDEN int64_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
     int64_t bit_position = BAD_BIT_SLOT;
 
     /* Iterate the entire bitmap a dword at a time */
-    for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
+    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
@@ -398,7 +400,7 @@ INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone
     int64_t bit_position = BAD_BIT_SLOT;
     int32_t bit;
 
-    for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
+    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
         for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
             bit = GET_BIT(bm[i], j);
 
@@ -410,6 +412,62 @@ INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone
     }
 
     return bit_position;
+}
+
+INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
+    if(zone->next_free_bit_slot != BAD_BIT_SLOT) {
+        return zone;
+    }
+
+    UNMASK_ZONE_PTRS(zone);
+
+    /* This zone may fit this chunk but if the zone was
+     * created for chunks more than N* larger than the
+     * requested allocation size then we would be wasting
+     * a lot memory by using it. Lets force the creation
+     * of a new zone instead. We only do this for sizes
+     * beyond ZONE_1024 bytes */
+    if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > ZONE_1024) {
+        MASK_ZONE_PTRS(zone);
+        return NULL;
+    }
+
+    /* If the cache for this zone is empty we should
+     * refill it to make future allocations faster */
+    if(zone->free_bit_slot_cache_usable == zone->free_bit_slot_cache_index) {
+        fill_free_bit_slot_cache(zone);
+    }
+
+    int64_t bit_slot = get_next_free_bit_slot(zone);
+
+    if(bit_slot != BAD_BIT_SLOT) {
+        MASK_ZONE_PTRS(zone);
+        return zone;
+    }
+
+    /* Free list failed, use a fast search */
+    bit_slot = iso_scan_zone_free_slot(zone);
+
+    if(bit_slot == BAD_BIT_SLOT) {
+        /* Fast search failed, search bit by bit */
+        bit_slot = iso_scan_zone_free_slot_slow(zone);
+        MASK_ZONE_PTRS(zone);
+
+        /* This zone may be entirely full, try the next one
+         * but mark this zone full so future allocations can
+         * take a faster path */
+        if(bit_slot == BAD_BIT_SLOT) {
+            zone->is_full = true;
+            return NULL;
+        } else {
+            zone->next_free_bit_slot = bit_slot;
+            return zone;
+        }
+    } else {
+        zone->next_free_bit_slot = bit_slot;
+        MASK_ZONE_PTRS(zone);
+        return zone;
+    }
 }
 
 /* Finds a zone that can fit this allocation request */
@@ -429,57 +487,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
 
         /* We found a zone, lets try to find a free slot in it */
         if(zone->chunk_size >= size) {
-            if(zone->next_free_bit_slot != BAD_BIT_SLOT) {
-                return zone;
-            }
+            zone = is_zone_usable(zone, size);
 
-            UNMASK_ZONE_PTRS(zone);
-
-            /* This zone may fit this chunk but if the zone was
-             * created for chunks more than N* larger than the
-             * requested allocation size then we would be wasting
-             * a lot memory by using it. Lets force the creation
-             * of a new zone instead. We only do this for sizes
-             * beyond ZONE_1024 bytes */
-            if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > ZONE_1024) {
-                MASK_ZONE_PTRS(zone);
-                return NULL;
-            }
-
-            /* If the cache for this zone is empty we should
-             * refill it to make future allocations faster */
-            if(zone->free_bit_slot_cache_usable == zone->free_bit_slot_cache_index) {
-                fill_free_bit_slot_cache(zone);
-            }
-
-            int64_t bit_slot = get_next_free_bit_slot(zone);
-
-            if(bit_slot != BAD_BIT_SLOT) {
-                MASK_ZONE_PTRS(zone);
-                return zone;
-            }
-
-            /* Free list failed, use a fast search */
-            bit_slot = iso_scan_zone_free_slot(zone);
-
-            if(bit_slot == BAD_BIT_SLOT) {
-                /* Fast search failed, search bit by bit */
-                bit_slot = iso_scan_zone_free_slot_slow(zone);
-                MASK_ZONE_PTRS(zone);
-
-                /* This zone may be entirely full, try the next one
-                 * but mark this zone full so future allocations can
-                 * take a faster path */
-                if(bit_slot == BAD_BIT_SLOT) {
-                    zone->is_full = true;
-                    continue;
-                } else {
-                    zone->next_free_bit_slot = bit_slot;
-                    return zone;
-                }
+            if(zone == NULL) {
+                continue;
             } else {
-                zone->next_free_bit_slot = bit_slot;
-                MASK_ZONE_PTRS(zone);
                 return zone;
             }
         }
@@ -511,7 +523,7 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
         /* In order to guarantee an 8 byte memory alignment
          * for all allocations we only create zones that
          * work with default allocation sizes */
-        for(size_t i = 0; i < sizeof(default_zones) / sizeof(uint32_t); i++) {
+        for(size_t i = 0; i < (sizeof(default_zones) / sizeof(uint32_t)); i++) {
             if(size < default_zones[i]) {
                 size = default_zones[i];
                 zone = iso_new_zone(size, true);
@@ -545,6 +557,12 @@ INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
             LOG_AND_ABORT("Allocated a new zone with no free bit slots");
         }
     } else {
+        zone = is_zone_usable(zone, size);
+
+        if(zone == NULL) {
+            return NULL;
+        }
+
         LOCK_ZONE_MUTEX(zone);
         free_bit_slot = zone->next_free_bit_slot;
     }
@@ -666,7 +684,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
         LOG_AND_ABORT("Chunk at %p is not a multiple of zone %d chunk size %zu", p, zone->index, zone->chunk_size);
     }
 
-    size_t chunk_number = chunk_offset / zone->chunk_size;
+    size_t chunk_number = (chunk_offset / zone->chunk_size);
     int64_t bit_position = (chunk_number * BITS_PER_CHUNK);
 
     int64_t dwords_to_bit_slot = (bit_position / BITS_PER_DWORD);

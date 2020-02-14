@@ -56,7 +56,7 @@
 #else
 #define LOG_ERROR(msg, ...)
 #define LOG(msg, ...)
-#define LOG_AND_ABORT(zone, msg, ...)                                                       \
+#define LOG_AND_ABORT(zone, msg, ...) \
     abort();
 #endif
 
@@ -181,8 +181,8 @@ uint32_t g_page_size;
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Anything above these sizes will
  * be created and initialized on demand */
-static uint32_t default_zones[] = { ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
-                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192 };
+static uint32_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
+                                   ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
@@ -248,6 +248,7 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void *get_base_page(void *addr);
 INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
+INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);

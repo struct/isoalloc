@@ -7,7 +7,7 @@ export LD_PRELOAD=build/libisoalloc.so
 
 rm test_output.txt
 
-tests=("tests")
+tests=("tests" "interfaces_test")
 failure=0
 succeeded=0
 

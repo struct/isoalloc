@@ -50,7 +50,7 @@ EXTERNAL_API size_t iso_chunksz(void *p) {
     return _iso_chunk_size(p);
 }
 
-EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(void *p, size_t size, iso_alloc_zone_handle *zone) {
+EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size) {
     if(zone == NULL) {
         return NULL;
     }
@@ -62,7 +62,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(void *p, size_t size, 
 
     void *r = _iso_alloc(size, zone);
 
-    if(p == NULL) {
+    if(r == NULL) {
         return r;
     }
 
@@ -77,7 +77,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(void *p, size_t size, 
     return r;
 }
 
-EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(size_t size, iso_alloc_zone_handle *zone) {
+EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) {
     if(zone == NULL) {
         return NULL;
     }
