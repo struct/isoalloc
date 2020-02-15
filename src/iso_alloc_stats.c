@@ -54,9 +54,9 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
                 bit_position = (i * BITS_PER_DWORD) + j;
                 void *leak = (zone->user_pages_start + ((bit_position / BITS_PER_CHUNK) * zone->chunk_size));
 
-                if(check_canary_no_abort(zone, leak) == ERR) {
+                if((check_canary_no_abort(zone, leak) == ERR)) {
                     total_leaks++;
-                    LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, i, leak, bit_position);
+                    LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, zone->index, leak, bit_position);
                 }
             }
         }
@@ -76,7 +76,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] Total bytes(%ld) megabytes(%ld)", zone->index, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] (%zu byte chunks) Total bytes(%ld) megabytes(%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     return (mem_usage / MEGABYTE_SIZE);
 }
 
@@ -86,7 +86,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_mem_usage() {
         iso_alloc_zone *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] Total bytes(%ld) megabytes(%ld)", zone->index, mem_usage, (mem_usage / MEGABYTE_SIZE));
+        LOG("Zone[%d] (%zu byte chunks) Total bytes(%ld) megabytes(%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     }
 
     return (mem_usage / MEGABYTE_SIZE);

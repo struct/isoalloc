@@ -30,7 +30,7 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
 
     void *r = _iso_alloc(size, NULL);
 
-    if(p == NULL) {
+    if(r == NULL) {
         return r;
     }
 
