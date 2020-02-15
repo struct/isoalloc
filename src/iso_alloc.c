@@ -206,7 +206,12 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     madvise(_root->guard_above, _root->system_page_size, MADV_DONTNEED);
 }
 
-__attribute__((constructor)) void iso_alloc_ctor() {
+INTERNAL_HIDDEN void iso_alloc_initialize() {
+    /* Do not allow a reinitialization unless root is NULL */
+    if(_root != NULL) {
+        return;
+    }
+
     struct timeval t;
     gettimeofday(&t, NULL);
     g_page_size = sysconf(_SC_PAGESIZE);
@@ -222,6 +227,13 @@ __attribute__((constructor)) void iso_alloc_ctor() {
     struct timeval nt;
     gettimeofday(&nt, NULL);
     srand((t.tv_usec * t.tv_sec) + (nt.tv_usec * nt.tv_sec) + getpid());
+    iso_alloc_initialized = true;
+}
+
+__attribute__((constructor)) void iso_alloc_ctor() {
+    if(iso_alloc_initialized == false) {
+        iso_alloc_initialize();
+    }
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
@@ -241,7 +253,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         munmap(zone->bitmap_start, zone->bitmap_size);
         munmap(zone->bitmap_pages_guard_below, _root->system_page_size);
         munmap(zone->bitmap_pages_guard_above, _root->system_page_size);
-
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
         munmap(zone->user_pages_guard_below, _root->system_page_size);
         munmap(zone->user_pages_guard_above, _root->system_page_size);
@@ -513,6 +524,10 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
+    if(iso_alloc_initialized == false) {
+        iso_alloc_initialize();
+    }
+
     if(zone == NULL) {
         zone = iso_find_zone_fit(size);
     }
@@ -663,7 +678,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t c = (uint64_t) * (uint64_t *) p;
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG_AND_ABORT("Canary at chunk %p has been corrupted! 0x%lx 0x%lx", p, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at chunk %p in zone[%d] has been corrupted! 0x%lx 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
     }
 }
 
@@ -671,6 +686,7 @@ INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void 
     uint64_t c = (uint64_t) * (uint64_t *) p;
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
+        LOG("Canary at chunk %p in zone[%d] has been corrupted! 0x%lx 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
         return ERR;
     }
 
@@ -722,7 +738,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     insert_free_bit_slot(zone, bit_position);
     zone->is_full = false;
-
     return;
 }
 
@@ -757,6 +772,10 @@ INTERNAL_HIDDEN void _iso_alloc_unprotect_root() {
 }
 
 INTERNAL_HIDDEN int32_t _iso_chunk_size(void *p) {
+    if(p == NULL) {
+        return 0;
+    }
+
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
     if(zone == NULL) {

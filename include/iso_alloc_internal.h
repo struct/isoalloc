@@ -33,32 +33,17 @@
 #endif
 
 #if DEBUG
-#define LOG_ERROR(msg, ...)                                                                                    \
-    fprintf(stderr, "[LOG][%d](%s) (%s) - " msg "\n", getpid(), __FUNCTION__, strerror(errno), ##__VA_ARGS__); \
-    fflush(stderr);
-
 #define LOG(msg, ...)                                                                  \
     fprintf(stdout, "[LOG][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);
+#else
+#define LOG(msg, ...)
+#endif
 
-/* fprintf will call malloc and if we are hooking
- * malloc then the allocator will likely dead lock
- * while waiting for a zone mutex. This is bad
- * and we want to avoid it. We also want to
- * avoid a reentrant malloc thats aborting for
- * a reason! So only attempt to print logs in
- * a debug build of the library */
 #define LOG_AND_ABORT(msg, ...)                                                             \
     fprintf(stdout, "[ABORTING][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);                                                                         \
     abort();
-
-#else
-#define LOG_ERROR(msg, ...)
-#define LOG(msg, ...)
-#define LOG_AND_ABORT(zone, msg, ...) \
-    abort();
-#endif
 
 #define ROUND_PAGE_UP(N) ((((N) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
 #define ROUND_PAGE_DOWN(N) (ROUND_PAGE_UP(N) - g_page_size)
@@ -239,6 +224,7 @@ typedef struct {
 
 /* The global root */
 iso_alloc_root *_root;
+bool iso_alloc_initialized;
 
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);

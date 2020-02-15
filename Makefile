@@ -23,7 +23,8 @@ all: library tests
 ## Build a release version of the library
 ## Adds malloc hooks
 library: clean
-	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(LIBRARY) $(C_SRCS) $(MALLOC_HOOK) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(THREAD_FLAGS) $(LIBRARY) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	strip $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
 ## Does not compile malloc hooks
@@ -46,7 +47,7 @@ tests: clean library_debug
 ## Build a non-debug library with performance
 ## monitoring enabled
 perf_tests: clean
-	$(CC) $(CFLAGS) $(C_SRCS) $(TEST_SRCS) $(PERF_FLAGS) -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > perf_analysis.txt
 
