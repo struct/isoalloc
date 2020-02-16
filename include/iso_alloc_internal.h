@@ -229,6 +229,7 @@ bool iso_alloc_initialized;
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
+INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void *get_base_page(void *addr);

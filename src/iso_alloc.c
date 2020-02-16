@@ -177,10 +177,17 @@ INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size) {
     void *p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     if(p == MAP_FAILED) {
+        LOG_AND_ABORT("Failed to mmap rw pages");
         return NULL;
     }
 
     return p;
+}
+
+INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection) {
+    if((mprotect(p, size, protection)) == ERR) {
+        LOG_AND_ABORT("Failed to mprotect pages @ %p", p);
+    }
 }
 
 INTERNAL_HIDDEN void iso_alloc_new_root() {
@@ -198,11 +205,11 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     _root->system_page_size = g_page_size;
 
     _root->guard_below = p;
-    mprotect(_root->guard_below, _root->system_page_size, PROT_NONE);
+    mprotect_pages(_root->guard_below, _root->system_page_size, PROT_NONE);
     madvise(_root->guard_below, _root->system_page_size, MADV_DONTNEED);
 
     _root->guard_above = (void *) ROUND_PAGE_UP((uintptr_t)(p + sizeof(iso_alloc_root) + _root->system_page_size));
-    mprotect(_root->guard_above, _root->system_page_size, PROT_NONE);
+    mprotect_pages(_root->guard_above, _root->system_page_size, PROT_NONE);
     madvise(_root->guard_above, _root->system_page_size, MADV_DONTNEED);
 }
 
@@ -244,8 +251,8 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         /* If this zone was a special case then we don't want
          * to reuse any of its backing pages. Mark them unusable
          * and ensure any future accesses result in a segfault */
-        mprotect(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
-        mprotect(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
+        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
         /* Purposefully keep the mutex locked. Any thread
          * that tries to allocate/free in this zone should
          * rightfully deadlock */
@@ -335,10 +342,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     new_zone->bitmap_end = (p + (new_zone->bitmap_size + _root->system_page_size));
     new_zone->bitmap_pages_guard_above = (void *) ROUND_PAGE_UP((uintptr_t) p + (new_zone->bitmap_size + _root->system_page_size));
 
-    mprotect(new_zone->bitmap_pages_guard_below, _root->system_page_size, PROT_NONE);
+    mprotect_pages(new_zone->bitmap_pages_guard_below, _root->system_page_size, PROT_NONE);
     madvise(new_zone->bitmap_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
 
-    mprotect(new_zone->bitmap_pages_guard_above, _root->system_page_size, PROT_NONE);
+    mprotect_pages(new_zone->bitmap_pages_guard_above, _root->system_page_size, PROT_NONE);
     madvise(new_zone->bitmap_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
 
     /* Bitmap pages are accessed often and usually in sequential order */
@@ -352,10 +359,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     new_zone->user_pages_end = (p + (_root->system_page_size + ZONE_USER_SIZE));
     new_zone->user_pages_guard_above = (void *) ROUND_PAGE_UP((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
 
-    mprotect(new_zone->user_pages_guard_below, _root->system_page_size, PROT_NONE);
+    mprotect_pages(new_zone->user_pages_guard_below, _root->system_page_size, PROT_NONE);
     madvise(new_zone->user_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
 
-    mprotect(new_zone->user_pages_guard_above, _root->system_page_size, PROT_NONE);
+    mprotect_pages(new_zone->user_pages_guard_above, _root->system_page_size, PROT_NONE);
     madvise(new_zone->user_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
 
     /* User pages will be accessed in an unpredictable order */
@@ -763,12 +770,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
 /* Disable all use of iso_alloc by protecting the _root */
 INTERNAL_HIDDEN void _iso_alloc_protect_root() {
-    mprotect(_root, sizeof(iso_alloc_root), PROT_NONE);
+    mprotect_pages(_root, sizeof(iso_alloc_root), PROT_NONE);
 }
 
 /* Unprotect all use of iso_alloc by allowing R/W of the _root */
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root() {
-    mprotect(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
+    mprotect_pages(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
 }
 
 INTERNAL_HIDDEN int32_t _iso_chunk_size(void *p) {
