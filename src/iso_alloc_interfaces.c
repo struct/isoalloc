@@ -77,6 +77,46 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
     return r;
 }
 
+EXTERNAL_API char *iso_strdup(const char *str) {
+    if(str == NULL) {
+        return NULL;
+    }
+
+    size_t size = strlen(str);
+
+    char *p = (char *) iso_alloc(size);
+
+    if(p == NULL) {
+        return NULL;
+    }
+
+    memcpy(p, str, size);
+    return p;
+}
+
+EXTERNAL_API char *iso_strndup(const char *str, size_t n) {
+    if(str == NULL) {
+        return NULL;
+    }
+
+    size_t s_size = strlen(str);
+
+    char *p = (char *) iso_alloc(n);
+
+    if(p == NULL) {
+        return NULL;
+    }
+
+    if(s_size > n) {
+        memcpy(p, str, n);
+        p[n-1] = '\0';
+    } else {
+        memcpy(p, str, s_size);
+    }
+
+    return p;
+}
+
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) {
     if(zone == NULL) {
         return NULL;

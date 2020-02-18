@@ -18,6 +18,8 @@ EXTERNAL_API void iso_free(void *p);
 EXTERNAL_API void iso_free_permanently(void *p);
 EXTERNAL_API void *iso_realloc(void *p, size_t size);
 EXTERNAL_API size_t iso_chunksz(void *p);
+EXTERNAL_API char *iso_strdup(const char *str);
+EXTERNAL_API char *iso_strndup(const char *str, size_t n);
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size);
 EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size);
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
