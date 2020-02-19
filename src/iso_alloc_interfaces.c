@@ -117,7 +117,7 @@ EXTERNAL_API char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char
 
     if(s_size > n) {
         memcpy(p, str, n);
-        p[n-1] = '\0';
+        p[n - 1] = '\0';
     } else {
         memcpy(p, str, s_size);
     }

@@ -598,7 +598,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     zone->next_free_bit_slot = BAD_BIT_SLOT;
 
     int32_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_DWORD);
-    int64_t remainder = (free_bit_slot % BITS_PER_DWORD);
+    int64_t which_bit = (free_bit_slot % BITS_PER_DWORD);
 
     void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
     int32_t *bm = (int32_t *) zone->bitmap_start;
@@ -609,28 +609,28 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
                       p, zone->index, free_bit_slot, p - zone->user_pages_end, (p - zone->user_pages_end) / _root->system_page_size, zone->user_pages_start, zone->user_pages_end);
     }
 
-    if((GET_BIT(b, remainder)) != 0) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %zu Cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, remainder was %ld",
-                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, remainder);
+    if((GET_BIT(b, which_bit)) != 0) {
+        LOG_AND_ABORT("Zone[%d] for chunk size %zu Cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, which_bit was %ld",
+                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
     }
 
     /* This chunk was previously allocated and free'd which
      * means it must have a canary written in its first dword.
      * Here we check the validity of that canary and abort
      * if its been corrupted */
-    if((GET_BIT(b, (remainder + 1))) == 1) {
+    if((GET_BIT(b, (which_bit + 1))) == 1) {
         check_canary(zone, p);
         memset(p, 0x0, CANARY_SIZE);
     }
 
     /* Set the in-use bit */
-    SET_BIT(b, remainder);
+    SET_BIT(b, which_bit);
 
     /* The second bit is flipped to 0 while in use. This
      * is because a previously in use chunk would have
      * a bit pattern of 11 which makes it looks the same
      * as a canary chunk. This bit is set again upon free. */
-    UNSET_BIT(b, (remainder + 1));
+    UNSET_BIT(b, (which_bit + 1));
 
     bm[dwords_to_bit_slot] = b;
 
@@ -711,7 +711,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     int64_t bit_position = (chunk_number * BITS_PER_CHUNK);
 
     int64_t dwords_to_bit_slot = (bit_position / BITS_PER_DWORD);
-    int32_t remainder = (bit_position % BITS_PER_DWORD);
+    int32_t which_bit = (bit_position % BITS_PER_DWORD);
 
     if((zone->bitmap_start + dwords_to_bit_slot) >= zone->bitmap_end) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
@@ -725,23 +725,51 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     /* Double free detection */
     /* TODO: make configurable */
-    if((GET_BIT(b, remainder)) == 0) {
+    if((GET_BIT(b, which_bit)) == 0) {
         LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%ld bit_position=%ld", p, zone->index, dwords_to_bit_slot, bit_position);
     }
 
     /* Set the next bit so we know this chunk was used */
-    SET_BIT(b, (remainder + 1));
+    SET_BIT(b, (which_bit + 1));
 
     /* Unset the bit and write the value into the bitmap
      * if this is not a permanent free. A permanent free
      * means this chunk will be marked as if it is a canary */
     if(permanent == false) {
-        UNSET_BIT(b, remainder);
+        UNSET_BIT(b, which_bit);
     }
 
     bm[dwords_to_bit_slot] = b;
 
     write_canary(zone, p);
+
+    /* Now that we have free'd this chunk lets check the
+     * chunks before and after it. If they were previously
+     * used and currently free they should have canaries
+     * we can verify */
+    if((p + zone->chunk_size) < zone->user_pages_end) {
+        int64_t bit_position_over = ((chunk_number + 1) * BITS_PER_CHUNK);
+        dwords_to_bit_slot = (bit_position_over / BITS_PER_DWORD);
+        b = bm[dwords_to_bit_slot];
+        which_bit = (bit_position_over % BITS_PER_DWORD);
+
+        if((GET_BIT(b, (which_bit + 1))) == 1) {
+            void *p_over = POINTER_FROM_BITSLOT(zone, bit_position_over);
+            check_canary(zone, p_over);
+        }
+    }
+
+    if((p - zone->chunk_size) > zone->user_pages_start) {
+        int64_t bit_position_under = ((chunk_number - 1) * BITS_PER_CHUNK);
+        dwords_to_bit_slot = (bit_position_under / BITS_PER_DWORD);
+        b = bm[dwords_to_bit_slot];
+        which_bit = (bit_position_under % BITS_PER_DWORD);
+
+        if((GET_BIT(b, (which_bit + 1))) == 1) {
+            void *p_under = POINTER_FROM_BITSLOT(zone, bit_position_under);
+            check_canary(zone, p_under);
+        }
+    }
 
     insert_free_bit_slot(zone, bit_position);
     zone->is_full = false;

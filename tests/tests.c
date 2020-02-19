@@ -21,7 +21,7 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
 
         p[i] = iso_alloc(allocation_size);
-
+        memset(p[i], 0x41, allocation_size);
         /* Randomly free some allocations */
         if((rand() % 5) > 1) {
             iso_free(p[i]);
