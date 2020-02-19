@@ -57,6 +57,23 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("Could not allocate from custom zone");
     }
 
+    p = iso_alloc(1024);
+
+    if(p == NULL) {
+        LOG_AND_ABORT("iso_alloc failed");
+    }
+
+    memset(p, 0x41, 1024);
+
+    void *r = iso_strdup(p);
+
+    if(r == NULL) {
+        LOG_AND_ABORT("iso_strdup failed");
+    }
+
+    iso_free(p);
+    iso_free(r);
+
     iso_verify_zones();
 
     return 0;

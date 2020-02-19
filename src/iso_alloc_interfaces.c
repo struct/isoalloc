@@ -5,7 +5,7 @@
 #include "iso_alloc_internal.h"
 
 EXTERNAL_API void *iso_alloc(size_t size) {
-    return _iso_alloc(size, NULL);
+    return _iso_alloc(NULL, size);
 }
 
 EXTERNAL_API void *iso_calloc(size_t nmemb, size_t size) {
@@ -28,7 +28,7 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
         return NULL;
     }
 
-    void *r = _iso_alloc(size, NULL);
+    void *r = _iso_alloc(NULL, size);
 
     if(r == NULL) {
         return r;
@@ -60,7 +60,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
         return NULL;
     }
 
-    void *r = _iso_alloc(size, zone);
+    void *r = _iso_alloc(zone, size);
 
     if(r == NULL) {
         return r;
@@ -78,13 +78,17 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
 }
 
 EXTERNAL_API char *iso_strdup(const char *str) {
+    return iso_strdup_from_zone(NULL, str);
+}
+
+EXTERNAL_API char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) {
     if(str == NULL) {
         return NULL;
     }
 
     size_t size = strlen(str);
 
-    char *p = (char *) iso_alloc(size);
+    char *p = (char *) _iso_alloc(zone, size);
 
     if(p == NULL) {
         return NULL;
@@ -95,13 +99,17 @@ EXTERNAL_API char *iso_strdup(const char *str) {
 }
 
 EXTERNAL_API char *iso_strndup(const char *str, size_t n) {
+    return iso_strndup_from_zone(NULL, str, n);
+}
+
+EXTERNAL_API char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) {
     if(str == NULL) {
         return NULL;
     }
 
     size_t s_size = strlen(str);
 
-    char *p = (char *) iso_alloc(n);
+    char *p = (char *) _iso_alloc(zone, n);
 
     if(p == NULL) {
         return NULL;
@@ -122,7 +130,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *z
         return NULL;
     }
 
-    return _iso_alloc(size, zone);
+    return _iso_alloc(zone, size);
 }
 
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {

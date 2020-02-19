@@ -12,7 +12,7 @@
  * existing and closed source programs that call malloc/free */
 #if MALLOC_HOOK
 EXTERNAL_API void *malloc(size_t size) {
-    return _iso_alloc(size, NULL);
+    return _iso_alloc(NULL, size);
 }
 
 EXTERNAL_API void free(void *p) {
@@ -30,7 +30,7 @@ EXTERNAL_API void *realloc(void *p, size_t size) {
 
 EXTERNAL_API int posix_memalign(void **memptr, size_t alignment, size_t size) {
     /* All iso_alloc allocations are 8 byte aligned */
-    *memptr = _iso_alloc(size, NULL);
+    *memptr = _iso_alloc(NULL, size);
 
     if(*memptr != NULL) {
         return 0;
@@ -41,6 +41,6 @@ EXTERNAL_API int posix_memalign(void **memptr, size_t alignment, size_t size) {
 
 EXTERNAL_API void *memalign(size_t alignment, size_t size) {
     /* All iso_alloc allocations are 8 byte aligned */
-    return _iso_alloc(size, NULL);
+    return _iso_alloc(NULL, size);
 }
 #endif

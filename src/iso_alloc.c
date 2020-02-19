@@ -524,13 +524,13 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
         return NULL;
     }
 
-    void *p = _iso_alloc(nmemb * size, NULL);
+    void *p = _iso_alloc(NULL, nmemb * size);
 
     memset(p, 0x0, nmemb * size);
     return p;
 }
 
-INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     if(iso_alloc_initialized == false) {
         iso_alloc_initialize();
     }

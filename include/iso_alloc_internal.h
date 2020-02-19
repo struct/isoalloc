@@ -248,7 +248,7 @@ INTERNAL_HIDDEN int64_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
-INTERNAL_HIDDEN void *_iso_alloc(size_t size, iso_alloc_zone *zone);
+INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
 INTERNAL_HIDDEN int32_t _iso_alloc_leak_detector(iso_alloc_zone *zone);
