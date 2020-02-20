@@ -27,13 +27,15 @@ There is one `iso_alloc_root` structure which contains a fixed number of `iso_al
 * 01 was used but is now free
 * 11 canary chunk
 
- All user chunk pages and bitmap pages are surrounded by guard page allocations with the `PROT_NONE`permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Internally managed zones will live for the entire lifetime of the process, but zones created via the API can be destroyed at any time.
+All user chunk pages and bitmap pages are surrounded by guard page allocations with the `PROT_NONE`permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Internally managed zones will live for the entire lifetime of the process, but zones created via the API can be destroyed at any time.
+
+If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented below.
 
 * All allocations are 8 byte aligned
 * Zones are thread safe by default, to disable unset `DTHREAD_SUPPORT`
 * The bitmap has 2 bits set aside per chunk
 * All zones are 8 MB in size regardless of the chunk sizes they manage
-* Default zones are created for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes. Zones are created on demand for larger allocations
+* Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes. Zones are created on demand for larger allocations
 * The free bit slot cache is 255 entries, it helps speed up allocations
 
 ## Security Properties
