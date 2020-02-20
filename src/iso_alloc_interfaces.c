@@ -28,17 +28,13 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
         return NULL;
     }
 
-    size_t chunk_size = _iso_chunk_size(p);
-
-    if(chunk_size >= size) {
-        return p;
-    }
-
     void *r = _iso_alloc(NULL, size);
 
     if(r == NULL) {
         return r;
     }
+
+    size_t chunk_size = _iso_chunk_size(p);
 
     if(size > chunk_size) {
         size = chunk_size;
