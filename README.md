@@ -51,6 +51,28 @@ There is one `iso_alloc_root` structure which contains a fixed number of `iso_al
 * Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
 
+## Building
+
+The Makefile targets are very simple:
+
+`make library` - Builds a standard version of the library
+
+`make library_debug` - Builds a debug version of the library
+
+`make library_debug_no_output` - Builds a debug version of the library with no logging output
+
+`make tests` - Builds and runs all tests
+
+`make perf_tests` - Builds and run a simple performance test
+
+`make cpp_library` - Builds the library with a simple C++ interface that overloads new/delete operators
+
+`make cpp_tests` - Builds and runs the C++ tests
+
+`make format` - Runs clang formatter according to the specification in .clang-format
+
+`make clean` - Cleans up the root directory
+
 ## API
 
 ```
