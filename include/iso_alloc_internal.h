@@ -219,6 +219,7 @@ typedef struct {
     uint32_t system_page_size;
     void *guard_below;
     void *guard_above;
+    uint64_t zone_handle_mask;
     iso_alloc_zone zones[MAX_ZONES];
 } iso_alloc_root;
 

@@ -25,12 +25,12 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     /* This function is only ever called during zone
      * initialization so we don't need to check the
      * current state of any chunks, they're all free.
-     * It's possible the call to rand() above picked
+     * It's possible the call to random() above picked
      * the same index twice, we can live with that
      * collision as canary chunks only provide a small
      * security property anyway */
     for(int32_t i = 0; i < zone->canary_count; i++) {
-        int32_t bm_idx = ALIGN_SZ_DOWN((rand() % max_bitmap_idx));
+        int32_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -103,7 +103,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This will negatively affect performance but
      * leads to a less predictable free list */
-    int32_t bm_idx = ALIGN_SZ_DOWN((rand() % max_bitmap_idx / 4));
+    int32_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx / 4));
 
     if(0 > bm_idx) {
         bm_idx = 0;
@@ -233,7 +233,9 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
 
     struct timeval nt;
     gettimeofday(&nt, NULL);
-    srand((t.tv_usec * t.tv_sec) + (nt.tv_usec * nt.tv_sec) + getpid());
+    srandom((t.tv_usec * t.tv_sec) + (nt.tv_usec * nt.tv_sec) + getpid());
+
+    _root->zone_handle_mask = (random() * random());
     iso_alloc_initialized = true;
 }
 
@@ -370,8 +372,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_RANDOM);
 
     new_zone->index = _root->zones_used;
-    new_zone->canary_secret = (rand() % 0xffffffffffffffff);
-    new_zone->pointer_mask = (rand() % 0xffffffffffffffff);
+    new_zone->canary_secret = (random() * random());
+    new_zone->pointer_mask = (random() * random());
 
     /* This should be the only place we call this function */
     create_canary_chunks(new_zone);
