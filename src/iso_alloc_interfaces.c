@@ -138,30 +138,23 @@ EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
     return;
 }
 
-/* Allocate a zone for a custom object / size */
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     iso_alloc_zone_handle *zone = (iso_alloc_zone_handle *) iso_new_zone(size, false);
     return zone;
 }
 
-/* Disable all use of iso_alloc by protecting the _root */
 EXTERNAL_API void iso_alloc_protect_root() {
     _iso_alloc_protect_root();
 }
 
-/* Unprotect all use of iso_alloc by allowing R/W of the _root */
 EXTERNAL_API void iso_alloc_unprotect_root() {
     _iso_alloc_unprotect_root();
 }
 
-/* Checks for leaks in a specific zone.
- * Returns count of leaks found in that zone */
 EXTERNAL_API int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     return _iso_alloc_zone_leak_detector(zone);
 }
 
-/* Check for leaks in all zones
- * Returns total count of leaks found */
 EXTERNAL_API int32_t iso_alloc_detect_leaks() {
     return _iso_alloc_detect_leaks();
 }
