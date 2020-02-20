@@ -1,4 +1,3 @@
-file tests
 set env LD_LIBRARY_PATH=build/
 set env LD_PRELOAD=build/libisoalloc.so
 r

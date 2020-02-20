@@ -65,50 +65,57 @@ The Makefile targets are very simple:
 
 `make clean` - Cleans up the root directory
 
+## Debugging
+
+If you try to use Isolation Alloc in an existing program then and you are getting crashes here are some tips to help you get started. First make sure you actually replaced all `malloc, calloc, realloc` and `free` calls to their `iso_alloc` equivalents. Don't forget things like `strdup` that return a pointer from `malloc`.
+
+If you are getting consistent crashes you can build a debug version of the library with `make library_debug` and then catch the crash in GDB with a command similar to this `gdb -q -command=misc/commands.gdb <your_binary>`.
+
+If all else fails please file an issue on the [github project](https://github.com/struct/isoalloc/issues) page.
+
 ## API
 
-```
-void *iso_alloc(size_t size) - Equivalent to malloc. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to iso_free.
+`void *iso_alloc(size_t size)` - Equivalent to malloc. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to iso_free.
 
-void *iso_calloc(size_t nmemb, size_t size) - Equivalent to calloc. Allocates a chunk big enough for an array of nmemb elements of size bytes. The array is zeroized.
+`void *iso_calloc(size_t nmemb, size_t size)` - Equivalent to calloc. Allocates a chunk big enough for an array of nmemb elements of size bytes. The array is zeroized.
 
-void *iso_realloc(void *p, size_t size) - Equivalent to realloc. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
+`void *iso_realloc(void *p, size_t size)` - Equivalent to realloc. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
 
-void iso_free(void *p) - Frees any chunk allocated and returned by any iso_alloc API (iso_alloc, iso_calloc, iso_realloc, iso_strdup, iso_strndup).
+`void iso_free(void *p)` - Frees any chunk allocated and returned by any iso_alloc API (iso_alloc, iso_calloc, iso_realloc, iso_strdup, iso_strndup).
 
-void iso_free_permanently(void *p) - Same as iso_free but marks the chunk in such a way that it will not be reallocated
+`void iso_free_permanently(void *p)` - Same as iso_free but marks the chunk in such a way that it will not be reallocated
 
-size_t iso_chunksz(void *p) - Returns the size of the chunk returned by iso_alloc
+`size_t iso_chunksz(void *p)` - Returns the size of the chunk returned by iso_alloc
 
-char *iso_strdup(const char *str) - Equivalent to strdup. Returned pointer must be free'd by iso_free.
+`char *iso_strdup(const char *str)` - Equivalent to strdup. Returned pointer must be free'd by iso_free.
 
-char *iso_strndup(const char *str, size_t n) - Equivalent to strndup. Returned pointer must be free'd by iso_free.
+`char *iso_strndup(const char *str, size_t n)` - Equivalent to strndup. Returned pointer must be free'd by iso_free.
 
-iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) - Allocates a new private zone for allocations up to size bytes. Returns a handle to that zone.
+`iso_alloc_zone_handle *iso_alloc_new_zone(size_t size)` - Allocates a new private zone for allocations up to size bytes. Returns a handle to that zone.
 
-char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) - Equivalent to iso_strdup except string is duplicated in specified zone.
+`char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str)` - Equivalent to iso_strdup except string is duplicated in specified zone.
 
-char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) - Equivalent to iso_strndup except string is duplicated in specified zone.
+`char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n)` - Equivalent to iso_strndup except string is duplicated in specified zone.
 
-iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) - Equivalent to iso_alloc except reallocation is done in specified zone.
+`iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to iso_alloc except reallocation is done in specified zone.
 
-iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size) - Equivalent to iso_realloc except reallocation is done in specified zone.
+`iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size)` - Equivalent to iso_realloc except reallocation is done in specified zone.
 
-void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) - Destroy a zone created with iso_alloc_from_zone.
+`void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone)` - Destroy a zone created with iso_alloc_from_zone.
 
-void iso_alloc_protect_root() - Temporarily protects the iso_alloc root structure by marking it unreadable.
+`void iso_alloc_protect_root()` - Temporarily protects the iso_alloc root structure by marking it unreadable.
 
-void iso_alloc_unprotect_root() - Undoes the operation performed by iso_alloc_protect_root.
+`void iso_alloc_unprotect_root()` - Undoes the operation performed by iso_alloc_protect_root.
 
-int32_t iso_alloc_detect_leaks() - Returns the total number of leaks detected for all zones. Will print debug logs when compiled with `-DDEBUG`
+`int32_t iso_alloc_detect_leaks()` - Returns the total number of leaks detected for all zones. Will print debug logs when compiled with `-DDEBUG`
 
-int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) - Returns the total number of leaks detected for specified zone. Will print debug logs when compiled with `-DDEBUG`
+`int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone)` - Returns the total number of leaks detected for specified zone. Will print debug logs when compiled with `-DDEBUG`
 
-int32_t iso_alloc_mem_usage() - Returns the total memory usage for all zones. Will print debug logs when compiled with `-DDEBUG`
+`int32_t iso_alloc_mem_usage()` - Returns the total memory usage for all zones. Will print debug logs when compiled with `-DDEBUG`
 
-int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) - Returns the total memory usage for a specified zone. Will print debug logs when compiled with `-DDEBUG`
+`int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone)` - Returns the total memory usage for a specified zone. Will print debug logs when compiled with `-DDEBUG`
 
-void iso_verify_zones() - Verifies the state of all zones. Will abort if inconsistencies are found.
+`void iso_verify_zones()` - Verifies the state of all zones. Will abort if inconsistencies are found.
 
-void iso_verify_zone(iso_alloc_zone_handle *zone) - Verifies the state of specified zone. Will abort if inconsistencies are found.
-```
+`void iso_verify_zone(iso_alloc_zone_handle *zone` - Verifies the state of specified zone. Will abort if inconsistencies are found.
+
