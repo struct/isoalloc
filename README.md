@@ -6,7 +6,7 @@ Isolation Alloc is a secure and fast(ish) memory allocator written in C. It's se
 
 ## Design
 
-IsoAlloc is designed for 64 bit Linux only, although it does currently compile and run on Mac OS. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to mmap allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux but that is also untested at this time.
+Isolation Alloc is designed for 64 bit Linux only, although it does currently compile and run on Mac OS. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux but that is also untested at this time.
 
 ```
       Contains Root structure
@@ -20,14 +20,14 @@ IsoAlloc is designed for 64 bit Linux only, although it does currently compile a
  |___ Guard page
 ```
 
-There is one iso_alloc_root structure which contains a fixed number of iso_alloc_zone structures. These iso_alloc_zone structures are referred to as zones. Zones point to user chunks and a bitmap that is used to manage those chunks. Both of these allocations are done separately, the zone only maintains pointers to them. These pointers are masked in between alloc and free operations. The bitmap contains 2 bits per user chunk. The current bit value specification is as follows:
+There is one `iso_alloc_root` structure which contains a fixed number of `iso_alloc_zone` structures. These `iso_alloc_zone` structures are referred to as zones. Zones point to user chunks and a bitmap that is used to manage those chunks. Both of these allocations are done separately, the zone only maintains pointers to them. These pointers are masked in between alloc and free operations. The bitmap contains 2 bits per user chunk. The current bit value specification is as follows:
 
 * 00 free chunk
 * 10 currently in use
 * 01 was used but is now free
 * 11 canary chunk
 
- All user chunk pages and bitmap pages are surrounded by guard page allocations with the PROT_NONE permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Zones managed by isoalloc will live for the entire lifetime of the process, but zones created via the API can be destroyed at any time.
+ All user chunk pages and bitmap pages are surrounded by guard page allocations with the `PROT_NONE`permission. Zones are created for specific sizes, or manually created through the exposed API for a particular size or object type. Internally managed zones will live for the entire lifetime of the process, but zones created via the API can be destroyed at any time.
 
 * All allocations are 8 byte aligned
 * Zones are thread safe by default, to disable unset `DTHREAD_SUPPORT`
@@ -41,14 +41,14 @@ There is one iso_alloc_root structure which contains a fixed number of iso_alloc
 * Zones cannot overflow or underflow into one another
 * All user pages are surrounded by guard pages
 * All bitmap pages are surrounded by guard pages
-* Double free's are checked for on every call to free()
+* Double free's are checked for on every call to `iso_free`
 * For zones managing allocations <= 8192 bytes in size around %1 of their chunks are canaries
-* The state of all zones, or a specific zone, can be verified at any anytime
-* A reused chunk will always have its canary checked before its returned by iso_alloc()
-* A chunk can be permanently free'd with a call to iso_free_permanently()
-* All user chunk contents are cleared upon iso_free() with a constant 0xDE
+* The state of all zones can be verified at any anytime using `iso_verify_zones` or `iso_verify_zone(zone)`
+* A reused chunk will always have its canary checked before its returned by `iso_alloc`
+* A chunk can be permanently free'd with a call to `iso_free_permanently`
+* All user chunk contents are cleared when passed to `iso_free` with the constant 0xDE
 * When freeing a chunk the canary in adjacent chunks above/below are verified
-* Some important zone metadata pointers are masked inbetween alloc/free operations
+* Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
 
 ## API
