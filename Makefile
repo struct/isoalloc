@@ -66,8 +66,12 @@ cpp_tests: clean cpp_library
 	$(CXX) $(CXXFLAGS) $(THREAD_FLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/tests.cpp -o $(BUILD_DIR)/cxx_tests -L$(BUILD_DIR) -lisoalloc
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/libisoalloc.so $(BUILD_DIR)/cxx_tests
 
+install:
+	cp -pR build/libisoalloc.so /usr/lib/
+
 format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
 	rm -rf build/* perf_analysis.txt gmon.out test_output.txt *.dSYM
+	mkdir -p build/
