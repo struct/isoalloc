@@ -664,6 +664,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = zone->canary_secret ^ (uint64_t) p;
     memcpy(p, &canary, CANARY_SIZE);
+    p += (zone->chunk_size - sizeof(uint64_t));
+    memcpy(p, &canary, CANARY_SIZE);
 }
 
 /* Verify the canary value in an allocation */
@@ -671,7 +673,13 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t c = * ((uint64_t *) p);
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG_AND_ABORT("Canary at chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+    }
+
+    c = * ((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
+
+    if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
+        LOG_AND_ABORT("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
     }
 }
 
@@ -679,7 +687,14 @@ INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void 
     uint64_t c = * ((uint64_t *) p);
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG("Canary at chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        return ERR;
+    }
+
+    c = * ((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
+
+    if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
+        LOG("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
         return ERR;
     }
 
