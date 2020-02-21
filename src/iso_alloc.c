@@ -784,11 +784,8 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
+    /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
-
-    if(zone == NULL) {
-        return;
-    }
 
     UNMASK_ZONE_PTRS(zone);
 
@@ -812,11 +809,8 @@ INTERNAL_HIDDEN int32_t _iso_chunk_size(void *p) {
         return 0;
     }
 
+    /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
-
-    if(zone == NULL) {
-        return 0;
-    }
 
     return zone->chunk_size;
 }
