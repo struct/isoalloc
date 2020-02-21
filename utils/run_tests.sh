@@ -25,7 +25,8 @@ for t in "${tests[@]}"; do
     fi
 done
 
-fail_tests=("double_free" "heap_overflow" "heap_underflow" "leaks_test")
+fail_tests=("double_free" "heap_overflow" "heap_underflow" "leaks_test"
+            "wild_free" "unaligned_free")
 
 for t in "${fail_tests[@]}"; do
     echo -n "Running $t test"

@@ -52,6 +52,8 @@ tests: clean library_debug
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/thread_tests.c -o $(BUILD_DIR)/thread_tests -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/leaks_test.c -o $(BUILD_DIR)/leaks_test -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/wild_free.c -o $(BUILD_DIR)/wild_free -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/unaligned_free.c -o $(BUILD_DIR)/unaligned_free -L$(BUILD_DIR) -lisoalloc
 	utils/run_tests.sh
 
 ## Build a non-debug library with performance

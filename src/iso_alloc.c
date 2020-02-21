@@ -136,7 +136,7 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
 #if DEBUG
     for(int32_t i = 0; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
         if(zone->free_bit_slot_cache[i] == bit_slot) {
-            LOG_AND_ABORT("bit slot %ld already in zone %d slot cache index=%d (free_bit_slot_cache_index=%d free_bit_slot_cache_usable=%d", bit_slot, zone->index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_usable);
+            LOG_AND_ABORT("bit slot %ld already in zone[%d] slot cache index=%d (free_bit_slot_cache_index=%d free_bit_slot_cache_usable=%d", bit_slot, zone->index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_usable);
             return;
         }
     }
@@ -706,8 +706,8 @@ INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
 
-    if(chunk_offset % zone->chunk_size != 0) {
-        LOG_AND_ABORT("Chunk at %p is not a multiple of zone %d chunk size %zu", p, zone->index, zone->chunk_size);
+    if((chunk_offset % zone->chunk_size) != 0) {
+        LOG_AND_ABORT("Chunk at %p is not a multiple of zone[%d] chunk size %zu. Off by %lu bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
     }
 
     size_t chunk_number = (chunk_offset / zone->chunk_size);
