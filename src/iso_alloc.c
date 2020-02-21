@@ -61,7 +61,6 @@ INTERNAL_HIDDEN void verify_all_zones() {
 }
 
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
-    LOCK_ZONE_MUTEX(zone);
     UNMASK_ZONE_PTRS(zone);
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int64_t bit_slot;
@@ -83,8 +82,6 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     }
 
     MASK_ZONE_PTRS(zone);
-    UNLOCK_ZONE_MUTEX(zone);
-
     return;
 }
 
@@ -202,6 +199,11 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     }
 
     _root = (iso_alloc_root *) (p + g_page_size);
+
+    if((pthread_mutex_init(&_root->zone_mutex, NULL)) != 0) {
+        LOG_AND_ABORT("Cannot initialize zone mutex for root")
+    }
+
     _root->system_page_size = g_page_size;
 
     _root->guard_below = p;
@@ -224,9 +226,10 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     g_page_size = sysconf(_SC_PAGESIZE);
 
     iso_alloc_new_root();
+    iso_alloc_zone *zone = NULL;
 
     for(size_t i = 0; i < (sizeof(default_zones) / sizeof(uint32_t)); i++) {
-        if(!(iso_new_zone(default_zones[i], true))) {
+        if(!(zone = iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
@@ -246,7 +249,6 @@ __attribute__((constructor)) void iso_alloc_ctor() {
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
-    LOCK_ZONE_MUTEX(zone);
     UNMASK_ZONE_PTRS(zone);
 
     if(zone->internally_managed == false) {
@@ -265,13 +267,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
         munmap(zone->user_pages_guard_below, _root->system_page_size);
         munmap(zone->user_pages_guard_above, _root->system_page_size);
-
-        /* This zone has already been wiped, and we already
-         * destroyed the mutex. At this point a race condition
-         * is unlikely */
-#if THREAD_SUPPORT
-        pthread_mutex_destroy(&zone->mutex);
-#endif
         memset(zone, 0x0, sizeof(iso_alloc_zone));
     }
 }
@@ -310,6 +305,8 @@ __attribute__((destructor)) void iso_alloc_dtor() {
 
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
+    pthread_mutex_destroy(&_root->zone_mutex);
+
     munmap(_root, sizeof(iso_alloc_root));
 }
 
@@ -323,18 +320,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
-    LOCK_ZONE_MUTEX(new_zone);
 
     new_zone->internally_managed = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
     new_zone->bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
-
-#if THREAD_SUPPORT
-    if((pthread_mutex_init(&new_zone->mutex, NULL)) != 0) {
-        LOG_AND_ABORT("Cannot initialize mutex for zone")
-    }
-#endif
 
     /* Most of these fields are effectively immutable
      * and should not change once they are set */
@@ -388,8 +378,6 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     MASK_ZONE_PTRS(new_zone);
 
     _root->zones_used++;
-    UNLOCK_ZONE_MUTEX(new_zone);
-
     return new_zone;
 }
 
@@ -571,8 +559,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             }
         }
 
-        LOCK_ZONE_MUTEX(zone);
-
         /* This is a brand new zone, so the fast path
          * should always work. Abort if it doesn't */
         free_bit_slot = zone->next_free_bit_slot;
@@ -587,7 +573,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             return NULL;
         }
 
-        LOCK_ZONE_MUTEX(zone);
         free_bit_slot = zone->next_free_bit_slot;
     }
 
@@ -637,7 +622,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     bm[dwords_to_bit_slot] = b;
 
     MASK_ZONE_PTRS(zone);
-    UNLOCK_ZONE_MUTEX(zone);
 
     return p;
 }
@@ -684,18 +668,18 @@ INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
 
 /* Verify the canary value in an allocation */
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
-    uint64_t c = (uint64_t) * (uint64_t *) p;
+    uint64_t c = * ((uint64_t *) p);
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG_AND_ABORT("Canary at chunk %p in zone[%d] has been corrupted! 0x%lx 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
     }
 }
 
 INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
-    uint64_t c = (uint64_t) * (uint64_t *) p;
+    uint64_t c = * ((uint64_t *) p);
 
     if(c != (uint64_t)(zone->canary_secret ^ (uint64_t) p)) {
-        LOG("Canary at chunk %p in zone[%d] has been corrupted! 0x%lx 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG("Canary at chunk %p in zone[%d] has been corrupted! Value: 0x%lx Expected: 0x%lx", p, zone->index, c, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
         return ERR;
     }
 
@@ -789,13 +773,11 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
-    LOCK_ZONE_MUTEX(zone);
     UNMASK_ZONE_PTRS(zone);
 
     iso_free_chunk_from_zone(zone, p, permanent);
 
     MASK_ZONE_PTRS(zone);
-    UNLOCK_ZONE_MUTEX(zone);
 }
 
 /* Disable all use of iso_alloc by protecting the _root */

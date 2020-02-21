@@ -22,7 +22,7 @@ All user chunk pages and bitmap pages are surrounded by guard page allocations w
 If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented below.
 
 * All allocations are 8 byte aligned
-* Zones are thread safe by default, to disable unset `DTHREAD_SUPPORT`
+* Zones are thread safe by default
 * The bitmap has 2 bits set aside per chunk
 * All zones are 8 MB in size regardless of the chunk sizes they manage
 * Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes. Zones are created on demand for larger allocations

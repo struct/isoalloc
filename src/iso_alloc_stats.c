@@ -25,13 +25,10 @@ INTERNAL_HIDDEN int32_t _iso_alloc_detect_leaks() {
 INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     int32_t total_leaks = 0;
 #if LEAK_DETECTOR
-    total_leaks -= zone->canary_count;
-
     if(zone == NULL) {
-        return ERR;
+        return 0;
     }
 
-    LOCK_ZONE_MUTEX(zone);
     UNMASK_ZONE_PTRS(zone);
 
     int32_t *bm = (int32_t *) zone->bitmap_start;
@@ -41,20 +38,25 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     for(int32_t i = 0; i < zone->bitmap_size / sizeof(int32_t); i++) {
         for(size_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
             int32_t bit = GET_BIT(bm[i], j);
+            int32_t bit_two = GET_BIT(bm[i], (j + 1));
 
-            if((GET_BIT(bm[i], j)) == 0 && (GET_BIT(bm[i], (j + 1))) == 1) {
+            /* Chunk was used but is now free */
+            if(bit == 0 && bit_two == 1) {
                 was_used++;
             }
 
             /* Theres no difference between a leaked and previously
              * used chunk (11) and a canary chunk (11). So in order
              * to accurately report on leaks we need to verify the
-             * canary value */
-            if(bit != 0) {
+             * canary value. If it doesn't validate then we assume
+             * its a true leak and increment the total_leaks counter */
+            if(bit == 1) {
                 bit_position = (i * BITS_PER_DWORD) + j;
                 void *leak = (zone->user_pages_start + ((bit_position / BITS_PER_CHUNK) * zone->chunk_size));
 
-                if((check_canary_no_abort(zone, leak) == ERR)) {
+                if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
+                    continue;
+                } else {
                     total_leaks++;
                     LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, zone->index, leak, bit_position);
                 }
@@ -64,10 +66,9 @@ INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
     float percentage = (float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0;
 
-    LOG("Zone[%d] Total number of %zu byte chunks(%zu) used(%d) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
+    LOG("Zone[%d] Total number of %zu byte chunks(%zu) used and free'd (%d) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
 
     MASK_ZONE_PTRS(zone);
-    UNLOCK_ZONE_MUTEX(zone);
 #endif
     return total_leaks;
 }

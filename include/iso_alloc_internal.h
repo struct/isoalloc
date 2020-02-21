@@ -16,10 +16,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#if THREAD_SUPPORT
 #include <pthread.h>
-#endif
 
 #define OK 0
 #define ERR -1
@@ -103,15 +100,10 @@
     zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask); \
     zone->user_pages_end = (void *) ((uintptr_t) zone->user_pages_end ^ (uintptr_t) zone->pointer_mask);
 
-#if THREAD_SUPPORT
-#define LOCK_ZONE_MUTEX(zone) \
-    pthread_mutex_lock(&zone->mutex);
-#define UNLOCK_ZONE_MUTEX(zone) \
-    pthread_mutex_unlock(&zone->mutex);
-#else
-#define LOCK_ZONE_MUTEX(zone)
-#define UNLOCK_ZONE_MUTEX(zone)
-#endif
+#define LOCK_ROOT_MUTEX() \
+    pthread_mutex_lock(&_root->zone_mutex);
+#define UNLOCK_ROOT_MUTEX() \
+    pthread_mutex_unlock(&_root->zone_mutex);
 
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
@@ -205,9 +197,6 @@ typedef struct {
     uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
     bool internally_managed;                            /* Zones can be managed by iso_alloc or custom */
     bool is_full;                                       /* Indicates whether this zone is full to avoid expensive free bit slot searches */
-#if THREAD_SUPPORT
-    pthread_mutex_t mutex; /* Each zone has its own mutex which protects both allocations and frees */
-#endif
 } iso_alloc_zone;
 
 /* There is only one iso_alloc root per-process.
@@ -220,6 +209,7 @@ typedef struct {
     void *guard_below;
     void *guard_above;
     uint64_t zone_handle_mask;
+    pthread_mutex_t zone_mutex;
     iso_alloc_zone zones[MAX_ZONES];
 } iso_alloc_root;
 

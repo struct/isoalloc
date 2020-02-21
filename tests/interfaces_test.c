@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("Could not create a zone");
     }
 
-    p = iso_alloc_from_zone(zone, 32);
+    p = iso_alloc_from_zone(zone, 256);
 
     if(p == NULL) {
         LOG_AND_ABORT("Could not allocate from custom zone");
@@ -56,6 +56,8 @@ int main(int argc, char *argv[]) {
     if(p == NULL) {
         LOG_AND_ABORT("Could not allocate from custom zone");
     }
+
+    iso_free(p);
 
     p = iso_alloc(1024);
 

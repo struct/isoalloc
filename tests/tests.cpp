@@ -11,6 +11,8 @@ uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
 uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024,
                           2048, 4096, 8192, 16384, 32768, 65536};
 
+int32_t alloc_count;
+
 int allocate(size_t array_size, size_t allocation_size) {
     void *p[array_size];
     memset(p, 0x0, array_size);
@@ -21,6 +23,12 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
 
         p[i] = new uint8_t[allocation_size];
+
+        if(p[i] == NULL) {
+            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations", allocation_size, alloc_count);
+        }
+
+        alloc_count++;
 
         /* Randomly free some allocations */
         if((rand() % 5) > 1) {
@@ -50,7 +58,7 @@ int main(int argc, char *argv[]) {
         allocate(array_sizes[i], 0);
     }
 
-    //iso_verify_zones();
+    iso_verify_zones();
 
     return 0;
 }

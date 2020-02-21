@@ -4,7 +4,7 @@
 
 $(echo '' > test_output.txt)
 
-tests=("tests" "interfaces_test")
+tests=("tests" "interfaces_test" "thread_tests")
 failure=0
 succeeded=0
 
@@ -25,9 +25,9 @@ for t in "${tests[@]}"; do
     fi
 done
 
-vuln_tests=("double_free" "heap_overflow" "heap_underflow")
+fail_tests=("double_free" "heap_overflow" "heap_underflow" "leaks_test")
 
-for t in "${vuln_tests[@]}"; do
+for t in "${fail_tests[@]}"; do
     echo -n "Running $t test"
     echo -n "Running $t test" >> test_output.txt 2>&1
     $(LD_LIBRARY_PATH=build/ LD_PRELOAD=build/libisoalloc.so build/$t >> test_output.txt 2>&1)
