@@ -20,15 +20,24 @@ BUILD_DIR = build
 all: library tests
 
 ## Build a release version of the library
-## Adds malloc hooks
 library: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 	strip $(BUILD_DIR)/libisoalloc.so
 
+## Build a release version of the library
+## Adds malloc hooks
+library_hook_malloc: clean
+	$(CC) $(CFLAGS) $(LIBRARY) $(MALLOC_HOOK) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	strip $(BUILD_DIR)/libisoalloc.so
+
 ## Build a debug version of the library
-## Does not compile malloc hooks
 library_debug: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+
+## Build a debug version of the library
+## Adds malloc hooks
+library_debug_hook_malloc: clean
+	$(CC) $(CFLAGS) $(LIBRARY) $(MALLOC_HOOK) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
 library_debug_no_output: clean

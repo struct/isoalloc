@@ -9,19 +9,20 @@
  * This may not be desired, especially if you intend to call
  * iso_alloc interfaces directly. These hook points are
  * useful because they allow us to use iso_alloc even in
- * existing and closed source programs that call malloc/free */
+ * existing and closed source programs that call malloc/free.
+ * Using this requires LD_PRELOAD so it is not recommended. */
 #if MALLOC_HOOK
 EXTERNAL_API void *malloc(size_t size) {
-    return _iso_alloc(NULL, size);
+    return iso_alloc(size);
 }
 
 EXTERNAL_API void free(void *p) {
-    _iso_free(p, false);
+    iso_free(p);
     return;
 }
 
 EXTERNAL_API void *calloc(size_t nmemb, size_t size) {
-    return _iso_calloc(nmemb, size);
+    return iso_calloc(nmemb, size);
 }
 
 EXTERNAL_API void *realloc(void *p, size_t size) {
@@ -30,7 +31,7 @@ EXTERNAL_API void *realloc(void *p, size_t size) {
 
 EXTERNAL_API int posix_memalign(void **memptr, size_t alignment, size_t size) {
     /* All iso_alloc allocations are 8 byte aligned */
-    *memptr = _iso_alloc(NULL, size);
+    *memptr = iso_alloc(size);
 
     if(*memptr != NULL) {
         return 0;
@@ -41,6 +42,6 @@ EXTERNAL_API int posix_memalign(void **memptr, size_t alignment, size_t size) {
 
 EXTERNAL_API void *memalign(size_t alignment, size_t size) {
     /* All iso_alloc allocations are 8 byte aligned */
-    return _iso_alloc(NULL, size);
+    return iso_alloc(size);
 }
 #endif
