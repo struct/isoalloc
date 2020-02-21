@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
     void *p = NULL;
 
     for(int32_t i = 0; i < 16; i++) {
-        p = iso_alloc(i*i);
+        p = iso_alloc(i * i);
 
         /* Free a single chunk */
         if(i == 1) {
