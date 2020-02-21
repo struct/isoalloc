@@ -704,8 +704,14 @@ INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void 
 }
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
+    /* Ensure the pointer is properly aligned */
+    if(((uintptr_t) p % ALIGNMENT) != 0) {
+        LOG_AND_ABORT("Chunk at %p of zone[%d] is not 8 bit aligned ", p, zone->index);
+    }
+
     uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
 
+    /* Ensure the pointer is a multiple of chunk size */
     if((chunk_offset % zone->chunk_size) != 0) {
         LOG_AND_ABORT("Chunk at %p is not a multiple of zone[%d] chunk size %zu. Off by %lu bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
     }
