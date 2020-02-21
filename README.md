@@ -42,6 +42,7 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * When freeing a chunk the canary in adjacent chunks above/below are verified
 * Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
+* Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size
 
 ## Building
 

@@ -706,7 +706,7 @@ INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(((uintptr_t) p % ALIGNMENT) != 0) {
-        LOG_AND_ABORT("Chunk at %p of zone[%d] is not 8 bit aligned ", p, zone->index);
+        LOG_AND_ABORT("Chunk at %p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
     uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
