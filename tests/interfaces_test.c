@@ -23,6 +23,14 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("iso_alloc failed")
     }
 
+    memset(p, 0x41, 128);
+
+    uint8_t *pv = p;
+
+    if(pv[10] != 0x41 || pv[100] != 0x41) {
+        LOG_AND_ABORT("Chunk allocated at %p does not contain expected data! %x %x", p, pv[10], pv[100]);
+    }
+
     /* Test iso_realloc */
     p = iso_realloc(p, 1024);
 
