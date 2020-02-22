@@ -726,9 +726,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
     }
 
-    /* TODO make configurable */
-    iso_clear_user_chunk(p, zone->chunk_size);
-
     int32_t *bm = (int32_t *) zone->bitmap_start;
     int32_t b = bm[dwords_to_bit_slot];
 
@@ -749,6 +746,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     }
 
     bm[dwords_to_bit_slot] = b;
+
+    /* TODO make configurable */
+    iso_clear_user_chunk(p, zone->chunk_size);
 
     write_canary(zone, p);
 
