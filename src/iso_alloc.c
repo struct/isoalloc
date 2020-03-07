@@ -149,10 +149,6 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
         if(current_bit_slot == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %ld in cache", zone->index, bit_slot);
         }
-
-        if(current_bit_slot == BAD_BIT_SLOT) {
-            break;
-        }
     }
 
     if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
