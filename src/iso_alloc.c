@@ -133,14 +133,27 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
-#if DEBUG
-    for(int32_t i = 0; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
-        if(zone->free_bit_slot_cache[i] == bit_slot) {
-            LOG_AND_ABORT("bit slot %ld already in zone[%d] slot cache index=%d (free_bit_slot_cache_index=%d free_bit_slot_cache_usable=%d", bit_slot, zone->index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_index, zone->free_bit_slot_cache_usable);
-            return;
+    /* The cache is sorted at creation time but once we start
+     * free'ing chunks we add bit_slots to it in an unpredictable
+     * order. So we can't search the cache with something like
+     * a binary search. This brute force search shouldn't incur
+     * too much of a performance penalty as we only search starting
+     * at the free_bit_slot_cache_usable index which is updated
+     * everytime we call get_next_free_bit_slot(). We do this in
+     * order to detect any corruption of the cache that attempts
+     * to add duplicate bit_slots which would result in iso_alloc()
+     * handing out in-use chunks */
+    for(int32_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
+        int64_t current_bit_slot = zone->free_bit_slot_cache[i];
+
+        if(current_bit_slot == bit_slot) {
+            LOG_AND_ABORT("Zone[%d] already contains bit slot %ld in cache", zone->index, bit_slot);
+        }
+
+        if(current_bit_slot == BAD_BIT_SLOT) {
+            break;
         }
     }
-#endif
 
     if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
         return;
@@ -717,10 +730,10 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     }
 
     size_t chunk_number = (chunk_offset / zone->chunk_size);
-    int64_t bit_position = (chunk_number * BITS_PER_CHUNK);
+    int64_t bit_slot = (chunk_number * BITS_PER_CHUNK);
 
-    int64_t dwords_to_bit_slot = (bit_position / BITS_PER_DWORD);
-    int32_t which_bit = (bit_position % BITS_PER_DWORD);
+    int64_t dwords_to_bit_slot = (bit_slot / BITS_PER_DWORD);
+    int32_t which_bit = (bit_slot % BITS_PER_DWORD);
 
     if((zone->bitmap_start + dwords_to_bit_slot) >= zone->bitmap_end) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
@@ -732,7 +745,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     /* Double free detection */
     /* TODO: make configurable */
     if((GET_BIT(b, which_bit)) == 0) {
-        LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%ld bit_position=%ld", p, zone->index, dwords_to_bit_slot, bit_position);
+        LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%ld bit_slot=%ld", p, zone->index, dwords_to_bit_slot, bit_slot);
     }
 
     /* Set the next bit so we know this chunk was used */
@@ -780,7 +793,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
         }
     }
 
-    insert_free_bit_slot(zone, bit_position);
+    insert_free_bit_slot(zone, bit_slot);
     zone->is_full = false;
     return;
 }
