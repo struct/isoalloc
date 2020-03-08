@@ -20,7 +20,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     int64_t bit_slot;
 
     /* Roughly %1 of the chunks in this zone will become a canary */
-    zone->canary_count = (chunk_count / CANARY_COUNT_DIV);
+    int32_t canary_count = (chunk_count / CANARY_COUNT_DIV);
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -29,7 +29,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
      * the same index twice, we can live with that
      * collision as canary chunks only provide a small
      * security property anyway */
-    for(int32_t i = 0; i < zone->canary_count; i++) {
+    for(int32_t i = 0; i < canary_count; i++) {
         int32_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx));
 
         if(0 > bm_idx) {
