@@ -21,7 +21,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_detect_leaks() {
 /* This is the built-in leak detector. It works by scanning
  * the bitmap for every allocated zone and looking for
  * uncleared bits. All user allocations should have been
- * free'd by the time this destructor runs! */
+ * free'd by the time this function runs! */
 INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     int32_t total_leaks = 0;
 #if LEAK_DETECTOR
