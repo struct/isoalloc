@@ -2,7 +2,7 @@
 
 # Isolation Alloc
 
-Isolation Alloc is a secure and fast(ish) memory allocator written in C. It's security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed as keeping objects of different sizes or types separate from one another. Isolation Alloc is designed and tested for 64 bit Linux. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux (it currently compiles on Mac OS) but that is also untested at this time.
+Isolation Alloc is a secure and fast(ish) memory allocator written in C. Its security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed up as keeping objects of different sizes or types separate from one another. Isolation Alloc is designed and tested for 64 bit Linux. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux (it currently compiles on Mac OS) but that is also untested at this time.
 
 Additional information about the allocator and some of its design choices can be found [here](http://struct.github.io/iso_alloc.html).
 
