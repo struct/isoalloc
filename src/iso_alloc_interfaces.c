@@ -186,7 +186,7 @@ EXTERNAL_API void iso_alloc_unprotect_root() {
     _iso_alloc_unprotect_root();
 }
 
-EXTERNAL_API int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
+EXTERNAL_API int64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
@@ -199,14 +199,14 @@ EXTERNAL_API int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     return r;
 }
 
-EXTERNAL_API int32_t iso_alloc_detect_leaks() {
+EXTERNAL_API int64_t iso_alloc_detect_leaks() {
     LOCK_ROOT_MUTEX();
     int32_t r = _iso_alloc_detect_leaks();
     UNLOCK_ROOT_MUTEX();
     return r;
 }
 
-EXTERNAL_API int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
+EXTERNAL_API int64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
@@ -219,7 +219,7 @@ EXTERNAL_API int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     return r;
 }
 
-EXTERNAL_API int32_t iso_alloc_mem_usage() {
+EXTERNAL_API int64_t iso_alloc_mem_usage() {
     LOCK_ROOT_MUTEX();
     int32_t r = _iso_alloc_mem_usage();
     UNLOCK_ROOT_MUTEX();

@@ -111,13 +111,13 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_alloc_unprotect_root()` - Undoes the operation performed by `iso_alloc_protect_root`.
 
-`int32_t iso_alloc_detect_leaks()` - Returns the total number of leaks detected for all zones. Will print debug logs when compiled with `-DDEBUG`
+`int64_t iso_alloc_detect_leaks()` - Returns the total number of leaks detected for all zones. Will print debug logs when compiled with `-DDEBUG`
 
-`int32_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone)` - Returns the total number of leaks detected for specified zone. Will print debug logs when compiled with `-DDEBUG`
+`int64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone)` - Returns the total number of leaks detected for specified zone. Will print debug logs when compiled with `-DDEBUG`
 
-`int32_t iso_alloc_mem_usage()` - Returns the total memory usage for all zones. Will print debug logs when compiled with `-DDEBUG`
+`int64_t iso_alloc_mem_usage()` - Returns the total memory usage for all zones. Will print debug logs when compiled with `-DDEBUG`
 
-`int32_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone)` - Returns the total memory usage for a specified zone. Will print debug logs when compiled with `-DDEBUG`
+`int64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone)` - Returns the total memory usage for a specified zone. Will print debug logs when compiled with `-DDEBUG`
 
 `void iso_verify_zones()` - Verifies the state of all zones. Will abort if inconsistencies are found.
 

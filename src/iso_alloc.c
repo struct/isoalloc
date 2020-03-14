@@ -14,13 +14,13 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
         return;
     }
 
-    int32_t *bm = (int32_t *) zone->bitmap_start;
-    int32_t max_bitmap_idx = (zone->bitmap_size / sizeof(int32_t));
-    int32_t chunk_count = (ZONE_USER_SIZE / zone->chunk_size);
+    int64_t *bm = (int64_t *) zone->bitmap_start;
+    int64_t max_bitmap_idx = (zone->bitmap_size / sizeof(int64_t));
+    int64_t chunk_count = (ZONE_USER_SIZE / zone->chunk_size);
     int64_t bit_slot;
 
     /* Roughly %1 of the chunks in this zone will become a canary */
-    int32_t canary_count = (chunk_count / CANARY_COUNT_DIV);
+    int64_t canary_count = (chunk_count / CANARY_COUNT_DIV);
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -29,8 +29,8 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
      * the same index twice, we can live with that
      * collision as canary chunks only provide a small
      * security property anyway */
-    for(int32_t i = 0; i < canary_count; i++) {
-        int32_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx));
+    for(int64_t i = 0; i < canary_count; i++) {
+        int64_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -39,7 +39,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
         /* Set the 1st and 2nd bits as 1 */
         SET_BIT(bm[bm_idx], 0);
         SET_BIT(bm[bm_idx], 1);
-        bit_slot = (bm_idx * BITS_PER_DWORD);
+        bit_slot = (bm_idx * BITS_PER_QWORD);
         void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
         write_canary(zone, p);
     }
@@ -62,13 +62,13 @@ INTERNAL_HIDDEN void verify_all_zones() {
 
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
-    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int64_t *bm = (int64_t *) zone->bitmap_start;
     int64_t bit_slot;
-    int32_t bit;
+    int64_t bit;
 
-    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
-        for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
-            bit_slot = (i * BITS_PER_DWORD);
+    for(int64_t i = 0; i < (zone->bitmap_size / sizeof(int64_t)); i++) {
+        for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+            bit_slot = (i * BITS_PER_QWORD);
             bit = GET_BIT(bm[i], (j + 1));
 
             /* If this bit is set it is either a free chunk or
@@ -92,15 +92,15 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
  * user mapping. Theres no guarantee this function will
  * find any free slots. */
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
-    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int64_t *bm = (int64_t *) zone->bitmap_start;
     int64_t bit_slot;
-    int32_t max_bitmap_idx = (zone->bitmap_size / sizeof(int32_t));
+    int64_t max_bitmap_idx = (zone->bitmap_size / sizeof(int64_t));
 
     /* This gives us an arbitrary spot in the bitmap to 
      * start searching but may mean we end up with a smaller
      * cache. This will negatively affect performance but
      * leads to a less predictable free list */
-    int32_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx / 4));
+    int64_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx / 4));
 
     if(0 > bm_idx) {
         bm_idx = 0;
@@ -116,15 +116,15 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
             return;
         }
 
-        for(int j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
+        for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
                 return;
             }
 
-            int32_t bit = GET_BIT(bm[bm_idx], j);
+            int64_t bit = GET_BIT(bm[bm_idx], j);
 
             if(bit == 0) {
-                bit_slot = (bm_idx * BITS_PER_DWORD) + j;
+                bit_slot = (bm_idx * BITS_PER_QWORD) + j;
                 zone->free_bit_slot_cache[zone->free_bit_slot_cache_index] = bit_slot;
                 zone->free_bit_slot_cache_index++;
             }
@@ -143,7 +143,7 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
      * order to detect any corruption of the cache that attempts
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks */
-    for(int32_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
+    for(int64_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
         int64_t current_bit_slot = zone->free_bit_slot_cache[i];
 
         if(current_bit_slot == bit_slot) {
@@ -237,7 +237,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     iso_alloc_new_root();
     iso_alloc_zone *zone = NULL;
 
-    for(size_t i = 0; i < (sizeof(default_zones) / sizeof(uint32_t)); i++) {
+    for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
         if(!(zone = iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
@@ -301,7 +301,7 @@ __attribute__((destructor)) void iso_alloc_dtor() {
 
 #endif
 
-    for(int32_t i = 0; i < _root->zones_used; i++) {
+    for(int64_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
         if(zone == NULL) {
@@ -393,15 +393,15 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
 /* Iterate through a zone bitmap a dword at a time
  * looking for empty holes (i.e. slot == 0) */
 INTERNAL_HIDDEN int64_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
-    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int64_t *bm = (int64_t *) zone->bitmap_start;
     int64_t bit_position = BAD_BIT_SLOT;
 
     /* Iterate the entire bitmap a dword at a time */
-    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
+    for(int64_t i = 0; i < (zone->bitmap_size / sizeof(int64_t)); i++) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
-            bit_position = (i * BITS_PER_DWORD);
+            bit_position = (i * BITS_PER_QWORD);
             return bit_position;
         }
     }
@@ -413,16 +413,16 @@ INTERNAL_HIDDEN int64_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
  * and returns the first free bit position. In a heavily
  * used zone this function will be slow to search */
 INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
-    int32_t *bm = (int32_t *) zone->bitmap_start;
+    int64_t *bm = (int64_t *) zone->bitmap_start;
     int64_t bit_position = BAD_BIT_SLOT;
-    int32_t bit;
+    int64_t bit;
 
-    for(int32_t i = 0; i < (zone->bitmap_size / sizeof(int32_t)); i++) {
-        for(int32_t j = 0; j < BITS_PER_DWORD; j += BITS_PER_CHUNK) {
+    for(int64_t i = 0; i < (zone->bitmap_size / sizeof(int64_t)); i++) {
+        for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             bit = GET_BIT(bm[i], j);
 
             if(bit == 0) {
-                bit_position = (i * BITS_PER_DWORD) + j;
+                bit_position = (i * BITS_PER_QWORD) + j;
                 return bit_position;
             }
         }
@@ -491,7 +491,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     iso_alloc_zone *zone = NULL;
 
-    for(int32_t i = 0; i < _root->zones_used; i++) {
+    for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         if(zone == NULL) {
@@ -544,7 +544,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         /* In order to guarantee an 8 byte memory alignment
          * for all allocations we only create zones that
          * work with default allocation sizes */
-        for(size_t i = 0; i < (sizeof(default_zones) / sizeof(uint32_t)); i++) {
+        for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
             if(size < default_zones[i]) {
                 size = default_zones[i];
                 zone = iso_new_zone(size, true);
@@ -593,12 +593,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
     zone->next_free_bit_slot = BAD_BIT_SLOT;
 
-    int32_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_DWORD);
-    int64_t which_bit = (free_bit_slot % BITS_PER_DWORD);
+    int64_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_QWORD);
+    int64_t which_bit = (free_bit_slot % BITS_PER_QWORD);
 
     void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
-    int32_t *bm = (int32_t *) zone->bitmap_start;
-    int32_t b = bm[dwords_to_bit_slot];
+    int64_t *bm = (int64_t *) zone->bitmap_start;
+    int64_t b = bm[dwords_to_bit_slot];
 
     if(p > zone->user_pages_end) {
         LOG_AND_ABORT("Allocating an address %p from zone[%d], bit slot %ld %ld bytes %ld pages outside zones user pages %p %p",
@@ -638,7 +638,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
-    for(int32_t i = 0; i <= _root->zones_used; i++) {
+    for(int64_t i = 0; i <= _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         if(zone == NULL) {
@@ -693,7 +693,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     }
 }
 
-INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p);
 
@@ -727,16 +727,15 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     size_t chunk_number = (chunk_offset / zone->chunk_size);
     int64_t bit_slot = (chunk_number * BITS_PER_CHUNK);
-
-    int64_t dwords_to_bit_slot = (bit_slot / BITS_PER_DWORD);
-    int32_t which_bit = (bit_slot % BITS_PER_DWORD);
+    int64_t dwords_to_bit_slot = (bit_slot / BITS_PER_QWORD);
 
     if((zone->bitmap_start + dwords_to_bit_slot) >= zone->bitmap_end) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
     }
 
-    int32_t *bm = (int32_t *) zone->bitmap_start;
-    int32_t b = bm[dwords_to_bit_slot];
+    int64_t which_bit = (bit_slot % BITS_PER_QWORD);
+    int64_t *bm = (int64_t *) zone->bitmap_start;
+    int64_t b = bm[dwords_to_bit_slot];
 
     /* Double free detection */
     /* TODO: make configurable */
@@ -767,9 +766,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
      * we can verify */
     if((p + zone->chunk_size) < zone->user_pages_end) {
         int64_t bit_position_over = ((chunk_number + 1) * BITS_PER_CHUNK);
-        dwords_to_bit_slot = (bit_position_over / BITS_PER_DWORD);
+        dwords_to_bit_slot = (bit_position_over / BITS_PER_QWORD);
         b = bm[dwords_to_bit_slot];
-        which_bit = (bit_position_over % BITS_PER_DWORD);
+        which_bit = (bit_position_over % BITS_PER_QWORD);
 
         if((GET_BIT(b, (which_bit + 1))) == 1) {
             void *p_over = POINTER_FROM_BITSLOT(zone, bit_position_over);
@@ -779,9 +778,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     if((p - zone->chunk_size) > zone->user_pages_start) {
         int64_t bit_position_under = ((chunk_number - 1) * BITS_PER_CHUNK);
-        dwords_to_bit_slot = (bit_position_under / BITS_PER_DWORD);
+        dwords_to_bit_slot = (bit_position_under / BITS_PER_QWORD);
         b = bm[dwords_to_bit_slot];
-        which_bit = (bit_position_under % BITS_PER_DWORD);
+        which_bit = (bit_position_under % BITS_PER_QWORD);
 
         if((GET_BIT(b, (which_bit + 1))) == 1) {
             void *p_under = POINTER_FROM_BITSLOT(zone, bit_position_under);
@@ -819,7 +818,7 @@ INTERNAL_HIDDEN void _iso_alloc_unprotect_root() {
     mprotect_pages(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
 }
 
-INTERNAL_HIDDEN int32_t _iso_chunk_size(void *p) {
+INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     if(p == NULL) {
         return 0;
     }

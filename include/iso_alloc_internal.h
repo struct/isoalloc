@@ -55,7 +55,7 @@
 
 #define BITS_PER_BYTE 8
 
-#define BITS_PER_DWORD 32
+#define BITS_PER_QWORD 64
 
 #define CANARY_SIZE 8
 
@@ -158,7 +158,7 @@ uint32_t g_page_size;
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Anything above these sizes will
  * be created and initialized on demand */
-static uint32_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
+static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
@@ -218,7 +218,7 @@ bool iso_alloc_initialized;
 
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE int32_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
+INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
@@ -240,11 +240,11 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
-INTERNAL_HIDDEN int32_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
-INTERNAL_HIDDEN int32_t _iso_alloc_leak_detector(iso_alloc_zone *zone);
-INTERNAL_HIDDEN int32_t _iso_alloc_detect_leaks();
-INTERNAL_HIDDEN int32_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
-INTERNAL_HIDDEN int32_t _iso_alloc_mem_usage();
-INTERNAL_HIDDEN int32_t _iso_chunk_size(void *p);
+INTERNAL_HIDDEN int64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
+INTERNAL_HIDDEN int64_t _iso_alloc_leak_detector(iso_alloc_zone *zone);
+INTERNAL_HIDDEN int64_t _iso_alloc_detect_leaks();
+INTERNAL_HIDDEN int64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
+INTERNAL_HIDDEN int64_t _iso_alloc_mem_usage();
+INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN void _iso_alloc_protect_root();
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root();
