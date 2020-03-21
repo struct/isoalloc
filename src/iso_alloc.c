@@ -304,10 +304,12 @@ __attribute__((destructor(65535))) void iso_alloc_dtor() {
 
 #endif
 
-/* Using MALLOC_HOOK is not recommended. But if you do
- * use it you may find your program crashing in various
- * dynamic linker routines that support destructors. In
- * this case we verify each zone but don't destroy them */
+    /* Using MALLOC_HOOK is not recommended. But if you do
+     * use it you may find your program crashing in various
+     * dynamic linker routines that support destructors. In
+     * this case we verify each zone but don't destroy them.
+     * This will leak the root structure but we are probably
+     * exiting anyway. */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
