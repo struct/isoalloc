@@ -251,7 +251,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     iso_alloc_initialized = true;
 }
 
-__attribute__((constructor)) void iso_alloc_ctor() {
+__attribute__((constructor(0))) void iso_alloc_ctor() {
     if(iso_alloc_initialized == false) {
         iso_alloc_initialize();
     }
@@ -283,7 +283,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     }
 }
 
-__attribute__((destructor)) void iso_alloc_dtor() {
+__attribute__((destructor(65535))) void iso_alloc_dtor() {
 #if DEBUG || LEAK_DETECTOR || MEM_USAGE
     uint64_t mb = 0;
 
@@ -304,6 +304,10 @@ __attribute__((destructor)) void iso_alloc_dtor() {
 
 #endif
 
+/* Using MALLOC_HOOK is not recommended. But if you do
+ * use it you may find your program crashing in various
+ * dynamic linker routines that support destructors. In
+ * this case we verify each zone but don't destroy them */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
@@ -312,14 +316,17 @@ __attribute__((destructor)) void iso_alloc_dtor() {
         }
 
         verify_zone(zone);
+#ifndef MALLOC_HOOK
         _iso_alloc_destroy_zone(zone);
+#endif
     }
 
+#ifndef MALLOC_HOOK
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
     pthread_mutex_destroy(&_root->zone_mutex);
-
     munmap(_root, sizeof(iso_alloc_root));
+#endif
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
