@@ -264,8 +264,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         /* If this zone was a special case then we don't want
          * to reuse any of its backing pages. Mark them unusable
          * and ensure any future accesses result in a segfault */
+        memset(zone->bitmap_start, POISON_BYTE, zone->bitmap_size);
         mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
+        memset(zone->user_pages_start, POISON_BYTE, ZONE_USER_SIZE);
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+        memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
         /* Purposefully keep the mutex locked. Any thread
          * that tries to allocate/free in this zone should
          * rightfully deadlock */
@@ -276,7 +279,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
         munmap(zone->user_pages_guard_below, _root->system_page_size);
         munmap(zone->user_pages_guard_above, _root->system_page_size);
-        memset(zone, 0x0, sizeof(iso_alloc_zone));
+        memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
     }
 }
 
