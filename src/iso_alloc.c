@@ -345,7 +345,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     new_zone->internally_managed = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
-    new_zone->bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
+
+    /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
+     * then we need to allocate a minimum size bitmap */
+    size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
+    new_zone->bitmap_size = bitmap_size ? bitmap_size : sizeof(uint64_t);
 
     /* Most of these fields are effectively immutable
      * and should not change once they are set */
@@ -544,6 +548,11 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     if(iso_alloc_initialized == false) {
         iso_alloc_initialize();
+    }
+
+    /* TODO: support large (> 8mb) allocations */
+    if(size >= ZONE_USER_SIZE) {
+        return NULL;
     }
 
     if(zone == NULL) {

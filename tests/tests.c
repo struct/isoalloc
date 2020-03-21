@@ -59,6 +59,39 @@ int main(int argc, char *argv[]) {
         allocate(array_sizes[i], 0);
     }
 
+    /* Allocate some large sizes */
+    void *p = iso_alloc((ZONE_USER_SIZE / 2) - 1);
+
+    if(p == NULL) {
+        LOG_AND_ABORT("Failed to allocate %d bytes", (ZONE_USER_SIZE / 2) - 1);
+    }
+
+    iso_free(p);
+
+    p = iso_alloc((ZONE_USER_SIZE / 2));
+
+    if(p == NULL) {
+        LOG_AND_ABORT("Failed to allocate %d bytes", (ZONE_USER_SIZE / 2));
+    }
+
+    iso_free(p);
+
+    p = iso_alloc((ZONE_USER_SIZE / 2) + 1);
+
+    if(p == NULL) {
+        LOG_AND_ABORT("Failed to allocate %d bytes", (ZONE_USER_SIZE / 2) + 1);
+    }
+
+    iso_free(p);
+
+    p = iso_alloc(ZONE_USER_SIZE - 1);
+
+    if(p == NULL) {
+        LOG_AND_ABORT("Failed to allocate %d bytes", ZONE_USER_SIZE - 1);
+    }
+
+    iso_free(p);
+
     iso_verify_zones();
 
     return 0;
