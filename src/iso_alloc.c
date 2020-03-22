@@ -340,6 +340,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
         size = ROUND_UP_SZ(size);
     }
 
+    if(size > SMALL_SZ_MAX) {
+        LOG_AND_ABORT("Chunks larger than %d not supported yet", SMALL_SZ_MAX);
+    }
+
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
 
     new_zone->internally_managed = internal;
@@ -349,7 +353,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
     size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
-    new_zone->bitmap_size = bitmap_size ? bitmap_size : sizeof(uint64_t);
+    new_zone->bitmap_size = (bitmap_size > sizeof(uint64_t)) ? bitmap_size : sizeof(uint64_t);
 
     /* Most of these fields are effectively immutable
      * and should not change once they are set */
@@ -459,7 +463,9 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * requested allocation size then we would be wasting
      * a lot memory by using it. Lets force the creation
      * of a new zone instead. We only do this for sizes
-     * beyond ZONE_1024 bytes */
+     * beyond ZONE_1024 bytes. In other words we can live
+     * with some wasted space in zones that manage chunks
+     * smaller than that */
     if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > ZONE_1024) {
         MASK_ZONE_PTRS(zone);
         return NULL;

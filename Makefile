@@ -3,15 +3,15 @@
 
 CC = clang
 CXX = clang++
-COMMON_CFLAGS = -Wall -O2 -Iinclude/ -pthread
+COMMON_CFLAGS = -Wall -Iinclude/ -pthread
 CFLAGS =  $(COMMON_CFLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
-DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE
+DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE -O0
 GDB_FLAGS = -g -ggdb3
 PERF_FLAGS = -pg -DPERF_BUILD
 MALLOC_HOOK = -DMALLOC_HOOK
-LIBRARY = -fPIC -shared -O3
+LIBRARY = -fPIC -shared
 SRC_DIR = src
 C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp

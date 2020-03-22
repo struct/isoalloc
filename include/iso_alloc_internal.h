@@ -117,6 +117,12 @@
 /* Each user allocation zone we make is 8mb in size */
 #define ZONE_USER_SIZE 8388608
 
+/* This is the largest divisor of ZONE_USER_SIZE we can
+ * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
+ * above this size will need to go through the large
+ * mapping code path */
+#define SMALL_SZ_MAX 262144
+
 #define WASTED_SZ_MULTIPLIER 8
 
 /* We allocate (1) zone at startup for common sizes.
