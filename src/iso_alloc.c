@@ -133,6 +133,11 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
+    if(0 > zone->free_bit_slot_cache_usable || 0 > zone->free_bit_slot_cache_index) {
+        LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
+    }
+
+#if DEBUG
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
      * order. So we can't search the cache with something like
@@ -142,14 +147,14 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
      * everytime we call get_next_free_bit_slot(). We do this in
      * order to detect any corruption of the cache that attempts
      * to add duplicate bit_slots which would result in iso_alloc()
-     * handing out in-use chunks */
+     * handing out in-use chunks. The _iso_alloc() path also does
+     * a check on the bitmap itself before handing out any chunks */
     for(int64_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(uint64_t)); i++) {
-        int64_t current_bit_slot = zone->free_bit_slot_cache[i];
-
-        if(current_bit_slot == bit_slot) {
+        if(zone->free_bit_slot_cache[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %ld in cache", zone->index, bit_slot);
         }
     }
+#endif
 
     if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
         return;
@@ -712,7 +717,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     if((GET_BIT(b, which_bit)) != 0) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %zu Cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, which_bit was %ld",
+        LOG_AND_ABORT("Zone[%d] for chunk size %zu cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, which_bit was %ld",
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
     }
 

@@ -180,7 +180,7 @@ typedef struct {
     int64_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
     int32_t free_bit_slot_cache_index;                  /* Tracks how many entries in the cache are filled */
     int32_t free_bit_slot_cache_usable;                 /* The oldest members of the free cache are served first */
-    int64_t next_free_bit_slot;                         /* The last bit slot returned by get_random_free_bit_slot */
+    int64_t next_free_bit_slot;                         /* The last bit slot returned by get_next_free_bit_slot */
     int32_t index;                                      /* Zone index */
     uint64_t canary_secret;                             /* Each zone has its own canary secret */
     uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
