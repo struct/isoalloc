@@ -527,7 +527,22 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     iso_alloc_zone *zone = NULL;
 
-    for(int64_t i = 0; i < _root->zones_used; i++) {
+    /* A simple optimization to find which default zone
+     * should fit this allocation. If we fail then a
+     * slower iterative approach is used. The longer a
+     * program runs the more likely we will fail this
+     * fast path as default zones may fill up */
+    int64_t i = 0;
+
+    if(size >= ZONE_512) {
+        i = (sizeof(default_zones) / sizeof(uint64_t) / 2);
+    } else if(size > ZONE_8192) {
+        i = sizeof(default_zones) / sizeof(uint64_t);
+    } else {
+        i = 0;
+    }
+
+    for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         if(zone == NULL) {
