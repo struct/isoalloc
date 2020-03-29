@@ -59,14 +59,6 @@ int main(int argc, char *argv[]) {
         allocate(array_sizes[i], 0);
     }
 
-    void *p = iso_alloc(SMALL_SZ_MAX);
-
-    if(p == NULL) {
-        LOG_AND_ABORT("Failed to allocate %d bytes", SMALL_SZ_MAX);
-    }
-
-    iso_free(p);
-
     iso_verify_zones();
 
     return 0;

@@ -42,9 +42,6 @@
     fflush(stdout);                                                                         \
     abort();
 
-#define ROUND_PAGE_UP(N) ((((N) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
-#define ROUND_PAGE_DOWN(N) (ROUND_PAGE_UP(N) - g_page_size)
-
 /* The number of bits in the bitmap that correspond
  * to a user chunk. We use 2 bits:
  *  00 free, never used
@@ -75,33 +72,28 @@
 #define ALIGN_SZ_DOWN(n) \
     ((((n) + (ALIGNMENT) -1) / (ALIGNMENT)) * (ALIGNMENT)) - ALIGNMENT
 
-#define ROUND_UP_SZ(n) \
-    ((((n) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
-
 #define ROUND_UP_PAGE(n) \
     ((((n) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
 
 #define ROUND_DOWN_PAGE(n) \
     (ROUND_UP_PAGE(n) - g_page_size)
 
-#define UNMASK_ZONE_PTRS(zone) \
-    MASK_BITMAP_PTRS(zone);    \
-    MASK_USER_PTRS(zone);
-
 #define MASK_ZONE_PTRS(zone) \
     MASK_BITMAP_PTRS(zone);  \
     MASK_USER_PTRS(zone);
 
-#define MASK_BITMAP_PTRS(zone)                                                                       \
-    zone->bitmap_start = (void *) ((uintptr_t) zone->bitmap_start ^ (uintptr_t) zone->pointer_mask); \
-    zone->bitmap_end = (void *) ((uintptr_t) zone->bitmap_end ^ (uintptr_t) zone->pointer_mask);
+#define UNMASK_ZONE_PTRS(zone) \
+    MASK_ZONE_PTRS(zone);
 
-#define MASK_USER_PTRS(zone)                                                                                 \
-    zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask); \
-    zone->user_pages_end = (void *) ((uintptr_t) zone->user_pages_end ^ (uintptr_t) zone->pointer_mask);
+#define MASK_BITMAP_PTRS(zone) \
+    zone->bitmap_start = (void *) ((uintptr_t) zone->bitmap_start ^ (uintptr_t) zone->pointer_mask);
+
+#define MASK_USER_PTRS(zone) \
+    zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask);
 
 #define LOCK_ROOT_MUTEX() \
     pthread_mutex_lock(&_root->zone_mutex);
+
 #define UNLOCK_ROOT_MUTEX() \
     pthread_mutex_unlock(&_root->zone_mutex);
 
@@ -124,6 +116,8 @@
 #define SMALL_SZ_MAX 262144
 
 #define WASTED_SZ_MULTIPLIER 8
+
+#define BIG_ALLOCATION_PAGE_COUNT 4
 
 /* We allocate (1) zone at startup for common sizes.
  * Each of these default zones is ZONE_SIZE in bytes
@@ -183,16 +177,6 @@ typedef struct {
 } iso_alloc_zone_configuration;
 
 typedef struct {
-    size_t chunk_size;                                  /* Size of chunks managed by this zone */
-    size_t bitmap_size;                                 /* Size of the bitmap in bytes */
-    void *bitmap_start;                                 /* Start of the bitmap */
-    void *bitmap_end;                                   /* End of the bitmap */
-    void *bitmap_pages_guard_below;                     /* Bitmap pages guard below */
-    void *bitmap_pages_guard_above;                     /* Bitmap pages guard above */
-    void *user_pages_start;                             /* Start of the pages backing this zone */
-    void *user_pages_end;                               /* End of the pages backing this zone */
-    void *user_pages_guard_below;                       /* User pages guard below */
-    void *user_pages_guard_above;                       /* User pages guard below */
     int64_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
     int32_t free_bit_slot_cache_index;                  /* Tracks how many entries in the cache are filled */
     int32_t free_bit_slot_cache_usable;                 /* The oldest members of the free cache are served first */
@@ -200,9 +184,24 @@ typedef struct {
     int32_t index;                                      /* Zone index */
     uint64_t canary_secret;                             /* Each zone has its own canary secret */
     uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
+    size_t chunk_size;                                  /* Size of chunks managed by this zone */
+    size_t bitmap_size;                                 /* Size of the bitmap in bytes */
+    void *bitmap_start;                                 /* Start of the bitmap */
+    void *user_pages_start;                             /* Start of the pages backing this zone */
     bool internally_managed;                            /* Zones can be managed by iso_alloc or custom */
     bool is_full;                                       /* Indicates whether this zone is full to avoid expensive free bit slot searches */
 } iso_alloc_zone;
+
+/* Meta data for big allocations are allocated near the
+ * user pages themselves but separated via guard pages.
+ * This meta data is stored at a random offset from the
+ * beginning of the page it resides on */
+typedef struct iso_alloc_big_zone {
+    bool free;
+    size_t size;
+    void *user_pages_start;
+    struct iso_alloc_big_zone *next;
+} iso_alloc_big_zone;
 
 /* There is only one iso_alloc root per-process.
  * It contains an array of zone structures. Each
@@ -216,6 +215,7 @@ typedef struct {
     uint64_t zone_handle_mask;
     pthread_mutex_t zone_mutex;
     iso_alloc_zone zones[MAX_ZONES];
+    iso_alloc_big_zone *big_alloc_zone_head;
 } iso_alloc_root;
 
 /* The global root */
@@ -243,12 +243,13 @@ INTERNAL_HIDDEN void verify_all_zones();
 INTERNAL_HIDDEN int64_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
+INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
+INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
-INTERNAL_HIDDEN int64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
-INTERNAL_HIDDEN int64_t _iso_alloc_leak_detector(iso_alloc_zone *zone);
-INTERNAL_HIDDEN int64_t _iso_alloc_detect_leaks();
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks();
 INTERNAL_HIDDEN int64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
 INTERNAL_HIDDEN int64_t _iso_alloc_mem_usage();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);

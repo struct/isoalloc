@@ -3,8 +3,8 @@
 
 #include "iso_alloc_internal.h"
 
-INTERNAL_HIDDEN int64_t _iso_alloc_detect_leaks() {
-    int64_t total_leaks = 0;
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
+    uint64_t total_leaks = 0;
 
     for(size_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
@@ -16,14 +16,30 @@ INTERNAL_HIDDEN int64_t _iso_alloc_detect_leaks() {
         total_leaks += _iso_alloc_zone_leak_detector(zone);
     }
 
-    return total_leaks;
+    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+
+    uint64_t big_leaks = 0;
+
+    while(big != NULL) {
+        if(big->free == true) {
+            big_leaks += big->size;
+            LOG("Big zone leaked %ld bytes", big->size);
+        }
+
+        big = big->next;
+    }
+
+    LOG("Total leaked in big zones: bytes (%ld) megabytes (%ld)", big_leaks, (big_leaks / MEGABYTE_SIZE));
+
+    return total_leaks + big_leaks;
 }
+
 /* This is the built-in leak detector. It works by scanning
  * the bitmap for every allocated zone and looking for
  * uncleared bits. All user allocations should have been
  * free'd by the time this function runs! */
-INTERNAL_HIDDEN int64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
-    int64_t total_leaks = 0;
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
+    uint64_t total_leaks = 0;
 #if LEAK_DETECTOR
     if(zone == NULL) {
         return 0;
@@ -69,6 +85,7 @@ INTERNAL_HIDDEN int64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     LOG("Zone[%d] Total number of %zu byte chunks(%zu) used and free'd (%ld) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
 
     MASK_ZONE_PTRS(zone);
+
 #endif
     return total_leaks;
 }
@@ -77,18 +94,29 @@ INTERNAL_HIDDEN int64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] (%zu byte chunks) Total bytes(%ld) megabytes(%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] holds %zu byte chunks. Total bytes (%ld), megabytes (%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     return (mem_usage / MEGABYTE_SIZE);
 }
 
 INTERNAL_HIDDEN int64_t _iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
+
     for(size_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] (%zu byte chunks) Total bytes(%ld) megabytes(%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+        LOG("Zone[%d] holds %zu byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
     }
+
+    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+
+    while(big != NULL) {
+        LOG("Big Zone Total bytes (%ld), megabytes (%ld)", big->size, (big->size / MEGABYTE_SIZE));
+        mem_usage += big->size;
+        big = big->next;
+    }
+
+    LOG("Total megabytes allocated (%ld)", (mem_usage / MEGABYTE_SIZE));
 
     return (mem_usage / MEGABYTE_SIZE);
 }

@@ -4,7 +4,7 @@
 
 $(echo '' > test_output.txt)
 
-tests=("tests" "interfaces_test" "thread_tests")
+tests=("tests" "big_tests" "interfaces_test" "thread_tests")
 failure=0
 succeeded=0
 

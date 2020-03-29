@@ -7,7 +7,7 @@ COMMON_CFLAGS = -Wall -Iinclude/ -pthread
 CFLAGS =  $(COMMON_CFLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
-DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE -O0
+DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE
 GDB_FLAGS = -g -ggdb3
 PERF_FLAGS = -pg -DPERF_BUILD
 MALLOC_HOOK = -DMALLOC_HOOK
@@ -45,24 +45,28 @@ library_debug_no_output: clean
 
 ## Build a debug version of the unit test
 tests: clean library_debug
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/heap_underflow.c -o $(BUILD_DIR)/heap_underflow -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/thread_tests.c -o $(BUILD_DIR)/thread_tests -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/leaks_test.c -o $(BUILD_DIR)/leaks_test -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/wild_free.c -o $(BUILD_DIR)/wild_free -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/unaligned_free.c -o $(BUILD_DIR)/unaligned_free -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) tests/incorrect_chunk_size_multiple.c -o $(BUILD_DIR)/incorrect_chunk_size_multiple -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/heap_underflow.c -o $(BUILD_DIR)/heap_underflow -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/thread_tests.c -o $(BUILD_DIR)/thread_tests -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/leaks_test.c -o $(BUILD_DIR)/leaks_test -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/wild_free.c -o $(BUILD_DIR)/wild_free -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c -o $(BUILD_DIR)/unaligned_free -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c -o $(BUILD_DIR)/incorrect_chunk_size_multiple -L$(BUILD_DIR) -lisoalloc
 	utils/run_tests.sh
 
 ## Build a non-debug library with performance
 ## monitoring enabled
 perf_tests: clean
 	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
-	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > perf_analysis.txt
+	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
+	$(BUILD_DIR)/big_tests_gprof
+	gprof -b $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
 
 ## C++ Support - Build object files for C code
 c_library_object:

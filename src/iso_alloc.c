@@ -219,7 +219,7 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     mprotect_pages(_root->guard_below, _root->system_page_size, PROT_NONE);
     madvise(_root->guard_below, _root->system_page_size, MADV_DONTNEED);
 
-    _root->guard_above = (void *) ROUND_PAGE_UP((uintptr_t)(p + sizeof(iso_alloc_root) + _root->system_page_size));
+    _root->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sizeof(iso_alloc_root) + _root->system_page_size));
     mprotect_pages(_root->guard_above, _root->system_page_size, PROT_NONE);
     madvise(_root->guard_above, _root->system_page_size, MADV_DONTNEED);
 }
@@ -274,11 +274,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
          * rightfully deadlock */
     } else {
         munmap(zone->bitmap_start, zone->bitmap_size);
-        munmap(zone->bitmap_pages_guard_below, _root->system_page_size);
-        munmap(zone->bitmap_pages_guard_above, _root->system_page_size);
+        munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
+        munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
-        munmap(zone->user_pages_guard_below, _root->system_page_size);
-        munmap(zone->user_pages_guard_above, _root->system_page_size);
+        munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
+        munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
         memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
     }
 }
@@ -295,8 +295,9 @@ __attribute__((destructor(65535))) void iso_alloc_dtor() {
         }
 
         _iso_alloc_zone_leak_detector(zone);
-        mb += _iso_alloc_zone_mem_usage(zone);
     }
+
+    mb = _iso_alloc_mem_usage();
 
 #if MEM_USAGE
     LOG("Total megabytes consumed by all zones: %ld", mb);
@@ -323,6 +324,15 @@ __attribute__((destructor(65535))) void iso_alloc_dtor() {
 #endif
     }
 
+    iso_alloc_big_zone *big_zone = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *b = NULL;
+
+    while(big_zone != NULL) {
+        b = big_zone->next;
+        munmap(big_zone - _root->system_page_size, (_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + big_zone->size);
+        big_zone = b;
+    }
+
 #ifndef MALLOC_HOOK
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
@@ -337,11 +347,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 
     if((size % ALIGNMENT) != 0) {
-        size = ROUND_UP_SZ(size);
+        size = ROUND_UP_PAGE(size);
     }
 
     if(size > SMALL_SZ_MAX) {
-        LOG_AND_ABORT("Chunks larger than %d not supported yet", SMALL_SZ_MAX);
+        LOG_AND_ABORT("Request for chunk of %ld bytes should be handled by big alloc path", size);
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
@@ -358,16 +368,16 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     /* Most of these fields are effectively immutable
      * and should not change once they are set */
     void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2));
-    new_zone->bitmap_pages_guard_below = p;
+    void *bitmap_pages_guard_below = p;
     new_zone->bitmap_start = (p + _root->system_page_size);
-    new_zone->bitmap_end = (p + (new_zone->bitmap_size + _root->system_page_size));
-    new_zone->bitmap_pages_guard_above = (void *) ROUND_PAGE_UP((uintptr_t) p + (new_zone->bitmap_size + _root->system_page_size));
 
-    mprotect_pages(new_zone->bitmap_pages_guard_below, _root->system_page_size, PROT_NONE);
-    madvise(new_zone->bitmap_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
+    void *bitmap_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (new_zone->bitmap_size + _root->system_page_size));
 
-    mprotect_pages(new_zone->bitmap_pages_guard_above, _root->system_page_size, PROT_NONE);
-    madvise(new_zone->bitmap_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
+    mprotect_pages(bitmap_pages_guard_below, _root->system_page_size, PROT_NONE);
+    madvise(bitmap_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
+
+    mprotect_pages(bitmap_pages_guard_above, _root->system_page_size, PROT_NONE);
+    madvise(bitmap_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
 
     /* Bitmap pages are accessed often and usually in sequential order */
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
@@ -375,16 +385,15 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
 
     p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size * 2));
 
-    new_zone->user_pages_guard_below = p;
+    void *user_pages_guard_below = p;
     new_zone->user_pages_start = (p + _root->system_page_size);
-    new_zone->user_pages_end = (p + (_root->system_page_size + ZONE_USER_SIZE));
-    new_zone->user_pages_guard_above = (void *) ROUND_PAGE_UP((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
+    void *user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
 
-    mprotect_pages(new_zone->user_pages_guard_below, _root->system_page_size, PROT_NONE);
-    madvise(new_zone->user_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
+    mprotect_pages(user_pages_guard_below, _root->system_page_size, PROT_NONE);
+    madvise(user_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
 
-    mprotect_pages(new_zone->user_pages_guard_above, _root->system_page_size, PROT_NONE);
-    madvise(new_zone->user_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
+    mprotect_pages(user_pages_guard_above, _root->system_page_size, PROT_NONE);
+    madvise(user_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
 
     /* User pages will be accessed in an unpredictable order */
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
@@ -551,14 +560,84 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
     return p;
 }
 
+INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
+    size = ROUND_UP_PAGE(size);
+
+    /* Let's first see if theres an existing set of
+     * pages that can satisfy this allocation request */
+    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *last_big = NULL;
+
+    while(big != NULL) {
+        if(big->free == true && big->size >= size) {
+            break;
+        }
+
+        last_big = big;
+        big = big->next;
+    }
+
+    /* We need to setup a new set of pages */
+    if(big == NULL) {
+        void *p = mmap_rw_pages((_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + size);
+
+        /* The first page is a guard page */
+        mprotect_pages(p, _root->system_page_size, PROT_NONE);
+        madvise(p, _root->system_page_size, MADV_DONTNEED);
+
+        /* Setup the next guard page */
+        void *next_gp = (p + _root->system_page_size * 2);
+        mprotect_pages(next_gp, _root->system_page_size, PROT_NONE);
+        madvise(next_gp, _root->system_page_size, MADV_DONTNEED);
+
+        /* User data starts at the beginning of the 3rd page */
+        void *user_pages = next_gp + _root->system_page_size;
+        madvise(user_pages, size, MADV_WILLNEED);
+        madvise(user_pages, size, MADV_RANDOM);
+
+        /* The second page is for meta data and it is placed
+         * at a random offset from the start of the page */
+        big = (iso_alloc_big_zone *) (p + _root->system_page_size);
+        madvise(big, _root->system_page_size, MADV_WILLNEED);
+        big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random() % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
+        big->user_pages_start = user_pages;
+        big->free = false;
+        big->size = size;
+        big->next = NULL;
+
+        void *last_gp = (user_pages + size);
+        mprotect_pages(last_gp, _root->system_page_size, PROT_NONE);
+        madvise(last_gp, _root->system_page_size, MADV_DONTNEED);
+
+        if(last_big != NULL) {
+            last_big->next = big;
+        }
+
+        if(_root->big_alloc_zone_head == NULL) {
+            _root->big_alloc_zone_head = big;
+        }
+
+        return big->user_pages_start;
+    } else {
+        big->free = false;
+        return big->user_pages_start;
+    }
+}
+
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     if(iso_alloc_initialized == false) {
         iso_alloc_initialize();
     }
 
-    /* TODO: support large (> 8mb) allocations */
-    if(size >= ZONE_USER_SIZE) {
-        return NULL;
+    /* Allocation requests of 8mb or larger are handled
+     * by the 'big allocation' path. If a zone was passed
+     * in we abort because its a misuse of the API */
+    if(size > SMALL_SZ_MAX) {
+        if(zone != NULL) {
+            LOG_AND_ABORT("Allocations of >= 8mb cannot use custom zones");
+        }
+
+        return _iso_big_alloc(size);
     }
 
     if(zone == NULL) {
@@ -627,9 +706,9 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     int64_t *bm = (int64_t *) zone->bitmap_start;
     int64_t b = bm[dwords_to_bit_slot];
 
-    if(p > zone->user_pages_end) {
+    if(p > zone->user_pages_start + ZONE_USER_SIZE) {
         LOG_AND_ABORT("Allocating an address %p from zone[%d], bit slot %ld %ld bytes %ld pages outside zones user pages %p %p",
-                      p, zone->index, free_bit_slot, p - zone->user_pages_end, (p - zone->user_pages_end) / _root->system_page_size, zone->user_pages_start, zone->user_pages_end);
+                      p, zone->index, free_bit_slot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
     if((GET_BIT(b, which_bit)) != 0) {
@@ -662,6 +741,26 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     return p;
 }
 
+INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
+    /* Its possible we are trying to unmap a big allocation */
+    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+
+    while(big != NULL) {
+        /* Only a free of the exact address is valid */
+        if(p == big->user_pages_start) {
+            return big;
+        }
+
+        if(p > big->user_pages_start && p < (big->user_pages_start + big->size)) {
+            LOG_AND_ABORT("Invalid free of big allocation at %p in mapping %p", p, big->user_pages_start);
+        }
+
+        big = big->next;
+    }
+
+    return NULL;
+}
+
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
@@ -673,21 +772,17 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
         }
 
         if(i == _root->zones_used) {
-            LOG_AND_ABORT("Passed a pointer that wasn't allocated by iso_alloc %p start=%p end=%p", p, zone->user_pages_start, zone->user_pages_end);
+            break;
         }
 
         UNMASK_ZONE_PTRS(zone);
 
-        if(zone->user_pages_start <= p && zone->user_pages_end > p) {
+        if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
             MASK_ZONE_PTRS(zone);
             return zone;
         }
 
         MASK_ZONE_PTRS(zone);
-    }
-
-    if(zone == NULL) {
-        LOG_AND_ABORT("Cannot free %p without a zone", p);
     }
 
     return NULL;
@@ -739,6 +834,41 @@ INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void 
     return OK;
 }
 
+INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent) {
+    /* If this isn't a permanent free then all we need
+     * to do is sanitize the mapping and mark it free */
+    memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
+
+    if(permanent == false) {
+        /* There is nothing else to do but mark this big zone free */
+        big_zone->free = true;
+    } else {
+        iso_alloc_big_zone *last = _root->big_alloc_zone_head;
+
+        if(last == big_zone) {
+            _root->big_alloc_zone_head = NULL;
+        } else {
+            /* We need to remove this entry from the list */
+            while(last != NULL) {
+                if(last->next == big_zone) {
+                    last->next = big_zone->next;
+                    break;
+                }
+
+                last = last->next;
+            }
+        }
+
+        if(last == NULL) {
+            LOG_AND_ABORT("The big zone list has been corrupted, unable to find big zone %p", big_zone);
+        }
+
+        /* Sanitize and mark the entire thing PROT_NONE */
+        memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone));
+        mprotect((void *) ROUND_DOWN_PAGE((uintptr_t)(big_zone - _root->system_page_size)), (_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + big_zone->size, PROT_NONE);
+    }
+}
+
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(((uintptr_t) p % ALIGNMENT) != 0) {
@@ -756,7 +886,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     int64_t bit_slot = (chunk_number * BITS_PER_CHUNK);
     int64_t dwords_to_bit_slot = (bit_slot / BITS_PER_QWORD);
 
-    if((zone->bitmap_start + dwords_to_bit_slot) >= zone->bitmap_end) {
+    if((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size)) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
     }
 
@@ -791,7 +921,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
      * we can verify */
-    if((p + zone->chunk_size) < zone->user_pages_end) {
+    if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
         int64_t bit_position_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_position_over / BITS_PER_QWORD);
         b = bm[dwords_to_bit_slot];
@@ -825,14 +955,21 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
-    /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
-    UNMASK_ZONE_PTRS(zone);
+    if(zone == NULL) {
+        iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
 
-    iso_free_chunk_from_zone(zone, p, permanent);
+        if(big_zone == NULL) {
+            LOG_AND_ABORT("Could not find any zone for allocation at %p", p);
+        }
 
-    MASK_ZONE_PTRS(zone);
+        iso_free_big_zone(big_zone, permanent);
+    } else {
+        UNMASK_ZONE_PTRS(zone);
+        iso_free_chunk_from_zone(zone, p, permanent);
+        MASK_ZONE_PTRS(zone);
+    }
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
@@ -852,6 +989,16 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
+
+    if(zone == NULL) {
+        iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
+
+        if(big_zone == NULL) {
+            LOG_AND_ABORT("Could not find any zone for allocation at %p", p);
+        }
+
+        return big_zone->size;
+    }
 
     return zone->chunk_size;
 }
