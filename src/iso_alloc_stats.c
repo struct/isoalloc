@@ -90,7 +90,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     return total_leaks;
 }
 
-INTERNAL_HIDDEN int64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
@@ -98,7 +98,7 @@ INTERNAL_HIDDEN int64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN int64_t _iso_alloc_mem_usage() {
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
 
     for(size_t i = 0; i < _root->zones_used; i++) {

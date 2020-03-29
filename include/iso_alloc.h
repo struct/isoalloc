@@ -1,9 +1,10 @@
 /* iso_alloc.h - A secure memory allocator
  * Copyright 2020 - chris.rohlf@gmail.com */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
+//#include <sys/types.h>
 
 #define EXTERNAL_API __attribute__((visibility("default")))
 
@@ -28,10 +29,10 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_protect_root();
 EXTERNAL_API void iso_alloc_unprotect_root();
-EXTERNAL_API int64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone);
-EXTERNAL_API int64_t iso_alloc_detect_leaks();
-EXTERNAL_API int64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone);
-EXTERNAL_API int64_t iso_alloc_mem_usage();
+EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone);
+EXTERNAL_API uint64_t iso_alloc_detect_leaks();
+EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone);
+EXTERNAL_API uint64_t iso_alloc_mem_usage();
 EXTERNAL_API void iso_verify_zones();
 EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone);
 #if CPP_SUPPORT
