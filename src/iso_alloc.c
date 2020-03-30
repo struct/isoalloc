@@ -784,7 +784,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
-    for(int64_t i = 0; i <= _root->zones_used; i++) {
+    for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         if(zone == NULL) {
