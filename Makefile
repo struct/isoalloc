@@ -94,5 +94,5 @@ format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
-	rm -rf build/* perf_analysis.txt gmon.out test_output.txt *.dSYM
+	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM
 	mkdir -p build/
