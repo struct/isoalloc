@@ -48,7 +48,10 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
         size = chunk_size;
     }
 
-    memcpy(r, p, size);
+    if(p != NULL) {
+        memcpy(r, p, size);
+    }
+
     _iso_free(p, false);
     return r;
 }
@@ -85,7 +88,10 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
         size = chunk_size;
     }
 
-    memcpy(r, p, size);
+    if(p != NULL) {
+        memcpy(r, p, size);
+    }
+
     iso_free(p);
     return r;
 }
