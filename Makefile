@@ -32,7 +32,7 @@ library_hook_malloc: clean
 
 ## Build a debug version of the library
 library_debug: clean
-	scan-build $(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Builds a debug version of the library with scan-build
 analyze_library_debug: clean
