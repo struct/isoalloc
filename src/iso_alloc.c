@@ -702,10 +702,16 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             LOG_AND_ABORT("Allocated a new zone with no free bit slots");
         }
     } else {
-        zone = is_zone_usable(zone, size);
+        /* We only need to check if the zone is usable
+         * if we didn't choose the zone ourselves. If
+         * we chose this zone then its guaranteed to
+         * already be usable */
+        if(zone->internally_managed == false) {
+            zone = is_zone_usable(zone, size);
 
-        if(zone == NULL) {
-            return NULL;
+            if(zone == NULL) {
+                return NULL;
+            }
         }
 
         free_bit_slot = zone->next_free_bit_slot;
