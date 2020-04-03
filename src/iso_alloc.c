@@ -732,7 +732,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     if((GET_BIT(b, which_bit)) != 0) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %zu cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, which_bit was %ld",
+        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at %p bitmap location @ %p. bit slot was %ld, which_bit was %ld",
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
     }
 
@@ -784,12 +784,8 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
-    for(int64_t i = 0; i < _root->zones_used; i++) {
+    for(uint32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
-
-        if(zone == NULL) {
-            LOG_AND_ABORT("Zone pointer overwritten with NULL");
-        }
 
         if(i == _root->zones_used) {
             break;
@@ -899,7 +895,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     /* Ensure the pointer is a multiple of chunk size */
     if((chunk_offset % zone->chunk_size) != 0) {
-        LOG_AND_ABORT("Chunk at %p is not a multiple of zone[%d] chunk size %zu. Off by %lu bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
+        LOG_AND_ABORT("Chunk at %p is not a multiple of zone[%d] chunk size %d. Off by %lu bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
     }
 
     size_t chunk_number = (chunk_offset / zone->chunk_size);
@@ -937,7 +933,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     write_canary(zone, p);
 
-    /* Now that we have free'd this chunk lets check the
+    /* Now that we have free'd this chunk lets validate the
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
      * we can verify */

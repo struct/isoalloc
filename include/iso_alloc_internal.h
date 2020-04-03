@@ -120,10 +120,9 @@
 #define BIG_ALLOCATION_PAGE_COUNT 4
 
 /* We allocate (1) zone at startup for common sizes.
- * Each of these default zones is ZONE_SIZE in bytes
- * so ZONE_65535 holds less chunks than ZONE_128 for
- * example. These are inexpensive for us to create
- * and only have a cost at startup time only */
+ * Each of these default zones is ZONE_USER_SIZE bytes
+ * so ZONE_8192 holds less chunks than ZONE_128 for
+ * example. These are inexpensive for us to create */
 #define ZONE_16 16
 #define ZONE_32 32
 #define ZONE_64 64
@@ -134,6 +133,8 @@
 #define ZONE_2048 2048
 #define ZONE_4096 4096
 #define ZONE_8192 8192
+
+#define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
 /* The size of our bit slot freelist */
 #define BIT_SLOT_CACHE_SZ 254
@@ -161,8 +162,6 @@ uint32_t g_page_size;
 static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 
-#define MAX_DEFAULT_ZONE_SZ ZONE_8192
-
 /* The API allows for consumers of the library to
  * create their own zones for unique data/object
  * types. This structure allows the caller to define
@@ -177,19 +176,19 @@ typedef struct {
 } iso_alloc_zone_configuration;
 
 typedef struct {
-    int64_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
+    void *user_pages_start;                             /* Start of the pages backing this zone */
+    void *bitmap_start;                                 /* Start of the bitmap */
     int32_t free_bit_slot_cache_index;                  /* Tracks how many entries in the cache are filled */
     int32_t free_bit_slot_cache_usable;                 /* The oldest members of the free cache are served first */
     int64_t next_free_bit_slot;                         /* The last bit slot returned by get_next_free_bit_slot */
     int32_t index;                                      /* Zone index */
     uint64_t canary_secret;                             /* Each zone has its own canary secret */
     uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
-    size_t chunk_size;                                  /* Size of chunks managed by this zone */
-    size_t bitmap_size;                                 /* Size of the bitmap in bytes */
-    void *bitmap_start;                                 /* Start of the bitmap */
-    void *user_pages_start;                             /* Start of the pages backing this zone */
+    uint32_t chunk_size;                                /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;                               /* Size of the bitmap in bytes */
     bool internally_managed;                            /* Zones can be managed by iso_alloc or custom */
     bool is_full;                                       /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    int64_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } iso_alloc_zone;
 
 /* Meta data for big allocations are allocated near the

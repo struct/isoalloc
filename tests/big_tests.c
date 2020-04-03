@@ -37,9 +37,9 @@ int main(int argc, char *argv[]) {
     iso_free_permanently(r);
     iso_free(q);
 
-    void *ptrs[16];
+    void *ptrs[64];
 
-    for(int32_t i = 0; i < 16; i++) {
+    for(int32_t i = 0; i < 64; i++) {
         ptrs[i] = iso_alloc(ZONE_USER_SIZE + (rand() % 1024));
 
         /* Randomly free some allocations */
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 
     LOG("Megabytes used: %ld", iso_alloc_mem_usage());
 
-    for(int32_t i = 0; i < 16; i++) {
+    for(int32_t i = 0; i < 64; i++) {
         iso_free(ptrs[i]);
     }
 

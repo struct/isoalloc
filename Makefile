@@ -4,9 +4,10 @@
 CC = clang
 CXX = clang++
 COMMON_CFLAGS = -Wall -Iinclude/ -pthread
-CFLAGS =  $(COMMON_CFLAGS) -fvisibility=hidden -std=c11
+CFLAGS = $(COMMON_CFLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
+OPTIMIZE = -O2
 DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE
 GDB_FLAGS = -g -ggdb3
 PERF_FLAGS = -pg -DPERF_BUILD
@@ -21,7 +22,7 @@ all: library tests
 
 ## Build a release version of the library
 library: clean
-	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) $(OPTIMIZE) -o $(BUILD_DIR)/libisoalloc.so
 	strip $(BUILD_DIR)/libisoalloc.so
 
 ## Build a release version of the library
@@ -46,6 +47,16 @@ library_debug_hook_malloc: clean
 ## Build a debug version of the library
 library_debug_no_output: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+
+## C++ Support - Build object files for C code
+c_library_object:
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_FLAGS) -fPIC -c
+	mv *.o $(BUILD_DIR)
+
+## C++ Support - Build the library with C++ support
+## including overloaded new/delete operators
+cpp_library: clean c_library_object
+	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(MALLOC_HOOK) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
 tests: clean library_debug
@@ -72,15 +83,14 @@ perf_tests: clean
 	$(BUILD_DIR)/big_tests_gprof
 	gprof -b $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
 
-## C++ Support - Build object files for C code
-c_library_object:
-	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_FLAGS) -fPIC -c
-	mv *.o $(BUILD_DIR)
-
-## C++ Support - Build the library with C++ support
-## including overloaded new/delete operators
-cpp_library: clean c_library_object
-	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(MALLOC_HOOK) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+## Runs a single test that prints CPU time
+single_perf_test: library
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) -DDEBUG tests/tests.c -o $(BUILD_DIR)/tests -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) -DMALLOC_PERF_TEST -DDEBUG tests/tests.c -o $(BUILD_DIR)/malloc_tests -L$(BUILD_DIR) -lisoalloc
+	echo "Running IsoAlloc Performance Test"
+	LD_LIBRARY_PATH=build/ build/tests
+	echo "Running glibc malloc Performance Test"
+	LD_LIBRARY_PATH=build/ build/malloc_tests
 
 ## C++ Support - Build a debug version of the unit test
 cpp_tests: clean cpp_library

@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    //iso_verify_zones();
+    iso_verify_zones();
     int32_t r = iso_alloc_detect_leaks();
 
     LOG("Total leaks detected: %d", r);
