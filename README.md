@@ -53,15 +53,23 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 
 The Makefile targets are very simple:
 
-`make library` - Builds a standard version of the library
+`make library` - Builds a release version of the library
+
+`make library_hook_malloc` - Builds a release version of the library with malloc hooking support
 
 `make library_debug` - Builds a debug version of the library
+
+`make analyze_library_debug` - Builds the library with Clang's scan-build if installed
+
+`make library_debug_hook_malloc` Builds a debug version of the library with malloc hooking support
 
 `make library_debug_no_output` - Builds a debug version of the library with no logging output
 
 `make tests` - Builds and runs all tests
 
-`make perf_tests` - Builds and run a simple performance test
+`make perf_tests` - Builds and runs a simple performance test that uses gprof
+
+`make single_perf_test` - Builds and runs a test that uses both iso_alloc and malloc
 
 `make cpp_library` - Builds the library with a simple C++ interface that overloads new/delete operators
 
