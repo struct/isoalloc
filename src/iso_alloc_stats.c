@@ -74,7 +74,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
                     continue;
                 } else {
                     total_leaks++;
-                    LOG("Leaked chunk of %zu bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, zone->index, leak, bit_position);
+                    LOG("Leaked chunk of %d bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, zone->index, leak, bit_position);
                 }
             }
         }
@@ -82,7 +82,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
     float percentage = (float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0;
 
-    LOG("Zone[%d] Total number of %zu byte chunks(%zu) used and free'd (%ld) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
+    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%ld) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
 
     MASK_ZONE_PTRS(zone);
 
@@ -94,7 +94,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] holds %zu byte chunks. Total bytes (%ld), megabytes (%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] holds %d byte chunks. Total bytes (%ld), megabytes (%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     return (mem_usage / MEGABYTE_SIZE);
 }
 
@@ -105,7 +105,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
         iso_alloc_zone *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] holds %zu byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
+        LOG("Zone[%d] holds %d byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
     }
 
     iso_alloc_big_zone *big = _root->big_alloc_zone_head;

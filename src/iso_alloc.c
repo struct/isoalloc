@@ -289,7 +289,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 }
 
 __attribute__((destructor(65535))) void iso_alloc_dtor() {
-#if DEBUG || LEAK_DETECTOR || MEM_USAGE
+#if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
     uint64_t mb = 0;
 
     for(size_t i = 0; i < _root->zones_used; i++) {

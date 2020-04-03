@@ -76,21 +76,21 @@ tests: clean library_debug
 ## Build a non-debug library with performance
 ## monitoring enabled
 perf_tests: clean
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof
 	gprof -b $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
 
 ## Runs a single test that prints CPU time
-single_perf_test: library
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) -DDEBUG tests/tests.c -o $(BUILD_DIR)/tests -L$(BUILD_DIR) -lisoalloc
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) -DMALLOC_PERF_TEST -DDEBUG tests/tests.c -o $(BUILD_DIR)/malloc_tests -L$(BUILD_DIR) -lisoalloc
+single_perf_test: clean
+	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"
-	LD_LIBRARY_PATH=build/ build/tests
+	build/tests
 	echo "Running glibc malloc Performance Test"
-	LD_LIBRARY_PATH=build/ build/malloc_tests
+	build/malloc_tests
 
 ## C++ Support - Build a debug version of the unit test
 cpp_tests: clean cpp_library

@@ -73,14 +73,12 @@ int main(int argc, char *argv[]) {
 
     end = clock();
 
-#if DEBUG
     double total = ((double) (end - start)) / CLOCKS_PER_SEC;
 
 #if MALLOC_PERF_TEST
-    LOG("malloc/free tests completed in %f seconds", total);
+    fprintf(stdout, "malloc/free tests completed in %f seconds\n", total);
 #else
-    LOG("iso_alloc/iso_free tests completed in %f seconds", total);
-#endif
+    fprintf(stdout, "iso_alloc/iso_free tests completed in %f seconds\n", total);
 #endif
 
     return 0;
