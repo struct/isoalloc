@@ -58,6 +58,7 @@ void *allocate() {
 }
 
 int main(int argc, char *argv[]) {
+#if THREAD_SUPPORT
     pthread_t to;
     pthread_t tt;
     pthread_create(&to, NULL, allocate, NULL);
@@ -66,6 +67,7 @@ int main(int argc, char *argv[]) {
     pthread_exit(NULL);
 
     iso_verify_zones();
+#endif
 
     return OK;
 }

@@ -3,8 +3,26 @@
 
 CC = clang
 CXX = clang++
-COMMON_CFLAGS = -Wall -Iinclude/ -pthread
-CFLAGS = $(COMMON_CFLAGS) -fvisibility=hidden -std=c11
+
+## Security flags can affect performance
+## SANITIZE_CHUNKS - Clear user chunks upon free
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0
+
+## Support for threads adds a performance overhead
+## You can safely disable it here if you know your
+## program does not require concurrent access
+## to the IsoAlloc APIs
+THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
+
+## Instructs the kernel (via mmap) to prepopulate
+## page tables which will reduce page faults and
+## improve performance. If you're using IsoAlloc
+## for small short lived programs you probably
+## want to disable this
+PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
+
+COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
 OPTIMIZE = -O2
@@ -84,7 +102,8 @@ perf_tests: clean
 	gprof -b $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
 
 ## Runs a single test that prints CPU time
-single_perf_test: clean
+## compared to the same malloc/free operations
+malloc_cmp_test: clean
 	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"

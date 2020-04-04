@@ -180,12 +180,20 @@ INTERNAL_HIDDEN INLINE void *get_base_page(void *addr) {
 }
 
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
+#if SANITIZE_CHUNKS
     memset(p, POISON_BYTE, size);
+#endif
 }
 
-INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size) {
+INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate) {
     size = ROUND_UP_PAGE(size);
-    void *p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *p = NULL;
+
+    if(populate == true) {
+        p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    } else {
+        p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    }
 
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");
@@ -205,7 +213,7 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     void *p = NULL;
 
     if(_root == NULL) {
-        p = (void *) mmap_rw_pages(sizeof(iso_alloc_root) + (g_page_size * 2));
+        p = (void *) mmap_rw_pages(sizeof(iso_alloc_root) + (g_page_size * 2), true);
     }
 
     if(p == NULL) {
@@ -370,9 +378,15 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
     new_zone->bitmap_size = (bitmap_size > sizeof(uint64_t)) ? bitmap_size : sizeof(uint64_t);
 
-    /* Most of these fields are effectively immutable
+    /* Most of the following fields are effectively immutable
      * and should not change once they are set */
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2));
+
+#if PRE_POPULATE_PAGES
+    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2), true);
+#else
+    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2), false);
+#endif
+
     void *bitmap_pages_guard_below = p;
     new_zone->bitmap_start = (p + _root->system_page_size);
 
@@ -388,7 +402,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_SEQUENTIAL);
 
-    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size * 2));
+    /* All user pages use MAP_POPULATE. This might seem like we are asking
+     * the kernel to commit a lot of memory for us that we may never use
+     * but when we call create_canary_chunks() that will happen anyway */
+    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size * 2), true);
 
     void *user_pages_guard_below = p;
     new_zone->user_pages_start = (p + _root->system_page_size);
@@ -599,7 +616,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
     /* We need to setup a new set of pages */
     if(big == NULL) {
-        void *p = mmap_rw_pages((_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + size);
+        void *p = mmap_rw_pages((_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + size, false);
 
         /* The first page is a guard page */
         mprotect_pages(p, _root->system_page_size, PROT_NONE);
@@ -917,7 +934,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     int64_t b = bm[dwords_to_bit_slot];
 
     /* Double free detection */
-    /* TODO: make configurable */
     if((GET_BIT(b, which_bit)) == 0) {
         LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%ld bit_slot=%ld", p, zone->index, dwords_to_bit_slot, bit_slot);
     }
@@ -934,7 +950,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     bm[dwords_to_bit_slot] = b;
 
-    /* TODO make configurable */
     iso_clear_user_chunk(p, zone->chunk_size);
 
     write_canary(zone, p);

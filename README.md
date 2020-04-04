@@ -31,6 +31,8 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * The free bit slot cache is 255 entries, it helps speed up allocations
 * All allocations >262144 bytes live in specially handled big zones which have no size limitations
 
+See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
+
 ## Security Properties
 
 * Zones cannot overflow or underflow into one another
@@ -41,7 +43,7 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * The state of all zones can be verified at any anytime using `iso_verify_zones` or `iso_verify_zone(zone)`
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`
 * A chunk can be permanently free'd with a call to `iso_free_permanently`
-* All user chunk contents are cleared when passed to `iso_free` with the constant 0xDE
+* If SANITIZE_CHUNKS All user chunk contents are cleared when passed to `iso_free` with the constant 0xDE
 * When freeing a chunk the canary in adjacent chunks above/below are verified
 * Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
@@ -69,7 +71,7 @@ The Makefile targets are very simple:
 
 `make perf_tests` - Builds and runs a simple performance test that uses gprof
 
-`make single_perf_test` - Builds and runs a test that uses both iso_alloc and malloc
+`make malloc_cmp_test` - Builds and runs a test that uses both iso_alloc and malloc for comparison
 
 `make cpp_library` - Builds the library with a simple C++ interface that overloads new/delete operators
 

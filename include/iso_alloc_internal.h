@@ -91,11 +91,16 @@
 #define MASK_USER_PTRS(zone) \
     zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask);
 
+#if THREAD_SUPPORT
 #define LOCK_ROOT_MUTEX() \
     pthread_mutex_lock(&_root->zone_mutex);
 
 #define UNLOCK_ROOT_MUTEX() \
     pthread_mutex_unlock(&_root->zone_mutex);
+#else
+#define LOCK_ROOT_MUTEX()
+#define UNLOCK_ROOT_MUTEX()
+#endif
 
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
@@ -225,7 +230,7 @@ INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection);
-INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size);
+INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void *get_base_page(void *addr);
 INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
