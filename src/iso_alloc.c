@@ -222,17 +222,6 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
         LOG_AND_ABORT("Cannot allocate pages for _root");
     }
 
-    int32_t mret = mlock(p, _root_size);
-
-    /* If the mlock operation fails we can continue. It
-     * just means that our root and zone data may get
-     * paged to disk at some point in the future. This
-     * would not be unexpected if we were running in a
-     * container somewhere with memory limitations */
-    if(mret != 0) {
-        LOG("Could not mlock _root");
-    }
-
     _root = (iso_alloc_root *) (p + g_page_size);
 
     if((pthread_mutex_init(&_root->zone_mutex, NULL)) != 0) {
@@ -267,6 +256,12 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
         if(!(zone = iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
+
+        /* This call to mlock may fail if memory limits
+         * are set too low. This will not affect us
+         * at runtime. It just means some of the default
+         * zone meta data may get swapped to disk */
+        mlock(zone, sizeof(iso_alloc_zone));
     }
 
     struct timeval nt;

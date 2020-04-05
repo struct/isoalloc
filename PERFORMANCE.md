@@ -20,7 +20,7 @@ Default zones for common sizes are created in the library constructor. This help
 
 By default user chunks are not sanitized upon free. While this helps mitigate uninitialized memory vulnerabilities it is a very slow operation. You can enable this feature by changing the `SANITIZE_CHUNKS` flag in the Makefile.
 
-The root structure, and the zone meta data that it encapsulates (but not the bitmap and user pages), are locked to RAM using the `mlock` system call. This means this data will never be swapped to disk, but beware at the current max zone size (8192) this locks about 18 megabytes of RAM. We do this because iterating over these data structures is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure.
+The meta data for all default zones will be locked with `mlock`. This means this data will never be swapped to disk. We do this because iterating over these data structures is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure. Zones that are created on demand after initialization will not have their memory locked.
 
 ## Tests
 
