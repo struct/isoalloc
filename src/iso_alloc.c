@@ -212,12 +212,25 @@ INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protect
 INTERNAL_HIDDEN void iso_alloc_new_root() {
     void *p = NULL;
 
+    size_t _root_size = sizeof(iso_alloc_root) + (g_page_size * 2);
+
     if(_root == NULL) {
-        p = (void *) mmap_rw_pages(sizeof(iso_alloc_root) + (g_page_size * 2), true);
+        p = (void *) mmap_rw_pages(_root_size, true);
     }
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for _root");
+    }
+
+    int32_t mret = mlock(p, _root_size);
+
+    /* If the mlock operation fails we can continue. It
+     * just means that our root and zone data may get
+     * paged to disk at some point in the future. This
+     * would not be unexpected if we were running in a
+     * container somewhere with memory limitations */
+    if(mret != 0) {
+        LOG("Could not mlock _root");
     }
 
     _root = (iso_alloc_root *) (p + g_page_size);
