@@ -50,6 +50,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 * Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size
 * The free bit slot cache is checked for duplicate entries to detect corruption
 * When custom zones are destroyed they are overwritten and marked PROT_NONE to prevent use-after-free
+* Big zone meta data lives at a random offset from its base page
 
 ## Building
 
