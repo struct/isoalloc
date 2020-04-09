@@ -22,7 +22,8 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) -fvisibility=hidden -std=c11
+BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
 OPTIMIZE = -O2
