@@ -44,7 +44,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 * Canaries are unique and are composed of a 64 bit secret value xor'd by the address of the chunk itself
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`
 * A chunk can be permanently free'd with a call to `iso_free_permanently`
-* If `SANITIZE_CHUNKS` All user chunk contents are cleared when passed to `iso_free` with the constant 0xDE
+* If `SANITIZE_CHUNKS` is set all user chunks are cleared when passed to `iso_free` with the constant 0xDE
 * When freeing a chunk the canary in adjacent chunks above/below are verified
 * Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
