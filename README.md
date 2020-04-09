@@ -41,6 +41,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 * Double free's are checked for on every call to `iso_free`
 * For zones managing allocations <= 8192 bytes in size around %1 of their chunks are canaries
 * The state of all zones can be verified at any anytime using `iso_verify_zones` or `iso_verify_zone(zone)`
+* Canaries are unique and are composed of a 64 bit secret value xor'd by the address of the chunk itself
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`
 * A chunk can be permanently free'd with a call to `iso_free_permanently`
 * If SANITIZE_CHUNKS All user chunk contents are cleared when passed to `iso_free` with the constant 0xDE
