@@ -1,8 +1,13 @@
 /* iso_alloc_internal.h - A secure memory allocator
  * Copyright 2020 - chris.rohlf@gmail.com */
+#pragma once
 
 #ifndef CPP_SUPPORT
 #define _GNU_SOURCE
+#endif
+
+#if !__x86_64__
+#pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
 #include <errno.h>
