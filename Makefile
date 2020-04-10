@@ -73,9 +73,13 @@ c_library_object:
 	mv *.o $(BUILD_DIR)
 
 ## C++ Support - Build the library with C++ support
-## including overloaded new/delete operators
 cpp_library: clean c_library_object
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(MALLOC_HOOK) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+
+## C++ Support - Build the library with C++ support
+## including overloaded new/delete operators
+cpp_library_hook_malloc: clean c_library_object
+	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
 tests: clean library_debug
