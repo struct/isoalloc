@@ -93,11 +93,11 @@ If all else fails please file an issue on the [github project](https://github.co
 
 ## API
 
-`void *iso_alloc(size_t size)` - Equivalent to malloc. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to `iso_free`.
+`void *iso_alloc(size_t size)` - Equivalent to `malloc`. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to `iso_free`.
 
-`void *iso_calloc(size_t nmemb, size_t size)` - Equivalent to calloc. Allocates a chunk big enough for an array of nmemb elements of size bytes. The array is zeroized.
+`void *iso_calloc(size_t nmemb, size_t size)` - Equivalent to `calloc`. Allocates a chunk big enough for an array of nmemb elements of size bytes. The array is zeroized.
 
-`void *iso_realloc(void *p, size_t size)` - Equivalent to realloc. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
+`void *iso_realloc(void *p, size_t size)` - Equivalent to `realloc`. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
 
 `void iso_free(void *p)` - Frees any chunk allocated and returned by any API call (e.g. `iso_alloc, iso_calloc, iso_realloc, iso_strdup, iso_strndup`).
 
@@ -105,19 +105,19 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `size_t iso_chunksz(void *p)` - Returns the size of the chunk returned by `iso_alloc`
 
-`char *iso_strdup(const char *str)` - Equivalent to strdup. Returned pointer must be free'd by `iso_free`.
+`char *iso_strdup(const char *str)` - Equivalent to `strdup`. Returned pointer must be free'd by `iso_free`.
 
-`char *iso_strndup(const char *str, size_t n)` - Equivalent to strndup. Returned pointer must be free'd by iso_free.
+`char *iso_strndup(const char *str, size_t n)` - Equivalent to `strndup`. Returned pointer must be free'd by iso_free.
 
 `iso_alloc_zone_handle *iso_alloc_new_zone(size_t size)` - Allocates a new private zone for allocations up to size bytes. Returns a handle to that zone.
 
 `char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str)` - Equivalent to `iso_strdup` except string is duplicated in specified zone.
 
-`char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n)` - Equivalent to iso_strndup except string is duplicated in specified zone.
+`char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n)` - Equivalent to `iso_strndup` except string is duplicated in specified zone.
 
-`iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to iso_alloc except reallocation is done in specified zone.
+`iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to `iso_alloc` except reallocation is done in specified zone.
 
-`iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size)` - Equivalent to iso_realloc except reallocation is done in specified zone.
+`iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size)` - Equivalent to `iso_realloc` except reallocation is done in specified zone.
 
 `void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone)` - Destroy a zone created with `iso_alloc_from_zone`.
 

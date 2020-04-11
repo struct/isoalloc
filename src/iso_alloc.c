@@ -72,8 +72,8 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
             bit = GET_BIT(bm[i], (j + 1));
 
             /* If this bit is set it is either a free chunk or
-             * a canary chunk. Either way it should have a
-             * canary we can verify */
+             * a canary chunk. Either way it should have a set
+             * of canaries we can verify */
             if(bit == 1) {
                 void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
