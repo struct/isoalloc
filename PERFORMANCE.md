@@ -6,7 +6,7 @@ Performance is a top priority for any memory allocator. Balancing those performa
 
 Note: All performance testing, unless noted otherwise, was performed on Linux.
 
-## Optimizations
+## Configuration and Optimizations
 
 IsoAlloc is only designed and tested for 64 bit, so we don't have to worry about portability hurting our performance. We can assume a large address space will always be present and we can optimize for simple things like always fetching 64 bits of memory as we iterate over an array. This remainder of this section is a basic overview of the performance optimizations in IsoAlloc.
 
@@ -23,6 +23,8 @@ Default zones for common sizes are created in the library constructor. This help
 By default user chunks are not sanitized upon free. While this helps mitigate uninitialized memory vulnerabilities it is a very slow operation. You can enable this feature by changing the `SANITIZE_CHUNKS` flag in the Makefile.
 
 The meta data for all default zones will be locked with `mlock`. This means this data will never be swapped to disk. We do this because iterating over these data structures is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure. Zones that are created on demand after initialization will not have their memory locked.
+
+If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all mutex lock/unlock operations from the allocator, which will speed things up substantially in some programs.
 
 ## Tests
 
