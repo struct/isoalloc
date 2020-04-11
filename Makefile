@@ -46,7 +46,7 @@ library: clean
 
 ## Build a release version of the library
 ## Adds malloc hooks
-library_hook_malloc: clean
+library_malloc_hook: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(MALLOC_HOOK) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 	strip $(BUILD_DIR)/libisoalloc.so
 
@@ -60,7 +60,7 @@ analyze_library_debug: clean
 
 ## Build a debug version of the library
 ## Adds malloc hooks
-library_debug_hook_malloc: clean
+library_debug_malloc_hook: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(MALLOC_HOOK) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
@@ -74,11 +74,11 @@ c_library_object:
 
 ## C++ Support - Build the library with C++ support
 cpp_library: clean c_library_object
-	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(MALLOC_HOOK) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## C++ Support - Build the library with C++ support
 ## including overloaded new/delete operators
-cpp_library_hook_malloc: clean c_library_object
+cpp_library_malloc_hook: clean c_library_object
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(MALLOC_HOOK) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
