@@ -18,7 +18,7 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## page tables which will reduce page faults and
 ## improve performance. If you're using IsoAlloc
 ## for small short lived programs you probably
-## want to disable this
+## want to disable this. This is ignored on MacOS
 PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
@@ -42,19 +42,18 @@ all: library tests
 ## Build a release version of the library
 library: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) $(OPTIMIZE) -o $(BUILD_DIR)/libisoalloc.so
-	strip $(BUILD_DIR)/libisoalloc.so
 
 ## Build a release version of the library
 ## Adds malloc hooks
 library_malloc_hook: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(MALLOC_HOOK) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
-	strip $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
 library_debug: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Builds a debug version of the library with scan-build
+## Requires scan-build is in your PATH
 analyze_library_debug: clean
 	scan-build $(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
@@ -97,7 +96,7 @@ tests: clean library_debug
 	utils/run_tests.sh
 
 ## Build a non-debug library with performance
-## monitoring enabled
+## monitoring enabled. Linux only
 perf_tests: clean
 	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests_gprof
 	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof

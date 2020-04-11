@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    LOG("Megabytes used: %ld", iso_alloc_mem_usage());
+    LOG("Megabytes used: %" PRIu64, iso_alloc_mem_usage());
 
     for(int32_t i = 0; i < 64; i++) {
         iso_free(ptrs[i]);

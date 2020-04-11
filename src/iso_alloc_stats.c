@@ -6,7 +6,7 @@
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     uint64_t total_leaks = 0;
 
-    for(size_t i = 0; i < _root->zones_used; i++) {
+    for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
         if(zone == NULL) {
@@ -23,13 +23,13 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     while(big != NULL) {
         if(big->free == true) {
             big_leaks += big->size;
-            LOG("Big zone leaked %ld bytes", big->size);
+            LOG("Big zone leaked %" PRIu64 " bytes", big->size);
         }
 
         big = big->next;
     }
 
-    LOG("Total leaked in big zones: bytes (%ld) megabytes (%ld)", big_leaks, (big_leaks / MEGABYTE_SIZE));
+    LOG("Total leaked in big zones: bytes (%" PRIu64 ") megabytes (%" PRIu64 ")", big_leaks, (big_leaks / MEGABYTE_SIZE));
 
     return total_leaks + big_leaks;
 }
@@ -47,11 +47,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
     UNMASK_ZONE_PTRS(zone);
 
-    int64_t *bm = (int64_t *) zone->bitmap_start;
-    int64_t bit_position;
+    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    bit_slot_t bit_slot;
     int64_t was_used = 0;
 
-    for(int64_t i = 0; i < zone->bitmap_size / sizeof(int64_t); i++) {
+    for(int64_t i = 0; i < zone->bitmap_size / sizeof(bitmap_index_t); i++) {
         for(size_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             int64_t bit = GET_BIT(bm[i], j);
             int64_t bit_two = GET_BIT(bm[i], (j + 1));
@@ -67,14 +67,14 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
              * canary value. If it doesn't validate then we assume
              * its a true leak and increment the total_leaks counter */
             if(bit == 1) {
-                bit_position = (i * BITS_PER_QWORD) + j;
-                void *leak = (zone->user_pages_start + ((bit_position / BITS_PER_CHUNK) * zone->chunk_size));
+                bit_slot = (i * BITS_PER_QWORD) + j;
+                void *leak = (zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
                 if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
                     continue;
                 } else {
                     total_leaks++;
-                    LOG("Leaked chunk of %d bytes detected in zone[%d] at %p (bit position = %ld)", zone->chunk_size, zone->index, leak, bit_position);
+                    LOG("Leaked chunk of %d bytes detected in zone[%d] at %p (bit position = %" PRIu64 ")", zone->chunk_size, zone->index, leak, bit_slot);
                 }
             }
         }
@@ -82,7 +82,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
     float percentage = (float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0;
 
-    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%ld) (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
+    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
 
     MASK_ZONE_PTRS(zone);
 
@@ -94,14 +94,14 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] holds %d byte chunks. Total bytes (%ld), megabytes (%ld)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] holds %d byte chunks. Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     return (mem_usage / MEGABYTE_SIZE);
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
 
-    for(size_t i = 0; i < _root->zones_used; i++) {
+    for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
@@ -111,12 +111,12 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     iso_alloc_big_zone *big = _root->big_alloc_zone_head;
 
     while(big != NULL) {
-        LOG("Big Zone Total bytes (%ld), megabytes (%ld)", big->size, (big->size / MEGABYTE_SIZE));
+        LOG("Big Zone Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", big->size, (big->size / MEGABYTE_SIZE));
         mem_usage += big->size;
         big = big->next;
     }
 
-    LOG("Total megabytes allocated (%ld)", (mem_usage / MEGABYTE_SIZE));
+    LOG("Total megabytes allocated (%" PRIu64 ")", (mem_usage / MEGABYTE_SIZE));
 
     return (mem_usage / MEGABYTE_SIZE);
 }

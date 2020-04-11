@@ -71,7 +71,7 @@ The Makefile targets are very simple:
 
 `make tests` - Builds and runs all tests
 
-`make perf_tests` - Builds and runs a simple performance test that uses gprof
+`make perf_tests` - Builds and runs a simple performance test that uses gprof. Linux only
 
 `make malloc_cmp_test` - Builds and runs a test that uses both iso_alloc and malloc for comparison
 

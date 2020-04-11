@@ -11,6 +11,7 @@
 #endif
 
 #include <errno.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -25,6 +26,8 @@
 
 #define OK 0
 #define ERR -1
+
+#define LAST_DTOR 65535
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
@@ -172,6 +175,9 @@ uint32_t g_page_size;
 static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 
+typedef uint64_t bit_slot_t;
+typedef int64_t bitmap_index_t;
+
 /* The API allows for consumers of the library to
  * create their own zones for unique data/object
  * types. This structure allows the caller to define
@@ -186,19 +192,19 @@ typedef struct {
 } iso_alloc_zone_configuration;
 
 typedef struct {
-    void *user_pages_start;                             /* Start of the pages backing this zone */
-    void *bitmap_start;                                 /* Start of the bitmap */
-    int32_t free_bit_slot_cache_index;                  /* Tracks how many entries in the cache are filled */
-    int32_t free_bit_slot_cache_usable;                 /* The oldest members of the free cache are served first */
-    int64_t next_free_bit_slot;                         /* The last bit slot returned by get_next_free_bit_slot */
-    int32_t index;                                      /* Zone index */
-    uint64_t canary_secret;                             /* Each zone has its own canary secret */
-    uint64_t pointer_mask;                              /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;                                /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;                               /* Size of the bitmap in bytes */
-    bool internally_managed;                            /* Zones can be managed by iso_alloc or custom */
-    bool is_full;                                       /* Indicates whether this zone is full to avoid expensive free bit slot searches */
-    int64_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
+    void *user_pages_start;                                /* Start of the pages backing this zone */
+    void *bitmap_start;                                    /* Start of the bitmap */
+    int32_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
+    int32_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
+    int64_t next_free_bit_slot;                            /* The last bit slot returned by get_next_free_bit_slot */
+    int32_t index;                                         /* Zone index */
+    uint64_t canary_secret;                                /* Each zone has its own canary secret */
+    uint64_t pointer_mask;                                 /* Each zone has its own pointer protection secret */
+    uint32_t chunk_size;                                   /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;                                  /* Size of the bitmap in bytes */
+    bool internally_managed;                               /* Zones can be managed by iso_alloc or custom */
+    bool is_full;                                          /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } iso_alloc_zone;
 
 /* Meta data for big allocations are allocated near the
@@ -207,7 +213,7 @@ typedef struct {
  * beginning of the page it resides on */
 typedef struct iso_alloc_big_zone {
     bool free;
-    size_t size;
+    uint64_t size;
     void *user_pages_start;
     struct iso_alloc_big_zone *next;
 } iso_alloc_big_zone;
@@ -238,18 +244,18 @@ INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protect
 INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void *get_base_page(void *addr);
-INTERNAL_HIDDEN INLINE int64_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
+INTERNAL_HIDDEN INLINE bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);
-INTERNAL_HIDDEN int64_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
+INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_new_root();
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void verify_all_zones();
-INTERNAL_HIDDEN int64_t get_next_free_bit_slot(iso_alloc_zone *zone);
+INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);

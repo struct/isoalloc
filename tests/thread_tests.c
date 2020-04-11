@@ -9,7 +9,7 @@ uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                ZONE_2048, ZONE_4096, ZONE_8192};
 
 uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024,
-                          2048, 4096, 8192, 16384, 32768, 65536};
+                          2048, 4096, 8192, 16384};
 
 void *allocate() {
     size_t array_size;
