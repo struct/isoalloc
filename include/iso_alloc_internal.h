@@ -31,6 +31,10 @@
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
+#if UNIT_TESTING
+#define EXTERNAL_API __attribute__((visibility("default")))
+#endif
+
 #if PERF_BUILD
 #define INLINE
 #else
@@ -99,6 +103,12 @@
 #define MASK_USER_PTRS(zone) \
     zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask);
 
+#define MASK_BIG_ZONE_NEXT(bnp) \
+    UNMASK_BIG_ZONE_NEXT(bnp)
+
+#define UNMASK_BIG_ZONE_NEXT(bnp) \
+    ((iso_alloc_big_zone *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
+
 #if THREAD_SUPPORT
 #define LOCK_ROOT_MUTEX() \
     pthread_mutex_lock(&_root->zone_mutex);
@@ -130,7 +140,8 @@
 
 #define WASTED_SZ_MULTIPLIER 8
 
-#define BIG_ALLOCATION_PAGE_COUNT 4
+#define BIG_ZONE_META_DATA_PAGE_COUNT 3
+#define BIG_ZONE_USER_PAGE_COUNT 2
 
 /* We allocate (1) zone at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
@@ -212,10 +223,12 @@ typedef struct {
  * This meta data is stored at a random offset from the
  * beginning of the page it resides on */
 typedef struct iso_alloc_big_zone {
+    uint64_t canary_a;
     bool free;
     uint64_t size;
     void *user_pages_start;
     struct iso_alloc_big_zone *next;
+    uint64_t canary_b;
 } iso_alloc_big_zone;
 
 /* There is only one iso_alloc root per-process.
@@ -228,15 +241,18 @@ typedef struct {
     void *guard_below;
     void *guard_above;
     uint64_t zone_handle_mask;
+    uint64_t big_zone_next_mask;
+    uint64_t big_zone_canary_secret;
     pthread_mutex_t zone_mutex;
     iso_alloc_zone zones[MAX_ZONES];
-    iso_alloc_big_zone *big_alloc_zone_head;
+    iso_alloc_big_zone *big_zone_head;
 } iso_alloc_root;
 
 /* The global root */
 iso_alloc_root *_root;
 bool iso_alloc_initialized;
 
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
@@ -270,3 +286,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN void _iso_alloc_protect_root();
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root();
+
+#if UNIT_TESTING
+EXTERNAL_API iso_alloc_root *_get_root();
+#endif

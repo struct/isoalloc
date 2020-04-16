@@ -16,7 +16,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
         total_leaks += _iso_alloc_zone_leak_detector(zone);
     }
 
-    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *big = _root->big_zone_head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
 
     uint64_t big_leaks = 0;
 
@@ -26,7 +30,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
             LOG("Big zone leaked %" PRIu64 " bytes", big->size);
         }
 
-        big = big->next;
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            big = NULL;
+        }
     }
 
     LOG("Total leaked in big zones: bytes (%" PRIu64 ") megabytes (%" PRIu64 ")", big_leaks, (big_leaks / MEGABYTE_SIZE));
@@ -108,12 +116,20 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
         LOG("Zone[%d] holds %d byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
     }
 
-    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *big = _root->big_zone_head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
 
     while(big != NULL) {
         LOG("Big Zone Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", big->size, (big->size / MEGABYTE_SIZE));
         mem_usage += big->size;
-        big = big->next;
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            big = NULL;
+        }
     }
 
     LOG("Total megabytes allocated (%" PRIu64 ")", (mem_usage / MEGABYTE_SIZE));

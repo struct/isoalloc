@@ -21,6 +21,10 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## want to disable this. This is ignored on MacOS
 PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 
+## Enable functions that expose IsoAlloc internals
+## for tests that need to verify security properties
+UNIT_TESTING = -DUNIT_TESTING=1
+
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11
@@ -52,6 +56,11 @@ library_malloc_hook: clean
 library_debug: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
+## Build a debug version of the library
+## specifically for unit tests
+library_debug_unit_tests: clean
+	$(CC) $(CFLAGS) $(LIBRARY) $(UNIT_TESTING) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+
 ## Builds a debug version of the library with scan-build
 ## Requires scan-build is in your PATH
 analyze_library_debug: clean
@@ -81,9 +90,10 @@ cpp_library_malloc_hook: clean c_library_object
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(MALLOC_HOOK) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
-tests: clean library_debug
+tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests -L$(BUILD_DIR) -lisoalloc
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c -o $(BUILD_DIR)/big_canary_test -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow -L$(BUILD_DIR) -lisoalloc
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) tests/heap_underflow.c -o $(BUILD_DIR)/heap_underflow -L$(BUILD_DIR) -lisoalloc

@@ -58,6 +58,22 @@ INTERNAL_HIDDEN void verify_all_zones() {
 
         verify_zone(zone);
     }
+
+    iso_alloc_big_zone *big = _root->big_zone_head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
+
+    while(big != NULL) {
+        check_big_canary(big);
+
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            break;
+        }
+    }
 }
 
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
@@ -274,6 +290,8 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     srandom((t.tv_usec * t.tv_sec) + (nt.tv_usec * nt.tv_sec) + getpid());
 
     _root->zone_handle_mask = (random() * random());
+    _root->big_zone_next_mask = (random() * random());
+    _root->big_zone_canary_secret = (random() * random());
     iso_alloc_initialized = true;
 }
 
@@ -350,13 +368,29 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor() {
 #endif
     }
 
-    iso_alloc_big_zone *big_zone = _root->big_alloc_zone_head;
-    iso_alloc_big_zone *b = NULL;
+    iso_alloc_big_zone *big_zone = _root->big_zone_head;
+    iso_alloc_big_zone *big = NULL;
+
+    if(big_zone != NULL) {
+        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
 
     while(big_zone != NULL) {
-        b = big_zone->next;
-        munmap(big_zone - _root->system_page_size, (_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + big_zone->size);
-        big_zone = b;
+        check_big_canary(big_zone);
+
+        if(big_zone->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big_zone->next);
+        } else {
+            big = NULL;
+        }
+
+        /* Free the user pages first */
+        void *up = big_zone->user_pages_start - _root->system_page_size;
+        munmap(up, (_root->system_page_size * 2) + big_zone->size);
+
+        /* Free the meta data */
+        munmap(big_zone - _root->system_page_size, (_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
+        big_zone = big;
     }
 
 #ifndef MALLOC_HOOK
@@ -615,60 +649,90 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
     /* Let's first see if theres an existing set of
      * pages that can satisfy this allocation request */
-    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *big = _root->big_zone_head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
+
     iso_alloc_big_zone *last_big = NULL;
 
     while(big != NULL) {
+        check_big_canary(big);
+
         if(big->free == true && big->size >= size) {
             break;
         }
 
         last_big = big;
-        big = big->next;
+
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            big = NULL;
+            break;
+        }
     }
 
     /* We need to setup a new set of pages */
     if(big == NULL) {
-        void *p = mmap_rw_pages((_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + size, false);
+        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false);
 
-        /* The first page is a guard page */
+        /* The first page before meta data is a guard page */
         mprotect_pages(p, _root->system_page_size, PROT_NONE);
         madvise(p, _root->system_page_size, MADV_DONTNEED);
-
-        /* Setup the next guard page */
-        void *next_gp = (p + _root->system_page_size * 2);
-        mprotect_pages(next_gp, _root->system_page_size, PROT_NONE);
-        madvise(next_gp, _root->system_page_size, MADV_DONTNEED);
-
-        /* User data starts at the beginning of the 3rd page */
-        void *user_pages = next_gp + _root->system_page_size;
-        madvise(user_pages, size, MADV_WILLNEED);
-        madvise(user_pages, size, MADV_RANDOM);
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
         big = (iso_alloc_big_zone *) (p + _root->system_page_size);
         madvise(big, _root->system_page_size, MADV_WILLNEED);
         big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random() % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
-        big->user_pages_start = user_pages;
         big->free = false;
         big->size = size;
         big->next = NULL;
 
+        if(last_big != NULL) {
+            last_big->next = MASK_BIG_ZONE_NEXT(big);
+        }
+
+        if(_root->big_zone_head == NULL) {
+            _root->big_zone_head = MASK_BIG_ZONE_NEXT(big);
+        }
+
+        /* Create the guard page after the meta data */
+        void *next_gp = (p + _root->system_page_size * 2);
+        mprotect_pages(next_gp, _root->system_page_size, PROT_NONE);
+        madvise(next_gp, _root->system_page_size, MADV_DONTNEED);
+
+        /* User data is allocated separately from big zone meta
+         * data to prevent an attacker from targeting it */
+        void *user_pages = mmap_rw_pages((_root->system_page_size * BIG_ZONE_USER_PAGE_COUNT) + size, false);
+
+        /* The first page is a guard page */
+        mprotect_pages(user_pages, _root->system_page_size, PROT_NONE);
+        madvise(user_pages, _root->system_page_size, MADV_DONTNEED);
+
+        /* Tell the kernel we want to access this big zone allocation */
+        user_pages += _root->system_page_size;
+        madvise(user_pages, size, MADV_WILLNEED);
+        madvise(user_pages, size, MADV_RANDOM);
+
+        /* The last page beyond user data is a guard page */
         void *last_gp = (user_pages + size);
         mprotect_pages(last_gp, _root->system_page_size, PROT_NONE);
         madvise(last_gp, _root->system_page_size, MADV_DONTNEED);
 
-        if(last_big != NULL) {
-            last_big->next = big;
-        }
+        /* Save a pointer to the user pages */
+        big->user_pages_start = user_pages;
 
-        if(_root->big_alloc_zone_head == NULL) {
-            _root->big_alloc_zone_head = big;
-        }
+        /* The canaries prevents a linear overwrite of the big
+         * zone meta data structure from either direction */
+        big->canary_a = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
+        big->canary_b = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
 
         return big->user_pages_start;
     } else {
+        check_big_canary(big);
         big->free = false;
         return big->user_pages_start;
     }
@@ -799,9 +863,15 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
 INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
     /* Its possible we are trying to unmap a big allocation */
-    iso_alloc_big_zone *big = _root->big_alloc_zone_head;
+    iso_alloc_big_zone *big = _root->big_zone_head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    }
 
     while(big != NULL) {
+        check_big_canary(big);
+
         /* Only a free of the exact address is valid */
         if(p == big->user_pages_start) {
             return big;
@@ -811,7 +881,12 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
             LOG_AND_ABORT("Invalid free of big allocation at %p in mapping %p", p, big->user_pages_start);
         }
 
-        big = big->next;
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            big = NULL;
+            break;
+        }
     }
 
     return NULL;
@@ -838,6 +913,21 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     }
 
     return NULL;
+}
+
+/* Verifies both canaries in a big zone structure. This
+ * is a fast operation so we call it anytime we iterate
+ * through the linked list of big zones */
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
+    uint64_t canary = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
+
+    if(big->canary_a != canary) {
+        LOG_AND_ABORT("Big zone %p bottom canary has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, big, big->canary_a, canary);
+    }
+
+    if(big->canary_b != canary) {
+        LOG_AND_ABORT("Big zone %p top canary has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, big, big->canary_a, canary);
+    }
 }
 
 /* All free chunks get a canary written at both
@@ -895,29 +985,39 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         /* There is nothing else to do but mark this big zone free */
         big_zone->free = true;
     } else {
-        iso_alloc_big_zone *last = _root->big_alloc_zone_head;
+        iso_alloc_big_zone *big = _root->big_zone_head;
 
-        if(last == big_zone) {
-            _root->big_alloc_zone_head = NULL;
+        if(big != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+        }
+
+        if(big == big_zone) {
+            _root->big_zone_head = NULL;
         } else {
             /* We need to remove this entry from the list */
-            while(last != NULL) {
-                if(last->next == big_zone) {
-                    last->next = big_zone->next;
+            while(big != NULL) {
+                check_big_canary(big);
+
+                if(UNMASK_BIG_ZONE_NEXT(big->next) == big_zone) {
+                    big->next = UNMASK_BIG_ZONE_NEXT(big_zone->next);
                     break;
                 }
 
-                last = last->next;
+                if(big->next != NULL) {
+                    big = UNMASK_BIG_ZONE_NEXT(big->next);
+                } else {
+                    big = NULL;
+                }
             }
         }
 
-        if(last == NULL) {
+        if(big == NULL) {
             LOG_AND_ABORT("The big zone list has been corrupted, unable to find big zone %p", big_zone);
         }
 
-        /* Sanitize and mark the entire thing PROT_NONE */
+        mprotect(big_zone->user_pages_start, big_zone->size, PROT_NONE);
         memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone));
-        mprotect((void *) ROUND_DOWN_PAGE((uintptr_t)(big_zone - _root->system_page_size)), (_root->system_page_size * BIG_ALLOCATION_PAGE_COUNT) + big_zone->size, PROT_NONE);
+        mprotect((void *) ROUND_DOWN_PAGE((uintptr_t)(big_zone - _root->system_page_size)), _root->system_page_size, PROT_NONE);
     }
 }
 
@@ -1052,3 +1152,12 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     return zone->chunk_size;
 }
+
+#if UNIT_TESTING
+/* Some tests require getting access to IsoAlloc internals
+ * that aren't supported by the API. We never want these
+ * in release builds of the library */
+EXTERNAL_API iso_alloc_root *_get_root() {
+    return _root;
+}
+#endif
