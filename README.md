@@ -43,6 +43,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 * The state of all zones can be verified at any anytime using `iso_verify_zones` or `iso_verify_zone(zone)`
 * Canaries are unique and are composed of a 64 bit secret value xor'd by the address of the chunk itself
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`
+* The top byte of user chunk canaries is 0x00 to prevent unbounded C string reads from leaking it
 * A chunk can be permanently free'd with a call to `iso_free_permanently`
 * If `SANITIZE_CHUNKS` is set all user chunks are cleared when passed to `iso_free` with the constant 0xDE
 * When freeing a chunk the canary in adjacent chunks above/below are verified

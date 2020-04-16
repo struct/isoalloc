@@ -933,9 +933,11 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
 /* All free chunks get a canary written at both
  * the start and end of their chunks. These canaries
  * are verified when adjacent chunks are allocated,
- * freed, or when the API requests validation */
+ * freed, or when the API requests validation. We
+ * sacrifice the high byte in entropy to prevent
+ * unbounded string reads from leaking it */
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
-    uint64_t canary = zone->canary_secret ^ (uint64_t) p;
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
     memcpy(p, &canary, CANARY_SIZE);
     p += (zone->chunk_size - sizeof(uint64_t));
     memcpy(p, &canary, CANARY_SIZE);
@@ -944,32 +946,32 @@ INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
 /* Verify the canary value in an allocation */
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
-    uint64_t canary = (zone->canary_secret ^ (uint64_t) p);
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
 
     if(v != canary) {
-        LOG_AND_ABORT("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
     }
 
     v = *((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
 
     if(v != canary) {
-        LOG_AND_ABORT("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG_AND_ABORT("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
     }
 }
 
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
-    uint64_t canary = (zone->canary_secret ^ (uint64_t) p);
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
 
     if(v != canary) {
-        LOG("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
         return ERR;
     }
 
     v = *((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
 
     if(v != canary) {
-        LOG("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, (uint64_t)(zone->canary_secret ^ (uint64_t) p));
+        LOG("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
         return ERR;
     }
 
