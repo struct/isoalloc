@@ -686,7 +686,8 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
          * at a random offset from the start of the page */
         big = (iso_alloc_big_zone *) (p + _root->system_page_size);
         madvise(big, _root->system_page_size, MADV_WILLNEED);
-        big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random() % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
+        uint32_t random_offset = ALIGN_SZ_DOWN(random());
+        big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random_offset % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
         big->free = false;
         big->size = size;
         big->next = NULL;
