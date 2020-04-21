@@ -1,17 +1,19 @@
 #!/bin/bash
 # This script runs all debug tests including vulnerable
 # examples of code that should crash
-
 $(echo '' > test_output.txt)
 
 tests=("tests" "big_tests" "interfaces_test" "thread_tests")
 failure=0
 succeeded=0
 
+export LD_LIBRARY_PATH=build/
+export LD_PRELOAD=build/libisoalloc.so
+
 for t in "${tests[@]}"; do
     echo -n "Running $t test"
-    echo -n "Running $t test" >> test_output.txt 2>&1
-    $(LD_LIBRARY_PATH=build/ LD_PRELOAD=build/libisoalloc.so build/$t >> test_output.txt 2>&1)
+    echo "Running $t test" >> test_output.txt 2>&1
+    $(build/$t >> test_output.txt 2>&1)
     ret=$?
 
     if [ $ret -ne 0 ]; then
@@ -31,8 +33,8 @@ fail_tests=("double_free" "heap_overflow" "heap_underflow" "leaks_test"
 
 for t in "${fail_tests[@]}"; do
     echo -n "Running $t test"
-    echo -n "Running $t test" >> test_output.txt 2>&1
-    $(LD_LIBRARY_PATH=build/ LD_PRELOAD=build/libisoalloc.so build/$t >> test_output.txt 2>&1)
+    echo "Running $t test" >> test_output.txt 2>&1
+    $(build/$t >> test_output.txt 2>&1)
     ret=$?
 
     if [ $ret -ne 0 ]; then
