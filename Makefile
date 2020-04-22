@@ -6,7 +6,8 @@ CXX = clang++
 
 ## Security flags can affect performance
 ## SANITIZE_CHUNKS - Clear user chunks upon free
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0
+## FUZZ_MODE - Call verify_all_zones upon every alloc/free (very slow!)
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0
 
 ## Support for threads adds a performance overhead
 ## You can safely disable it here if you know your
