@@ -7,7 +7,8 @@ CXX = clang++
 ## Security flags can affect performance
 ## SANITIZE_CHUNKS - Clear user chunks upon free
 ## FUZZ_MODE - Call verify_all_zones upon every alloc/free (very slow!)
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0
+## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=1 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=1
 
 ## Support for threads adds a performance overhead
 ## You can safely disable it here if you know your
@@ -22,7 +23,7 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## want to disable this. This is ignored on MacOS
 PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 
-## Enable functions that expose IsoAlloc internals
+## Enable some functionality that like IsoAlloc internals
 ## for tests that need to verify security properties
 UNIT_TESTING = -DUNIT_TESTING=1
 

@@ -153,7 +153,7 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
         LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
     }
 
-#if DEBUG
+#if DEBUG || UNIT_TESTING
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
      * order. So we can't search the cache with something like
@@ -164,7 +164,9 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
      * order to detect any corruption of the cache that attempts
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks. The _iso_alloc() path also does
-     * a check on the bitmap itself before handing out any chunks */
+     * a check on the bitmap itself before handing out any chunks.
+     * This is mainly used for testing that new features don't
+     * introduce bugs. Its too aggressive for release builds */
     for(int32_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(bit_slot_t)); i++) {
         if(zone->free_bit_slot_cache[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %" PRIu64 " in cache", zone->index, bit_slot);
@@ -842,7 +844,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     if((GET_BIT(b, which_bit)) != 0) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at %p bitmap location @ %p. bit slot was %" PRIu64 ", which_bit was %" PRIu64,
+        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at %p bitmap location @ %p. bit slot was %" PRIu64 ", bit number was %" PRIu64,
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
     }
 
@@ -1109,8 +1111,11 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
         }
     }
 
-    insert_free_bit_slot(zone, bit_slot);
-    zone->is_full = false;
+    if(permanent == false) {
+        insert_free_bit_slot(zone, bit_slot);
+        zone->is_full = false;
+    }
+
     return;
 }
 

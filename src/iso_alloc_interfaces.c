@@ -26,13 +26,23 @@ EXTERNAL_API void iso_free(void *p) {
 }
 
 EXTERNAL_API void iso_free_permanently(void *p) {
+    LOCK_ROOT_MUTEX();
     _iso_free(p, true);
+    UNLOCK_ROOT_MUTEX();
     return;
+}
+
+/* Returns the size of the chunk for an associated pointer */
+EXTERNAL_API size_t iso_chunksz(void *p) {
+    LOCK_ROOT_MUTEX();
+    size_t s = _iso_chunk_size(p);
+    UNLOCK_ROOT_MUTEX();
+    return s;
 }
 
 EXTERNAL_API void *iso_realloc(void *p, size_t size) {
     if(p != NULL && size == 0) {
-        _iso_free(p, false);
+        iso_free(p);
         return NULL;
     }
 
@@ -52,16 +62,13 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
         memcpy(r, p, size);
     }
 
-    _iso_free(p, false);
-    return r;
-}
+#if PERM_FREE_REALLOC
+    iso_free_permanently(p);
+#else
+    iso_free(p);
+#endif
 
-/* Returns the size of the chunk for an associated pointer */
-EXTERNAL_API size_t iso_chunksz(void *p) {
-    LOCK_ROOT_MUTEX();
-    size_t s = _iso_chunk_size(p);
-    UNLOCK_ROOT_MUTEX();
-    return s;
+    return r;
 }
 
 EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size) {
@@ -76,7 +83,9 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
         return NULL;
     }
 
+    LOCK_ROOT_MUTEX();
     void *r = _iso_alloc(zone, size);
+    UNLOCK_ROOT_MUTEX();
 
     if(r == NULL) {
         return r;
@@ -92,7 +101,12 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
         memcpy(r, p, size);
     }
 
-    iso_free(p);
+#if PERM_FREE_REALLOC
+    iso_free_permanently(p);
+#else
+    iso_free(p, false);
+#endif
+
     return r;
 }
 
@@ -138,7 +152,9 @@ EXTERNAL_API char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
+    LOCK_ROOT_MUTEX();
     char *p = (char *) _iso_alloc(zone, n);
+    UNLOCK_ROOT_MUTEX();
 
     if(p == NULL) {
         return NULL;
