@@ -8,7 +8,7 @@ CXX = clang++
 ## SANITIZE_CHUNKS - Clear user chunks upon free
 ## FUZZ_MODE - Call verify_all_zones upon every alloc/free (very slow!)
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=1 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=1
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
 
 ## Support for threads adds a performance overhead
 ## You can safely disable it here if you know your
@@ -27,6 +27,9 @@ PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 ## for tests that need to verify security properties
 UNIT_TESTING = -DUNIT_TESTING=1
 
+## Enable the malloc/free and new/delete hooks
+MALLOC_HOOK = -DMALLOC_HOOK
+
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11
@@ -36,7 +39,6 @@ OPTIMIZE = -O2
 DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE
 GDB_FLAGS = -g -ggdb3
 PERF_FLAGS = -pg -DPERF_BUILD
-MALLOC_HOOK = -DMALLOC_HOOK
 LIBRARY = -fPIC -shared
 SRC_DIR = src
 C_SRCS = $(SRC_DIR)/*.c

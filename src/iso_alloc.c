@@ -149,7 +149,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
-    if(0 > zone->free_bit_slot_cache_usable || 0 > zone->free_bit_slot_cache_index) {
+    if(UNLIKELY(0 > zone->free_bit_slot_cache_usable) || UNLIKELY((0 > zone->free_bit_slot_cache_index))) {
         LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
     }
 
@@ -168,7 +168,7 @@ INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot
      * This is mainly used for testing that new features don't
      * introduce bugs. Its too aggressive for release builds */
     for(int32_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(bit_slot_t)); i++) {
-        if(zone->free_bit_slot_cache[i] == bit_slot) {
+        if(UNLIKELY(zone->free_bit_slot_cache[i] == bit_slot)) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %" PRIu64 " in cache", zone->index, bit_slot);
         }
     }
@@ -193,17 +193,13 @@ INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone) {
     return zone->next_free_bit_slot;
 }
 
-INTERNAL_HIDDEN INLINE void *get_base_page(void *addr) {
-    return (void *) ((uintptr_t) addr & ~(_root->system_page_size - 1));
-}
-
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 #if SANITIZE_CHUNKS
     memset(p, POISON_BYTE, size);
 #endif
 }
 
-INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate) {
+INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
     size = ROUND_UP_PAGE(size);
     void *p = NULL;
 
@@ -226,7 +222,7 @@ INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate) {
     return p;
 }
 
-INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection) {
+INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     if((mprotect(p, size, protection)) == ERR) {
         LOG_AND_ABORT("Failed to mprotect pages @ %p", p);
     }
@@ -297,7 +293,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     iso_alloc_initialized = true;
 }
 
-__attribute__((constructor(0))) void iso_alloc_ctor() {
+__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor() {
     if(iso_alloc_initialized == false) {
         iso_alloc_initialize();
     }
@@ -512,7 +508,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
 /* This function scans an entire bitmap bit-by-bit
  * and returns the first free bit position. In a heavily
  * used zone this function will be slow to search */
-INTERNAL_HIDDEN INLINE bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot = BAD_BIT_SLOT;
     int64_t bit;
@@ -559,7 +555,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 
     bit_slot_t bit_slot = get_next_free_bit_slot(zone);
 
-    if(bit_slot != BAD_BIT_SLOT) {
+    if(LIKELY(bit_slot != BAD_BIT_SLOT)) {
         MASK_ZONE_PTRS(zone);
         return zone;
     }
@@ -838,12 +834,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
      * which could result in a page fault */
     bitmap_index_t b = bm[dwords_to_bit_slot];
 
-    if(p > zone->user_pages_start + ZONE_USER_SIZE) {
+    if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
         LOG_AND_ABORT("Allocating an address %p from zone[%d], bit slot %" PRIu64 " %ld bytes %ld pages outside zones user pages %p %p",
                       p, zone->index, free_bit_slot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
-    if((GET_BIT(b, which_bit)) != 0) {
+    if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
         LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at %p bitmap location @ %p. bit slot was %" PRIu64 ", bit number was %" PRIu64,
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
     }
@@ -888,7 +884,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
             return big;
         }
 
-        if(p > big->user_pages_start && p < (big->user_pages_start + big->size)) {
+        if(UNLIKELY(p > big->user_pages_start) && UNLIKELY(p < (big->user_pages_start + big->size))) {
             LOG_AND_ABORT("Invalid free of big allocation at %p in mapping %p", p, big->user_pages_start);
         }
 
@@ -932,11 +928,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
     uint64_t canary = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
 
-    if(big->canary_a != canary) {
+    if(UNLIKELY(big->canary_a != canary)) {
         LOG_AND_ABORT("Big zone %p bottom canary has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, big, big->canary_a, canary);
     }
 
-    if(big->canary_b != canary) {
+    if(UNLIKELY(big->canary_b != canary)) {
         LOG_AND_ABORT("Big zone %p top canary has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, big, big->canary_a, canary);
     }
 }
@@ -947,7 +943,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * freed, or when the API requests validation. We
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
     memcpy(p, &canary, CANARY_SIZE);
     p += (zone->chunk_size - sizeof(uint64_t));
@@ -959,29 +955,29 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
 
-    if(v != canary) {
+    if(UNLIKELY(v != canary)) {
         LOG_AND_ABORT("Canary at beginning of chunk %p in zone[%d][%d byte chunks] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, zone->chunk_size, v, canary);
     }
 
     v = *((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
 
-    if(v != canary) {
+    if(UNLIKELY(v != canary)) {
         LOG_AND_ABORT("Canary at end of chunk %p in zone[%d][%d byte chunks] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, zone->chunk_size, v, canary);
     }
 }
 
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
 
-    if(v != canary) {
+    if(UNLIKELY(v != canary)) {
         LOG("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
         return ERR;
     }
 
     v = *((uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)));
 
-    if(v != canary) {
+    if(UNLIKELY(v != canary)) {
         LOG("Canary at end of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
         return ERR;
     }
@@ -1036,14 +1032,14 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
-    if(((uintptr_t) p % ALIGNMENT) != 0) {
+    if(UNLIKELY(((uintptr_t) p % ALIGNMENT) != 0)) {
         LOG_AND_ABORT("Chunk at %p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
     uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
-    if((chunk_offset % zone->chunk_size) != 0) {
+    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
         LOG_AND_ABORT("Chunk at %p is not a multiple of zone[%d] chunk size %d. Off by %" PRIu64 " bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
     }
 
@@ -1051,7 +1047,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     bit_slot_t bit_slot = (chunk_number * BITS_PER_CHUNK);
     bit_slot_t dwords_to_bit_slot = (bit_slot / BITS_PER_QWORD);
 
-    if((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size)) {
+    if(UNLIKELY((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size))) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap %p", p);
     }
 
@@ -1065,7 +1061,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     bitmap_index_t b = bm[dwords_to_bit_slot];
 
     /* Double free detection */
-    if((GET_BIT(b, which_bit)) == 0) {
+    if(UNLIKELY((GET_BIT(b, which_bit)) == 0)) {
         LOG_AND_ABORT("Double free of chunk %p detected from zone[%d] dwords_to_bit_slot=%" PRIu64 " bit_slot=%" PRIu64, p, zone->index, dwords_to_bit_slot, bit_slot);
     }
 

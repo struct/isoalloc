@@ -104,7 +104,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle 
 #if PERM_FREE_REALLOC
     iso_free_permanently(p);
 #else
-    iso_free(p, false);
+    iso_free(p);
 #endif
 
     return r;

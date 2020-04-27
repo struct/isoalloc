@@ -27,6 +27,13 @@
 #define OK 0
 #define ERR -1
 
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
+/* GCC complains if your constructor priority is
+ * 0-100 but Clang does not. We need the lowest
+ * priority constructor for MALLOC_HOOK */
+#define FIRST_CTOR 101
 #define LAST_DTOR 65535
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
@@ -253,25 +260,24 @@ iso_alloc_root *_root;
 bool iso_alloc_initialized;
 
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big);
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE void mprotect_pages(void *p, size_t size, int32_t protection);
-INTERNAL_HIDDEN INLINE void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
-INTERNAL_HIDDEN INLINE void *get_base_page(void *addr);
-INTERNAL_HIDDEN INLINE bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);
+INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
+INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
+INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p);
+INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
+INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_new_root();
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void verify_all_zones();
-INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
