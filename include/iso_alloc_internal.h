@@ -176,6 +176,8 @@
  * of all free'd user chunks */
 #define POISON_BYTE 0xde
 
+#define CANARY_VALIDATE_MASK 0xffffffffffffff00
+
 #define BAD_BIT_SLOT -1
 
 /* Calculate the user pointer given a zone and a bit slot */

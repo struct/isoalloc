@@ -944,7 +944,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
 INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
-    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
     memcpy(p, &canary, CANARY_SIZE);
     p += (zone->chunk_size - sizeof(uint64_t));
     memcpy(p, &canary, CANARY_SIZE);
@@ -953,7 +953,7 @@ INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
 /* Verify the canary value in an allocation */
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
-    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 
     if(UNLIKELY(v != canary)) {
         LOG_AND_ABORT("Canary at beginning of chunk %p in zone[%d][%d byte chunks] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, zone->chunk_size, v, canary);
@@ -968,7 +968,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
 
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
-    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & 0xffffffffffffff00;
+    uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 
     if(UNLIKELY(v != canary)) {
         LOG("Canary at beginning of chunk %p in zone[%d] has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, p, zone->index, v, canary);
