@@ -81,6 +81,10 @@ The Makefile targets are very simple:
 
 `make malloc_cmp_test` - Builds and runs a test that uses both iso_alloc and malloc for comparison
 
+`make c_library_objects` - Builds .o files to be linked in another compilation step
+
+`make c_library_objects_debug` - Builds debug .o files to be linked in another compilation step
+
 `make cpp_library` - Builds the library with a simple C++ interface that overloads new/delete operators
 
 `make cpp_tests` - Builds and runs the C++ tests
@@ -88,6 +92,10 @@ The Makefile targets are very simple:
 `make format` - Runs clang formatter according to the specification in .clang-format
 
 `make clean` - Cleans up the root directory
+
+## Linking With C++
+
+If you want to use IsoAlloc with a C++ program you can use the `c_library_objects` Makefile target. This will produce .o object files you can pass to your compiler. These targets are used internally to build a library with `new` and `delete` support.
 
 ## Debugging
 
