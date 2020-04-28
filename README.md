@@ -24,7 +24,7 @@ All user chunk pages and bitmap pages are surrounded by guard page allocations w
 If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented below.
 
 * All allocations are 8 byte aligned
-* Zones are thread safe by default by a mutex
+* The `iso_alloc_root` structure is thread safe and guarded by a mutex 
 * The bitmap has 2 bits set aside per chunk
 * Zones are 8 MB in size regardless of the chunk sizes they manage
 * Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes. Zones are created on demand for larger allocations
@@ -32,6 +32,10 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * All allocations >262144 bytes live in specially handled big zones which have no size limitations
 
 See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
+
+## Thread Safety
+
+IsoAlloc is thread safe by way of protecting the root structure with a mutex. This means every thread that wants to allocate or free a chunk needs to wait until it can grab the lock. This design choice has some big pros and cons. It can negatively impact performance of multi threaded programs that perform a lot of allocations. This is because every thread shares the same set of global zones. The benefit of this is that you can allocate and free any chunk from any thread with little code complexity required. Given how bad this performance hit is I am evaluating different strategies to improve the situation.
 
 ## Security Properties
 
