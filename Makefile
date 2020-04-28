@@ -30,13 +30,13 @@ UNIT_TESTING = -DUNIT_TESTING=1
 ## Enable the malloc/free and new/delete hooks
 MALLOC_HOOK = -DMALLOC_HOOK
 
-COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
+OPTIMIZE = -O2
+COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(OPTIMIZE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11
 EXE_CFLAGS = -fPIE
-OPTIMIZE = -O2
-DEBUG_FLAGS = -DDEBUG -DLEAK_DETECTOR -DMEM_USAGE
+DEBUG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 GDB_FLAGS = -g -ggdb3
 PERF_FLAGS = -pg -DPERF_BUILD
 LIBRARY = -fPIC -shared
@@ -49,7 +49,7 @@ all: library tests
 
 ## Build a release version of the library
 library: clean
-	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) $(OPTIMIZE) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a release version of the library
 ## Adds malloc hooks
@@ -80,12 +80,20 @@ library_debug_no_output: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## C++ Support - Build object files for C code
-c_library_object:
+c_library_objects:
+	$(CC) $(CFLAGS) $(C_SRCS) -fPIC -c
+	mv *.o $(BUILD_DIR)
+
+## C++ Support - Build object files for C code
+c_library_objects_debug:
 	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_FLAGS) -fPIC -c
 	mv *.o $(BUILD_DIR)
 
 ## C++ Support - Build the library with C++ support
-cpp_library: clean c_library_object
+cpp_library: clean c_library_objects
+	$(CXX) $(CXXFLAGS) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+
+cpp_library_debug: clean c_library_objects_debug
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## C++ Support - Build the library with C++ support
@@ -112,8 +120,8 @@ tests: clean library_debug_unit_tests
 ## Build a non-debug library with performance
 ## monitoring enabled. Linux only
 perf_tests: clean
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests_gprof
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) $(OPTIMIZE) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof
@@ -122,8 +130,8 @@ perf_tests: clean
 ## Runs a single test that prints CPU time
 ## compared to the same malloc/free operations
 malloc_cmp_test: clean
-	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) tests/tests.c -o $(BUILD_DIR)/tests
-	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OPTIMIZE) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) tests/tests.c -o $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"
 	build/tests
 	echo "Running glibc malloc Performance Test"
