@@ -290,13 +290,10 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     _root->zone_handle_mask = (random() * random());
     _root->big_zone_next_mask = (random() * random());
     _root->big_zone_canary_secret = (random() * random());
-    iso_alloc_initialized = true;
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor() {
-    if(iso_alloc_initialized == false) {
-        iso_alloc_initialize();
-    }
+    iso_alloc_initialize();
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
@@ -738,14 +735,10 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
-    if(iso_alloc_initialized == false) {
-        iso_alloc_initialize();
-    }
-
     /* Allocation requests of 8mb or larger are handled
      * by the 'big allocation' path. If a zone was passed
      * in we abort because its a misuse of the API */
-    if(size > SMALL_SZ_MAX) {
+    if(UNLIKELY(size > SMALL_SZ_MAX)) {
         if(zone != NULL) {
             LOG_AND_ABORT("Allocations of >= 8mb cannot use custom zones");
         }
