@@ -10,6 +10,7 @@
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
+#include <byteswap.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
