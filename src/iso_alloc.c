@@ -723,8 +723,8 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         /* The canaries prevents a linear overwrite of the big
          * zone meta data structure from either direction */
-        big->canary_a = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
-        big->canary_b = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
+        big->canary_a = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
+        big->canary_b = big->canary_a;
 
         return big->user_pages_start;
     } else {
@@ -919,7 +919,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
  * is a fast operation so we call it anytime we iterate
  * through the linked list of big zones */
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
-    uint64_t canary = ((uint64_t) big ^ (uint64_t) big->user_pages_start ^ _root->big_zone_canary_secret);
+    uint64_t canary = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
 
     if(UNLIKELY(big->canary_a != canary)) {
         LOG_AND_ABORT("Big zone %p bottom canary has been corrupted! Value: 0x%" PRIx64 " Expected: 0x%" PRIx64, big, big->canary_a, canary);
