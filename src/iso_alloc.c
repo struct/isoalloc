@@ -25,12 +25,12 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     /* This function is only ever called during zone
      * initialization so we don't need to check the
      * current state of any chunks, they're all free.
-     * It's possible the call to random() here will
+     * It's possible the call to rand_uint64() here will
      * return the same index twice, we can live with
      * that collision as canary chunks only provide a
      * small security property anyway */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx));
+        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -116,7 +116,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This will negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((random() % max_bitmap_idx / 4));
+    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx / 4));
 
     if(0 > bm_idx) {
         bm_idx = 0;
@@ -264,8 +264,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize(void) {
         return;
     }
 
-    struct timeval t;
-    gettimeofday(&t, NULL);
     g_page_size = sysconf(_SC_PAGESIZE);
 
     iso_alloc_new_root();
@@ -283,13 +281,9 @@ INTERNAL_HIDDEN void iso_alloc_initialize(void) {
         mlock(zone, sizeof(iso_alloc_zone));
     }
 
-    struct timeval nt;
-    gettimeofday(&nt, NULL);
-    srandom((t.tv_usec * t.tv_sec) + (nt.tv_usec * nt.tv_sec) + getpid());
-
-    _root->zone_handle_mask = (random() * random());
-    _root->big_zone_next_mask = (random() * random());
-    _root->big_zone_canary_secret = (random() * random());
+    _root->zone_handle_mask = rand_uint64();
+    _root->big_zone_next_mask = rand_uint64();
+    _root->big_zone_canary_secret = rand_uint64();
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
@@ -464,8 +458,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_RANDOM);
 
     new_zone->index = _root->zones_used;
-    new_zone->canary_secret = (random() * random());
-    new_zone->pointer_mask = (random() * random());
+    new_zone->canary_secret = rand_uint64();
+    new_zone->pointer_mask = rand_uint64();
 
     /* This should be the only place we call this function */
     create_canary_chunks(new_zone);
@@ -681,7 +675,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
          * at a random offset from the start of the page */
         big = (iso_alloc_big_zone *) (p + _root->system_page_size);
         madvise(big, _root->system_page_size, MADV_WILLNEED);
-        uint32_t random_offset = ALIGN_SZ_DOWN(random());
+        uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
         big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random_offset % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
         big->free = false;
         big->size = size;
