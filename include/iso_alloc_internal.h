@@ -10,7 +10,13 @@
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
+#if __linux__
 #include <byteswap.h>
+#elif __APPLE__
+#include <libkern/OSByteOrder.h>
+#define bswap_32(x) OSSwapInt32(x)
+#define bswap_64(x) OSSwapInt64(x)
+#endif
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
