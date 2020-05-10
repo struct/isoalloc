@@ -48,7 +48,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
 /* Verify the integrity of all canary chunks and the
  * canary written to all free chunks. This function
  * either aborts or returns nothing */
-INTERNAL_HIDDEN void verify_all_zones() {
+INTERNAL_HIDDEN void verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
@@ -228,7 +228,7 @@ INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     }
 }
 
-INTERNAL_HIDDEN void iso_alloc_new_root() {
+INTERNAL_HIDDEN void iso_alloc_new_root(void) {
     void *p = NULL;
 
     size_t _root_size = sizeof(iso_alloc_root) + (g_page_size * 2);
@@ -258,7 +258,7 @@ INTERNAL_HIDDEN void iso_alloc_new_root() {
     madvise(_root->guard_above, _root->system_page_size, MADV_DONTNEED);
 }
 
-INTERNAL_HIDDEN void iso_alloc_initialize() {
+INTERNAL_HIDDEN void iso_alloc_initialize(void) {
     /* Do not allow a reinitialization unless root is NULL */
     if(_root != NULL) {
         return;
@@ -292,7 +292,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize() {
     _root->big_zone_canary_secret = (random() * random());
 }
 
-__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor() {
+__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     iso_alloc_initialize();
 }
 
@@ -322,7 +322,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     }
 }
 
-__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor() {
+__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
     uint64_t mb = 0;
 
@@ -1135,12 +1135,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
-INTERNAL_HIDDEN void _iso_alloc_protect_root() {
+INTERNAL_HIDDEN void _iso_alloc_protect_root(void) {
     mprotect_pages(_root, sizeof(iso_alloc_root), PROT_NONE);
 }
 
 /* Unprotect all use of iso_alloc by allowing R/W of the _root */
-INTERNAL_HIDDEN void _iso_alloc_unprotect_root() {
+INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void) {
     mprotect_pages(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
 }
 
@@ -1169,7 +1169,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 /* Some tests require getting access to IsoAlloc internals
  * that aren't supported by the API. We never want these
  * in release builds of the library */
-EXTERNAL_API iso_alloc_root *_get_root() {
+EXTERNAL_API iso_alloc_root *_get_root(void) {
     return _root;
 }
 #endif
