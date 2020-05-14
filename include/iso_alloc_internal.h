@@ -10,7 +10,13 @@
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
+#if __linux__
 #include <byteswap.h>
+#elif __APPLE__
+#include <libkern/OSByteOrder.h>
+#define bswap_32(x) OSSwapInt32(x)
+#define bswap_64(x) OSSwapInt64(x)
+#endif
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -21,7 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -277,9 +282,9 @@ INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
-INTERNAL_HIDDEN void iso_alloc_new_root();
+INTERNAL_HIDDEN void iso_alloc_new_root(void);
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
-INTERNAL_HIDDEN void verify_all_zones();
+INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
@@ -288,12 +293,13 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks();
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
-INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage();
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
-INTERNAL_HIDDEN void _iso_alloc_protect_root();
-INTERNAL_HIDDEN void _iso_alloc_unprotect_root();
+INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
+INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
+INTERNAL_HIDDEN uint64_t rand_uint64(void);
 
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root();

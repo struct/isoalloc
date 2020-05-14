@@ -45,6 +45,11 @@ C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp
 BUILD_DIR = build
 
+UNAME := $(shell uname)
+ifeq ($(UNAME), Darwin)
+CFLAGS += -framework Security  # should really be a LDFLAGS
+endif
+
 all: library tests
 
 ## Build a release version of the library
