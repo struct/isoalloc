@@ -17,6 +17,7 @@
 #define bswap_32(x) OSSwapInt32(x)
 #define bswap_64(x) OSSwapInt64(x)
 #endif
+
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>

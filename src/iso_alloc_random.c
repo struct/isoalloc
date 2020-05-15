@@ -1,3 +1,9 @@
+/* iso_alloc.c - A secure memory allocator
+ * Copyright 2020 - chris.rohlf@gmail.com */
+
+/* Contributed by Oscar Reparaz (@oreparaz)
+ * https://github.com/struct/isoalloc/pull/5 */
+
 #if __linux__
 #include <linux/random.h>
 #include <sys/syscall.h>
