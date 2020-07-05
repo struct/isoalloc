@@ -6,7 +6,7 @@ If you're looking to contribute to IsoAlloc then you will want to start with thi
 
 Contributing to IsoAlloc is a pretty standard process of forking the repo, making a pull request, and optionally linking it to an existing issue. Before you make your pull request please run the following commands on both Linux and MacOS:
 
-`clang format` - Run the clang formatter to ensure your code conforms to the rest of the project
+`make format` - Run the clang formatter to ensure your code conforms to the rest of the project
 
 `make tests` - Make sure all tests still pass
 
