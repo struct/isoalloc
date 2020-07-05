@@ -199,6 +199,11 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 #endif
 }
 
+INTERNAL_HIDDEN void create_guard_page(void *p) {
+    mprotect_pages(p, _root->system_page_size, PROT_NONE);
+    madvise(p, _root->system_page_size, MADV_DONTNEED);
+}
+
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
     size = ROUND_UP_PAGE(size);
     void *p = NULL;
@@ -250,12 +255,10 @@ INTERNAL_HIDDEN void iso_alloc_new_root(void) {
     _root->system_page_size = g_page_size;
 
     _root->guard_below = p;
-    mprotect_pages(_root->guard_below, _root->system_page_size, PROT_NONE);
-    madvise(_root->guard_below, _root->system_page_size, MADV_DONTNEED);
+    create_guard_page(_root->guard_below);
 
     _root->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sizeof(iso_alloc_root) + _root->system_page_size));
-    mprotect_pages(_root->guard_above, _root->system_page_size, PROT_NONE);
-    madvise(_root->guard_above, _root->system_page_size, MADV_DONTNEED);
+    create_guard_page(_root->guard_above);
 }
 
 INTERNAL_HIDDEN void iso_alloc_initialize(void) {
@@ -298,9 +301,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
          * to reuse any of its backing pages. Mark them unusable
          * and ensure any future accesses result in a segfault */
         memset(zone->bitmap_start, POISON_BYTE, zone->bitmap_size);
-        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
+        create_guard_page(zone->bitmap_start);
         memset(zone->user_pages_start, POISON_BYTE, ZONE_USER_SIZE);
-        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+        create_guard_page(zone->user_pages_start);
         memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
         /* Purposefully keep the mutex locked. Any thread
          * that tries to allocate/free in this zone should
@@ -428,11 +431,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
 
     void *bitmap_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (new_zone->bitmap_size + _root->system_page_size));
 
-    mprotect_pages(bitmap_pages_guard_below, _root->system_page_size, PROT_NONE);
-    madvise(bitmap_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
-
-    mprotect_pages(bitmap_pages_guard_above, _root->system_page_size, PROT_NONE);
-    madvise(bitmap_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
+    create_guard_page(bitmap_pages_guard_below);
+    create_guard_page(bitmap_pages_guard_above);
 
     /* Bitmap pages are accessed often and usually in sequential order */
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
@@ -447,11 +447,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     new_zone->user_pages_start = (p + _root->system_page_size);
     void *user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
 
-    mprotect_pages(user_pages_guard_below, _root->system_page_size, PROT_NONE);
-    madvise(user_pages_guard_below, _root->system_page_size, MADV_DONTNEED);
-
-    mprotect_pages(user_pages_guard_above, _root->system_page_size, PROT_NONE);
-    madvise(user_pages_guard_above, _root->system_page_size, MADV_DONTNEED);
+    create_guard_page(user_pages_guard_below);
+    create_guard_page(user_pages_guard_above);
 
     /* User pages will be accessed in an unpredictable order */
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
@@ -668,8 +665,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false);
 
         /* The first page before meta data is a guard page */
-        mprotect_pages(p, _root->system_page_size, PROT_NONE);
-        madvise(p, _root->system_page_size, MADV_DONTNEED);
+        create_guard_page(p);
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
@@ -691,16 +687,14 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         /* Create the guard page after the meta data */
         void *next_gp = (p + _root->system_page_size * 2);
-        mprotect_pages(next_gp, _root->system_page_size, PROT_NONE);
-        madvise(next_gp, _root->system_page_size, MADV_DONTNEED);
+        create_guard_page(next_gp);
 
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
         void *user_pages = mmap_rw_pages((_root->system_page_size * BIG_ZONE_USER_PAGE_COUNT) + size, false);
 
         /* The first page is a guard page */
-        mprotect_pages(user_pages, _root->system_page_size, PROT_NONE);
-        madvise(user_pages, _root->system_page_size, MADV_DONTNEED);
+        create_guard_page(user_pages);
 
         /* Tell the kernel we want to access this big zone allocation */
         user_pages += _root->system_page_size;
@@ -709,8 +703,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         /* The last page beyond user data is a guard page */
         void *last_gp = (user_pages + size);
-        mprotect_pages(last_gp, _root->system_page_size, PROT_NONE);
-        madvise(last_gp, _root->system_page_size, MADV_DONTNEED);
+        create_guard_page(last_gp);
 
         /* Save a pointer to the user pages */
         big->user_pages_start = user_pages;
