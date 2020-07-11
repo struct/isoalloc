@@ -31,6 +31,8 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * The free bit slot cache is 255 entries, it helps speed up allocations
 * All allocations >262144 bytes live in specially handled big zones which have no size limitations
 
+There is experimental support for Address Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN` compiler flags in the `Makefile`.
+
 See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 
 ## Thread Safety
@@ -150,4 +152,3 @@ If all else fails please file an issue on the [github project](https://github.co
 `void iso_verify_zones()` - Verifies the state of all zones. Will abort if inconsistencies are found.
 
 `void iso_verify_zone(iso_alloc_zone_handle *zone)` - Verifies the state of specified zone. Will abort if inconsistencies are found.
-
