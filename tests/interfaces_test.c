@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("iso_alloc failed");
     }
 
-    memset(p, 0x41, 1024);
+    memset(p, 0x00, 1024);
 
     void *r = iso_strdup(p);
 

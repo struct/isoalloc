@@ -31,6 +31,51 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#if ENABLE_ASAN
+#include <sanitizer/asan_interface.h>
+
+#define POISON_ZONE(zone)                                                  \
+    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) == 0) {   \
+        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE); \
+    }
+
+#define UNPOISON_ZONE(zone)                                                  \
+    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) != 0) {     \
+        ASAN_UNPOISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE); \
+    }
+
+#define POISON_ZONE_CHUNK(zone, ptr)                      \
+    if(IS_POISONED_RANGE(ptr, zone->chunk_size) == 0) {   \
+        ASAN_POISON_MEMORY_REGION(ptr, zone->chunk_size); \
+    }
+
+#define UNPOISON_ZONE_CHUNK(zone, ptr)                      \
+    if(IS_POISONED_RANGE(ptr, zone->chunk_size) != 0) {     \
+        ASAN_UNPOISON_MEMORY_REGION(ptr, zone->chunk_size); \
+    }
+
+#define POISON_BIG_ZONE(zone)                                          \
+    if(IS_POISONED_RANGE(zone->user_pages_start, zone->size) == 0) {   \
+        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, zone->size); \
+    }
+
+#define UNPOISON_BIG_ZONE(zone)                                          \
+    if(IS_POISONED_RANGE(zone->user_pages_start, zone->size) != 0) {     \
+        ASAN_UNPOISON_MEMORY_REGION(zone->user_pages_start, zone->size); \
+    }
+
+#define IS_POISONED_RANGE(ptr, size) \
+    __asan_region_is_poisoned(ptr, size)
+#else
+#define POISON_ZONE(zone)
+#define UNPOISON_ZONE(zone)
+#define POISON_ZONE_CHUNK(ptr, zone)
+#define UNPOISON_ZONE_CHUNK(ptr, zone)
+#define POISON_BIG_ZONE(zone)
+#define UNPOISON_BIG_ZONE(zone)
+#define IS_POISONED_RANGE(ptr, size) 0
+#endif
+
 #define OK 0
 #define ERR -1
 

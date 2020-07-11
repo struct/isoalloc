@@ -5,6 +5,7 @@
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     uint64_t total_leaks = 0;
+    uint64_t big_leaks = 0;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
@@ -21,8 +22,6 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     if(big != NULL) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
     }
-
-    uint64_t big_leaks = 0;
 
     while(big != NULL) {
         if(big->free == true) {
@@ -48,6 +47,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
  * free'd by the time this function runs! */
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
     uint64_t total_leaks = 0;
+
 #if LEAK_DETECTOR
     if(zone == NULL) {
         return 0;
@@ -88,13 +88,12 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
         }
     }
 
-    float percentage = (float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0;
-
-    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone), was_used, (int32_t) percentage);
+    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
+        was_used, (int32_t)((float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0));
 
     MASK_ZONE_PTRS(zone);
-
 #endif
+
     return total_leaks;
 }
 

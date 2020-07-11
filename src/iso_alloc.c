@@ -194,7 +194,7 @@ INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
-#if SANITIZE_CHUNKS
+#if SANITIZE_CHUNKS && !ENABLE_ASAN
     memset(p, POISON_BYTE, size);
 #endif
 }
@@ -295,6 +295,7 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
+    UNPOISON_ZONE(zone);
 
     if(zone->internally_managed == false) {
         /* If this zone was a special case then we don't want
@@ -468,6 +469,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     /* Prime the next_free_bit_slot member */
     get_next_free_bit_slot(new_zone);
 
+    POISON_ZONE(new_zone);
     MASK_ZONE_PTRS(new_zone);
 
     _root->zones_used++;
@@ -717,6 +719,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     } else {
         check_big_canary(big);
         big->free = false;
+        UNPOISON_BIG_ZONE(big);
         return big->user_pages_start;
     }
 }
@@ -806,6 +809,8 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     int64_t which_bit = (free_bit_slot % BITS_PER_QWORD);
 
     void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
+    UNPOISON_ZONE_CHUNK(zone, p);
+
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     /* Read out 64 bits from the bitmap. We will write
@@ -850,28 +855,28 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
 INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
     /* Its possible we are trying to unmap a big allocation */
-    iso_alloc_big_zone *big = _root->big_zone_head;
+    iso_alloc_big_zone *big_zone = _root->big_zone_head;
 
-    if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+    if(big_zone != NULL) {
+        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
     }
 
-    while(big != NULL) {
-        check_big_canary(big);
+    while(big_zone != NULL) {
+        check_big_canary(big_zone);
 
         /* Only a free of the exact address is valid */
-        if(p == big->user_pages_start) {
-            return big;
+        if(p == big_zone->user_pages_start) {
+            return big_zone;
         }
 
-        if(UNLIKELY(p > big->user_pages_start) && UNLIKELY(p < (big->user_pages_start + big->size))) {
-            LOG_AND_ABORT("Invalid free of big allocation at %p in mapping %p", p, big->user_pages_start);
+        if(UNLIKELY(p > big_zone->user_pages_start) && UNLIKELY(p < (big_zone->user_pages_start + big_zone->size))) {
+            LOG_AND_ABORT("Invalid free of big zone allocation at %p in mapping %p", p, big_zone->user_pages_start);
         }
 
-        if(big->next != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        if(big_zone->next != NULL) {
+            big_zone = UNMASK_BIG_ZONE_NEXT(big_zone->next);
         } else {
-            big = NULL;
+            big_zone = NULL;
             break;
         }
     }
@@ -917,6 +922,23 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
     }
 }
 
+/* Checking canaries under ASAN mode is not trivial. ASAN
+ * provides a strong guarantee that these chunks haven't
+ * been modified in some way */
+#if ENABLE_ASAN
+INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
+    return;
+}
+
+/* Verify the canary value in an allocation */
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
+    return;
+}
+
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+    return OK;
+}
+#else
 /* All free chunks get a canary written at both
  * the start and end of their chunks. These canaries
  * are verified when adjacent chunks are allocated,
@@ -964,14 +986,21 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
 
     return OK;
 }
+#endif
 
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent) {
+    if(UNLIKELY(big_zone->free == true)) {
+        LOG_AND_ABORT("Double free of big zone %p has been detected!", big_zone);
+    }
+
     /* If this isn't a permanent free then all we need
      * to do is sanitize the mapping and mark it free */
+#ifndef ENABLE_ASAN
     memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
+#endif
 
     if(permanent == false) {
-        /* There is nothing else to do but mark this big zone free */
+        POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
     } else {
         iso_alloc_big_zone *big = _root->big_zone_head;
@@ -1091,6 +1120,8 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
         insert_free_bit_slot(zone, bit_slot);
         zone->is_full = false;
     }
+
+    POISON_ZONE_CHUNK(zone, p);
 
     return;
 }
