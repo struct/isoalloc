@@ -15,7 +15,7 @@
 #include "iso_alloc_internal.h"
 
 INTERNAL_HIDDEN uint64_t rand_uint64(void) {
-    uint64_t val;
+    uint64_t val = 0;
 
 /* In modern versions of glibc (>=2.25) we can call getrandom(),
    but older versions of glibc are still in use as of writing this.
