@@ -14,7 +14,13 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
 ## poisoning and unpoisoning zones. It adds a significant
 ## performance and memory penalty. If you want to enable
 ## this just uncomment the line below
-ENABLE_ASAN = #-DENABLE_ASAN=1 -fsanitize=address
+#ENABLE_ASAN = -fsanitize=address -DENABLE_ASAN=0
+
+## Enable memory sanitizer to catch uninitialized reads.
+## This is slow, and its incompatible with ENABLE_ASAN
+#ENABLE_MSAN = -fsanitize=memory -fsanitize-memory-track-origins
+
+SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN)
 
 ## Support for threads adds a performance overhead
 ## You can safely disable it here if you know your
@@ -39,11 +45,11 @@ MALLOC_HOOK = -DMALLOC_HOOK
 OPTIMIZE = -O2
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(OPTIMIZE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11 $(ENABLE_ASAN)
-CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++11 $(ENABLE_ASAN)
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
+CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++17 $(SANITIZER_SUPPORT)
 EXE_CFLAGS = -fPIE
 DEBUG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
-GDB_FLAGS = -g -ggdb3
+GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
 PERF_FLAGS = -pg -DPERF_BUILD
 LIBRARY = -fPIC -shared
 SRC_DIR = src
