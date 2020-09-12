@@ -60,6 +60,7 @@ IsoAlloc is thread safe by way of protecting the root structure with a mutex. Th
 * When custom zones are destroyed they are overwritten and marked PROT_NONE to prevent use-after-free
 * Big zone meta data lives at a random offset from its base page
 * A call to `realloc` will always return a new chunk. Use `PERM_FREE_REALLOC` to make these free's permanent
+* Enable `FUZZ_MODE` in the Makefile to verify all zones upon every alloc/free operation
 
 ## Building
 
