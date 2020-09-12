@@ -76,6 +76,11 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     }
 }
 
+#if ENABLE_ASAN
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+    return;
+}
+#else
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
@@ -100,6 +105,7 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     MASK_ZONE_PTRS(zone);
     return;
 }
+#endif
 
 /* Pick a random index in the bitmap and start looking
  * for free bit slots we can add to the cache. The random
@@ -833,10 +839,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
      * or it's a canary chunk. In either case this means it
      * has a canary written in its first dword. Here we check
      * that canary and abort if its been corrupted */
+#if !ENABLE_ASAN
     if((GET_BIT(b, (which_bit + 1))) == 1) {
         check_canary(zone, p);
         memset(p, 0x0, CANARY_SIZE);
     }
+#endif
 
     /* Set the in-use bit */
     SET_BIT(b, which_bit);
@@ -1094,6 +1102,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
      * we can verify */
+#if !ENABLE_ASAN
     if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);
@@ -1115,6 +1124,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
             check_canary(zone, p_under);
         }
     }
+#endif
 
     if(permanent == false) {
         insert_free_bit_slot(zone, bit_slot);

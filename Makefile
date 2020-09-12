@@ -14,10 +14,10 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
 ## poisoning and unpoisoning zones. It adds a significant
 ## performance and memory penalty. If you want to enable
 ## this just uncomment the line below
-#ENABLE_ASAN = -fsanitize=address -DENABLE_ASAN=0
+#ENABLE_ASAN = -fsanitize=address -DENABLE_ASAN=1
 
 ## Enable memory sanitizer to catch uninitialized reads.
-## This is slow, and its incompatible with ENABLE_ASAN
+## This is slow, and it's incompatible with ENABLE_ASAN
 #ENABLE_MSAN = -fsanitize=memory -fsanitize-memory-track-origins
 
 SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN)
@@ -183,5 +183,5 @@ format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
-	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM
+	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core*
 	mkdir -p build/
