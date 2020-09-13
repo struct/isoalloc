@@ -154,7 +154,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
     }
 }
 
-INTERNAL_HIDDEN void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
+INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
     if(UNLIKELY(0 > zone->free_bit_slot_cache_usable) || UNLIKELY((0 > zone->free_bit_slot_cache_index))) {
         LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
     }
