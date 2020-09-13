@@ -40,13 +40,17 @@ PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 UNIT_TESTING = -DUNIT_TESTING=1
 
 ## Enable the malloc/free and new/delete hooks
-MALLOC_HOOK = -DMALLOC_HOOK
+## This is not recommended. The IsoAlloc APIs
+## should be called directly instead
+#MALLOC_HOOK = -DMALLOC_HOOK=1
+
+HOOKS = $(MALLOC_HOOK)
 
 OPTIMIZE = -O2
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(OPTIMIZE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
-CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT -std=c++17 $(SANITIZER_SUPPORT)
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
+CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 DEBUG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
@@ -70,12 +74,6 @@ library: clean
 	@echo "make library"
 	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
-## Build a release version of the library
-## Adds malloc hooks
-library_malloc_hook: clean
-	@echo "make library_malloc_hook"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(MALLOC_HOOK) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
-
 ## Build a debug version of the library
 library_debug: clean
 	@echo "make library debug"
@@ -92,12 +90,6 @@ library_debug_unit_tests: clean
 analyze_library_debug: clean
 	@echo "make analyze_library_debug"
 	scan-build $(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
-
-## Build a debug version of the library
-## Adds malloc hooks
-library_debug_malloc_hook: clean
-	@echo "make library_debug_malloc_hook"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(MALLOC_HOOK) $(DEBUG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
 library_debug_no_output: clean
@@ -124,12 +116,6 @@ cpp_library: clean c_library_objects
 cpp_library_debug: clean c_library_objects_debug
 	@echo "make cpp_library_debug"
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
-
-## C++ Support - Build the library with C++ support
-## including overloaded new/delete operators
-cpp_library_malloc_hook: clean c_library_object
-	@echo "make cpp_library_malloc_hook"
-	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) $(MALLOC_HOOK) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests

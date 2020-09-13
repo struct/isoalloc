@@ -70,13 +70,9 @@ The Makefile targets are very simple:
 
 `make library` - Builds a release version of the library
 
-`make library_hook_malloc` - Builds a release version of the library with malloc hooking support
-
 `make library_debug` - Builds a debug version of the library
 
 `make analyze_library_debug` - Builds the library with Clang's scan-build if installed
-
-`make library_debug_hook_malloc` Builds a debug version of the library with malloc hooking support
 
 `make library_debug_no_output` - Builds a debug version of the library with no logging output
 
