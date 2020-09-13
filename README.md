@@ -45,7 +45,8 @@ IsoAlloc is thread safe by way of protecting the root structure with a mutex. Th
 * All user pages are surrounded by guard pages including big zones
 * All bitmap pages are surrounded by guard pages
 * Double free's are checked for on every call to `iso_free`
-* For zones managing allocations <= 8192 bytes in size around %1 of their chunks are canaries
+* For zones managing allocations <= 8192 bytes in size around %1 of their chunks are permanent canaries
+* All free'd chunks get a canary written to them and verified upon reallocation
 * The state of all zones can be verified at any anytime using `iso_verify_zones` or `iso_verify_zone(zone)`
 * Canaries are unique and are composed of a 64 bit secret value xor'd by the address of the chunk itself
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`

@@ -120,9 +120,9 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 
     /* This gives us an arbitrary spot in the bitmap to 
      * start searching but may mean we end up with a smaller
-     * cache. This will negatively affect performance but
+     * cache. This may negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx / 4));
+    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx));
 
     if(0 > bm_idx) {
         bm_idx = 0;
@@ -592,12 +592,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
      * fast path as default zones may fill up */
     int32_t i = 0;
 
-    if(size >= ZONE_512) {
+    if(size >= ZONE_512 && size <= ZONE_8192) {
         i = (sizeof(default_zones) / sizeof(uint64_t) / 2);
     } else if(size > ZONE_8192) {
         i = sizeof(default_zones) / sizeof(uint64_t);
-    } else {
-        i = 0;
     }
 
     for(; i < _root->zones_used; i++) {
