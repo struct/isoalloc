@@ -57,6 +57,7 @@ IsoAlloc is thread safe by way of protecting the root structure with a mutex. Th
 * Some important zone metadata pointers are masked inbetween `iso_alloc` and `iso_free` operations
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
 * Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size
+* The free bit slot cache provides a chunk quarantine or delayed free mechanism
 * The free bit slot cache is checked for duplicate entries to detect corruption
 * When custom zones are destroyed they are overwritten and marked PROT_NONE to prevent use-after-free
 * Big zone meta data lives at a random offset from its base page
