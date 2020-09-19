@@ -144,6 +144,10 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *z
 }
 
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
+    if(zone == NULL) {
+        return;
+    }
+
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     LOCK_ROOT_MUTEX();
     _iso_alloc_destroy_zone(zone);

@@ -306,7 +306,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     UNPOISON_ZONE(zone);
 
     if(zone->internally_managed == false) {
-#if FUZZ_MODE
+#if FUZZ_MODE || NEVER_REUSE_ZONES
         /* If this zone was a custom zone then we don't want
          * to reuse any of its backing pages. Mark them unusable
          * and ensure any future accesses result in a segfault */
@@ -427,12 +427,20 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
         LOG_AND_ABORT("Cannot allocate additional zones");
     }
 
+    /* Chunk size must be aligned */
     if((size % ALIGNMENT) != 0) {
-        size = ROUND_UP_PAGE(size);
+        size = ALIGN_SZ_UP(size);
     }
 
+#if DEBUG
     if(size > SMALL_SZ_MAX) {
         LOG_AND_ABORT("Request for chunk of %ld bytes should be handled by big alloc path", size);
+    }
+#endif
+
+    /* Minimum chunk size is 16 */
+    if(size < ZONE_16) {
+        size = ZONE_16;
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];

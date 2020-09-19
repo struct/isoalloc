@@ -101,16 +101,16 @@
 #endif
 
 #if DEBUG
-#define LOG(msg, ...)                                                                  \
-    fprintf(stdout, "[LOG][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
+#define LOG(msg, ...)                                                                                              \
+    fprintf(stdout, "[LOG][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);
 #else
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                             \
-    fprintf(stdout, "[ABORTING][%d](%s) " msg "\n", getpid(), __FUNCTION__, ##__VA_ARGS__); \
-    fflush(stdout);                                                                         \
+#define LOG_AND_ABORT(msg, ...)                                                                                         \
+    fprintf(stdout, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+    fflush(stdout);                                                                                                     \
     abort();
 
 /* The number of bits in the bitmap that correspond
@@ -139,6 +139,9 @@
 
 #define UNSET_BIT(n, k) \
     n &= ~(1UL << k);
+
+#define ALIGN_SZ_UP(n) \
+    ((((n) + (ALIGNMENT) -1) / (ALIGNMENT)) * (ALIGNMENT))
 
 #define ALIGN_SZ_DOWN(n) \
     ((((n) + (ALIGNMENT) -1) / (ALIGNMENT)) * (ALIGNMENT)) - ALIGNMENT
