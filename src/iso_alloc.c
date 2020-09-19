@@ -215,7 +215,7 @@ INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
     void *p = NULL;
 
     /* Only Linux supports MAP_POPULATE */
-#if __linux__
+#if __linux__ && PRE_POPULATE_PAGES
     if(populate == true) {
         p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     } else {
@@ -234,6 +234,8 @@ INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
 }
 
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
+    size = ROUND_UP_PAGE(size);
+
     if((mprotect(p, size, protection)) == ERR) {
         LOG_AND_ABORT("Failed to mprotect pages @ %p", p);
     }
@@ -304,25 +306,45 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     UNPOISON_ZONE(zone);
 
     if(zone->internally_managed == false) {
-        /* If this zone was a special case then we don't want
+#if FUZZ_MODE
+        /* If this zone was a custom zone then we don't want
          * to reuse any of its backing pages. Mark them unusable
          * and ensure any future accesses result in a segfault */
-        memset(zone->bitmap_start, POISON_BYTE, zone->bitmap_size);
-        create_guard_page(zone->bitmap_start);
-        memset(zone->user_pages_start, POISON_BYTE, ZONE_USER_SIZE);
-        create_guard_page(zone->user_pages_start);
+        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
+        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
         memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
-        /* Purposefully keep the mutex locked. Any thread
-         * that tries to allocate/free in this zone should
-         * rightfully deadlock */
+        /* Mark the zone as full so no attempts are made to use it */
+        zone->is_full = true;
+#else
+        memset(zone->bitmap_start, 0x0, zone->bitmap_size);
+        memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
+        zone->internally_managed = true;
+
+        /* Reusing custom zones has the potential for introducing
+         * zone-use-after-free patterns. So we bootstrap the zone
+         * from scratch here */
+        create_canary_chunks(zone);
+
+        /* When we create a new zone its an opportunity to
+         * populate our free list cache with random entries */
+        fill_free_bit_slot_cache(zone);
+
+        /* Prime the next_free_bit_slot member */
+        get_next_free_bit_slot(zone);
+
+        POISON_ZONE(zone);
+        MASK_ZONE_PTRS(zone);
+        return;
+#endif
     } else {
+        /* The only time we ever destroy a default non-custom zone
+         * is from the destructor so its safe unmap pages */
         munmap(zone->bitmap_start, zone->bitmap_size);
         munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
         munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
         munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
         munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
-        memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
     }
 }
 
@@ -414,7 +436,6 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
-
     new_zone->internally_managed = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
@@ -427,11 +448,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     /* Most of the following fields are effectively immutable
      * and should not change once they are set */
 
-#if PRE_POPULATE_PAGES
     void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2), true);
-#else
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size * 2), false);
-#endif
 
     void *bitmap_pages_guard_below = p;
     new_zone->bitmap_start = (p + _root->system_page_size);
@@ -465,7 +482,6 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     new_zone->canary_secret = rand_uint64();
     new_zone->pointer_mask = rand_uint64();
 
-    /* This should be the only place we call this function */
     create_canary_chunks(new_zone);
 
     /* When we create a new zone its an opportunity to
@@ -999,12 +1015,12 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         LOG_AND_ABORT("Double free of big zone %p has been detected!", big_zone);
     }
 
-    /* If this isn't a permanent free then all we need
-     * to do is sanitize the mapping and mark it free */
 #ifndef ENABLE_ASAN
     memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
 
+    /* If this isn't a permanent free then all we need
+     * to do is sanitize the mapping and mark it free */
     if(permanent == false) {
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
@@ -1039,9 +1055,11 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
             LOG_AND_ABORT("The big zone list has been corrupted, unable to find big zone %p", big_zone);
         }
 
-        mprotect(big_zone->user_pages_start, big_zone->size, PROT_NONE);
+        mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
         memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone));
-        mprotect((void *) ROUND_DOWN_PAGE((uintptr_t)(big_zone - _root->system_page_size)), _root->system_page_size, PROT_NONE);
+
+        /* Big zone meta data is at a random offset from its base page */
+        mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), _root->system_page_size, PROT_NONE);
     }
 }
 

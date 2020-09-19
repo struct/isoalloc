@@ -71,45 +71,6 @@ EXTERNAL_API void *iso_realloc(void *p, size_t size) {
     return r;
 }
 
-EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size) {
-    if(zone == NULL) {
-        return NULL;
-    } else {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
-    }
-
-    if(p != NULL && size == 0) {
-        iso_free(p);
-        return NULL;
-    }
-
-    LOCK_ROOT_MUTEX();
-    void *r = _iso_alloc(zone, size);
-    UNLOCK_ROOT_MUTEX();
-
-    if(r == NULL) {
-        return r;
-    }
-
-    size_t chunk_size = iso_chunksz(p);
-
-    if(size > chunk_size) {
-        size = chunk_size;
-    }
-
-    if(p != NULL) {
-        memcpy(r, p, size);
-    }
-
-#if PERM_FREE_REALLOC
-    iso_free_permanently(p);
-#else
-    iso_free(p);
-#endif
-
-    return r;
-}
-
 EXTERNAL_API char *iso_strdup(const char *str) {
     return iso_strdup_from_zone(NULL, str);
 }

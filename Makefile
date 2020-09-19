@@ -6,7 +6,7 @@ CXX = clang++
 
 ## Security flags can affect performance
 ## SANITIZE_CHUNKS - Clear user chunks upon free
-## FUZZ_MODE - Call verify_all_zones upon every alloc/free (very slow!)
+## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse custom zones
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
 SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
 
@@ -47,7 +47,7 @@ UNIT_TESTING = -DUNIT_TESTING=1
 HOOKS = $(MALLOC_HOOK)
 
 OPTIMIZE = -O2
-COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(OPTIMIZE)
+COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
@@ -72,7 +72,7 @@ all: library tests
 ## Build a release version of the library
 library: clean
 	@echo "make library"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the library
 library_debug: clean
@@ -99,7 +99,7 @@ library_debug_no_output: clean
 ## C++ Support - Build object files for C code
 c_library_objects:
 	@echo "make c_library_objects"
-	$(CC) $(CFLAGS) $(C_SRCS) -fPIC -c
+	$(CC) $(CFLAGS) $(OPTIMIZE) $(C_SRCS) -fPIC -c
 	mv *.o $(BUILD_DIR)
 
 ## C++ Support - Build debug object files for C code
@@ -111,7 +111,7 @@ c_library_objects_debug:
 ## C++ Support - Build the library with C++ support
 cpp_library: clean c_library_objects
 	@echo "make cpp_library"
-	$(CXX) $(CXXFLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(CXX) $(CXXFLAGS) $(OPTIMIZE) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 cpp_library_debug: clean c_library_objects_debug
 	@echo "make cpp_library_debug"
@@ -138,8 +138,8 @@ tests: clean library_debug_unit_tests
 ## monitoring enabled. Linux only
 perf_tests: clean
 	@echo "make perf_tests"
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
-	$(CC) $(CFLAGS) $(C_SRCS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof
@@ -149,8 +149,8 @@ perf_tests: clean
 ## compared to the same malloc/free operations
 malloc_cmp_test: clean
 	@echo "make malloc_cmp_test"
-	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
-	$(CC) $(CFLAGS) $(C_SRCS) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"
 	build/tests
 	echo "Running glibc malloc Performance Test"

@@ -62,7 +62,7 @@ IsoAlloc is thread safe by way of protecting the root structure with a mutex. Th
 * When custom zones are destroyed they are overwritten and marked PROT_NONE to prevent use-after-free
 * Big zone meta data lives at a random offset from its base page
 * A call to `realloc` will always return a new chunk. Use `PERM_FREE_REALLOC` to make these free's permanent
-* Enable `FUZZ_MODE` in the Makefile to verify all zones upon every alloc/free operation
+* Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse custom zones
 
 ## Building
 
@@ -130,9 +130,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n)` - Equivalent to `iso_strndup` except string is duplicated in specified zone.
 
-`iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to `iso_alloc` except reallocation is done in specified zone.
-
-`iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size)` - Equivalent to `iso_realloc` except reallocation is done in specified zone.
+`iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to `iso_alloc` except allocation is done in specified zone.
 
 `void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone)` - Destroy a zone created with `iso_alloc_from_zone`.
 

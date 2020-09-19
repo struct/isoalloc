@@ -59,13 +59,9 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("Could not allocate from custom zone");
     }
 
-    p = iso_realloc_from_zone(zone, p, 64);
-
-    if(p == NULL) {
-        LOG_AND_ABORT("Could not allocate from custom zone");
-    }
-
     iso_free(p);
+
+    iso_alloc_destroy_zone(zone);
 
     p = iso_alloc(1024);
 

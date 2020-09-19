@@ -23,7 +23,6 @@ EXTERNAL_API char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char 
 EXTERNAL_API char *iso_strndup(const char *str, size_t n);
 EXTERNAL_API char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n);
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size);
-EXTERNAL_API iso_alloc_zone_handle *iso_realloc_from_zone(iso_alloc_zone_handle *zone, void *p, size_t size);
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_protect_root();
