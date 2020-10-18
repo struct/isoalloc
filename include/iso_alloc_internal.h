@@ -31,6 +31,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifndef MADV_DONTNEED
+#define MADV_DONTNEED POSIX_MADV_DONTNEED
+#endif
+
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 
