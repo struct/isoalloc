@@ -562,7 +562,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * beyond ZONE_1024 bytes. In other words we can live
      * with some wasted space in zones that manage chunks
      * smaller than that */
-    if(zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER) && size > ZONE_1024) {
+    if(size > ZONE_1024 && zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER)) {
         MASK_ZONE_PTRS(zone);
         return NULL;
     }
@@ -634,14 +634,12 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
         }
 
         /* We found a zone, lets try to find a free slot in it */
-        if(zone->chunk_size >= size) {
-            zone = is_zone_usable(zone, size);
+        zone = is_zone_usable(zone, size);
 
-            if(zone == NULL) {
-                continue;
-            } else {
-                return zone;
-            }
+        if(zone == NULL) {
+            continue;
+        } else {
+            return zone;
         }
     }
 
