@@ -256,9 +256,11 @@ INTERNAL_HIDDEN void iso_alloc_new_root(void) {
 
     _root = (iso_alloc_root *) (p + g_page_size);
 
+#if THREAD_SUPPORT
     if((pthread_mutex_init(&_root->zone_mutex, NULL)) != 0) {
         LOG_AND_ABORT("Cannot initialize zone mutex for root")
     }
+#endif
 
     _root->system_page_size = g_page_size;
 
@@ -417,7 +419,9 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 #ifndef MALLOC_HOOK
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
+#if THREAD_SUPPORT
     pthread_mutex_destroy(&_root->zone_mutex);
+#endif
     munmap(_root, sizeof(iso_alloc_root));
 #endif
 }

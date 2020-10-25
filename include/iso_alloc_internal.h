@@ -21,7 +21,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,6 +29,10 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#if THREAD_SUPPORT
+#include <pthread.h>
+#endif
 
 #ifndef MADV_DONTNEED
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
@@ -311,7 +314,9 @@ typedef struct {
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
+#if THREAD_SUPPORT
     pthread_mutex_t zone_mutex;
+#endif
     iso_alloc_zone zones[MAX_ZONES];
     iso_alloc_big_zone *big_zone_head;
 } iso_alloc_root;
