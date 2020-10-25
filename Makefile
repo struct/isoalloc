@@ -136,7 +136,7 @@ tests: clean library_debug_unit_tests
 
 fuzz_test: clean
 	@echo "make fuzz_test"
-	$(CC) $(COMMON_CFLAGS) $(C_SRCS) $(DEBUG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) -DNEVER_REUSE_ZONES=1 tests/alloc_fuzz.c -o $(BUILD_DIR)/alloc_fuzz
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) -DNEVER_REUSE_ZONES=1 tests/alloc_fuzz.c -o $(BUILD_DIR)/alloc_fuzz
 	LD_LIBRARY_PATH=build/ build/alloc_fuzz
 
 ## Build a non-debug library with performance
