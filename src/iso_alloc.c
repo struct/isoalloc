@@ -206,8 +206,10 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 }
 
 INTERNAL_HIDDEN void create_guard_page(void *p) {
-    mprotect_pages(p, _root->system_page_size, PROT_NONE);
-    madvise(p, _root->system_page_size, MADV_DONTNEED);
+    /* Use g_page_size here because we could be
+     * calling this while we setup the root */
+    mprotect_pages(p, g_page_size, PROT_NONE);
+    madvise(p, g_page_size, MADV_DONTNEED);
 }
 
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
@@ -241,45 +243,48 @@ INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     }
 }
 
-INTERNAL_HIDDEN void iso_alloc_new_root(void) {
+INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     void *p = NULL;
+    iso_alloc_root *r;
 
     size_t _root_size = sizeof(iso_alloc_root) + (g_page_size * 2);
 
-    if(_root == NULL) {
-        p = (void *) mmap_rw_pages(_root_size, true);
-    }
+    p = (void *) mmap_rw_pages(_root_size, true);
 
     if(p == NULL) {
-        LOG_AND_ABORT("Cannot allocate pages for _root");
+        LOG_AND_ABORT("Cannot allocate pages for root");
     }
 
-    _root = (iso_alloc_root *) (p + g_page_size);
+    r = (iso_alloc_root *) (p + g_page_size);
 
 #if THREAD_SUPPORT
-    if((pthread_mutex_init(&_root->zone_mutex, NULL)) != 0) {
+    if((pthread_mutex_init(&r->zone_mutex, NULL)) != 0) {
         LOG_AND_ABORT("Cannot initialize zone mutex for root")
     }
 #endif
 
-    _root->system_page_size = g_page_size;
+    r->system_page_size = g_page_size;
 
-    _root->guard_below = p;
-    create_guard_page(_root->guard_below);
+    r->guard_below = p;
+    create_guard_page(r->guard_below);
 
-    _root->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sizeof(iso_alloc_root) + _root->system_page_size));
-    create_guard_page(_root->guard_above);
+    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sizeof(iso_alloc_root) + r->system_page_size));
+    create_guard_page(r->guard_above);
+    return r;
 }
 
-INTERNAL_HIDDEN void iso_alloc_initialize(void) {
+INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     /* Do not allow a reinitialization unless root is NULL */
     if(_root != NULL) {
         return;
     }
 
-    g_page_size = sysconf(_SC_PAGESIZE);
+    _root = iso_alloc_new_root();
 
-    iso_alloc_new_root();
+    if(_root == NULL) {
+        LOG_AND_ABORT("Could not initialize global root");
+    }
+
     iso_alloc_zone *zone = NULL;
 
     for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
@@ -300,7 +305,8 @@ INTERNAL_HIDDEN void iso_alloc_initialize(void) {
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
-    iso_alloc_initialize();
+    g_page_size = sysconf(_SC_PAGESIZE);
+    iso_alloc_initialize_global_root();
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
