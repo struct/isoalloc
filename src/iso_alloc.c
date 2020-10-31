@@ -52,7 +52,7 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
-        if(zone == NULL) {
+        if(zone == NULL || zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
             break;
         }
 
@@ -320,7 +320,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
          * and ensure any future accesses result in a segfault */
         mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
-        memset(zone, POISON_BYTE, sizeof(iso_alloc_zone));
+        memset(zone, 0x0, sizeof(iso_alloc_zone));
         /* Mark the zone as full so no attempts are made to use it */
         zone->is_full = true;
 #else

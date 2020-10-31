@@ -12,15 +12,19 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
 
 ## This enables Address Sanitizer support for manually
 ## poisoning and unpoisoning zones. It adds a significant
-## performance and memory penalty. If you want to enable
-## this just uncomment the line below
+## performance and memory penalty.
+## This is slow, and it's incompatible with other sanitizers
 #ENABLE_ASAN = -fsanitize=address -DENABLE_ASAN=1
 
 ## Enable memory sanitizer to catch uninitialized reads.
-## This is slow, and it's incompatible with ENABLE_ASAN
+## This is slow, and it's incompatible with other sanitizers
 #ENABLE_MSAN = -fsanitize=memory -fsanitize-memory-track-origins
 
-SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN)
+## Enable undefined behavior sanitizer to catch undefined behavior.
+## This is slow, and it's incompatible with other sanitizers
+#ENABLE_UBSAN = -fsanitize=undefined
+
+SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN)
 
 ## Support for threads adds a performance overhead
 ## You can safely disable it here if you know your

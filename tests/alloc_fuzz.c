@@ -31,6 +31,11 @@ iso_alloc_zone_handle *custom_zone;
 #define DESTROY_ZONE_K 10
 #define DESTROY_ZONE_V 8
 
+#define MAYBE_VALIDATE_ZONES() \
+    if((rand() % 10) == 1) {   \
+        iso_verify_zones();    \
+    }
+
 int reallocate(size_t array_size, size_t allocation_size) {
     void *p[array_size];
     memset(p, 0x0, array_size);
@@ -56,6 +61,8 @@ int reallocate(size_t array_size, size_t allocation_size) {
             alloc_count--;
         }
     }
+
+    MAYBE_VALIDATE_ZONES();
 
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
@@ -92,6 +99,8 @@ int callocate(size_t array_size, size_t allocation_size) {
             alloc_count--;
         }
     }
+
+    MAYBE_VALIDATE_ZONES();
 
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
@@ -141,6 +150,8 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
     }
 
+    MAYBE_VALIDATE_ZONES();
+
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
         if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
@@ -149,7 +160,7 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
     }
 
-    if(rand() % 100 == 1) {
+    if(rand() % 10 == 1) {
         iso_alloc_destroy_zone(custom_zone);
         custom_zone = NULL;
     }
