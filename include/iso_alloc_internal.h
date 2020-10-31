@@ -203,7 +203,7 @@
 
 /* This is the largest divisor of ZONE_USER_SIZE we can
  * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
- * above this size will need to go through the large
+ * above this size will need to go through the big
  * mapping code path */
 #define SMALL_SZ_MAX 262144
 
@@ -252,10 +252,20 @@
 uint32_t g_page_size;
 
 /* iso_alloc makes a number of default zones for common
- * allocation sizes. Anything above these sizes will
- * be created and initialized on demand */
+ * allocation sizes. Allocations are 'first fit' up until
+ * ZONE_1024 at which point a new zone is created for that
+ * specific size request. You can create additional startup
+ * profile by adjusting the next few lines below. */
+#if SMALL_MEM_STARTUP
+/* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
+#define SMALLEST_ZONE ZONE_64
+static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
+#else
+/* ZONE_USER_SIZE * sizeof(default_zones) = ~80 mb */
+#define SMALLEST_ZONE ZONE_16
 static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
+#endif
 
 typedef uint64_t bit_slot_t;
 typedef int64_t bitmap_index_t;

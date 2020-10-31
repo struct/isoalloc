@@ -32,6 +32,12 @@ SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN)
 ## to the IsoAlloc APIs
 THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 
+## This tells IsoAlloc to only start with 4 default zones.
+## If you set it to 0 IsoAlloc will startup with 10. The
+## performance penalty for setting it to 0 is a one time
+## startup cost but more memory may be wasted.
+STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=1
+
 ## Instructs the kernel (via mmap) to prepopulate
 ## page tables which will reduce page faults and
 ## improve performance. If you're using IsoAlloc
@@ -51,7 +57,7 @@ UNIT_TESTING = -DUNIT_TESTING=1
 HOOKS = $(MALLOC_HOOK)
 
 OPTIMIZE = -O2
-COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES)
+COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)

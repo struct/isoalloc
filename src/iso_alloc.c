@@ -448,9 +448,9 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 #endif
 
-    /* Minimum chunk size is 16 */
-    if(size < ZONE_16) {
-        size = ZONE_16;
+    /* Minimum chunk size */
+    if(size < SMALLEST_ZONE) {
+        size = SMALLEST_ZONE;
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
@@ -618,19 +618,21 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 /* Finds a zone that can fit this allocation request */
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     iso_alloc_zone *zone = NULL;
+    int32_t i = 0;
 
+#if !SMALL_MEM_STARTUP
     /* A simple optimization to find which default zone
      * should fit this allocation. If we fail then a
      * slower iterative approach is used. The longer a
      * program runs the more likely we will fail this
      * fast path as default zones may fill up */
-    int32_t i = 0;
 
     if(size >= ZONE_512 && size <= ZONE_8192) {
         i = (sizeof(default_zones) / sizeof(uint64_t) / 2);
     } else if(size > ZONE_8192) {
         i = sizeof(default_zones) / sizeof(uint64_t);
     }
+#endif
 
     for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
