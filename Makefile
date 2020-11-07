@@ -35,7 +35,8 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## This tells IsoAlloc to only start with 4 default zones.
 ## If you set it to 0 IsoAlloc will startup with 10. The
 ## performance penalty for setting it to 0 is a one time
-## startup cost but more memory may be wasted.
+## startup cost but more memory may be wasted. See the
+## comments in iso_alloc_internal.h for modifying this
 STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=1
 
 ## Instructs the kernel (via mmap) to prepopulate

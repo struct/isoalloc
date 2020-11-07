@@ -267,6 +267,33 @@ static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 #endif
 
+/* If you have specific allocation pattern requirements
+ * then you want a custom set of default zones. These
+ * example are provided to get you started. Zone creation
+ * is not limited to these sizes, this array just specifies
+ * the default zones that will be created at startup time.
+ * Each of these examples is 4 default zones which will
+ * consume 32mb of memory in total */
+#if 0
+#define SMALLEST_ZONE ZONE_16
+static uint64_t default_zones[] = {ZONE_16, ZONE_16, ZONE_16, ZONE_16};
+#endif
+
+#if 0
+#define SMALLEST_ZONE ZONE_16
+static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128};
+#endif
+
+#if 0
+#define SMALLEST_ZONE ZONE_256
+static uint64_t default_zones[] = {ZONE_256, ZONE_256, ZONE_512, ZONE_512};
+#endif
+
+#if 0
+#define SMALLEST_ZONE ZONE_512
+static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
+#endif
+
 typedef uint64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
 
