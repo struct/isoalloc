@@ -567,7 +567,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     /* This zone may fit this chunk but if the zone was
      * created for chunks more than N* larger than the
      * requested allocation size then we would be wasting
-     * a lot memory by using it. Lets force the creation
+     * a lot of memory by using it. We force the creation
      * of a new zone instead. We only do this for sizes
      * beyond ZONE_1024 bytes. In other words we can live
      * with some wasted space in zones that manage chunks

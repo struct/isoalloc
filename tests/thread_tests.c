@@ -35,7 +35,6 @@ void *allocate() {
                 }
 
                 alloc_count++;
-
                 memset(p[i], 0x41, allocation_size);
 
                 /* Randomly free some allocations */
