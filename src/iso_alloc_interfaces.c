@@ -32,7 +32,6 @@ EXTERNAL_API void iso_free_permanently(void *p) {
     return;
 }
 
-/* Returns the size of the chunk for an associated pointer */
 EXTERNAL_API size_t iso_chunksz(void *p) {
     LOCK_ROOT_MUTEX();
     size_t s = _iso_chunk_size(p);
