@@ -78,12 +78,17 @@ ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 endif
 
+ifeq ($(UNAME), Linux)
+STRIP = strip -s $(BUILD_DIR)/libisoalloc.so
+endif
+
 all: library tests
 
 ## Build a release version of the library
 library: clean
 	@echo "make library"
 	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(STRIP)
 
 ## Build a debug version of the library
 library_debug: clean
@@ -123,6 +128,7 @@ c_library_objects_debug:
 cpp_library: clean c_library_objects
 	@echo "make cpp_library"
 	$(CXX) $(CXXFLAGS) $(OPTIMIZE) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(STRIP)
 
 cpp_library_debug: clean c_library_objects_debug
 	@echo "make cpp_library_debug"
