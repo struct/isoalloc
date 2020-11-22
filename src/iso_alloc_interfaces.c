@@ -40,7 +40,7 @@ EXTERNAL_API size_t iso_chunksz(void *p) {
 }
 
 EXTERNAL_API void *iso_realloc(void *p, size_t size) {
-    if(p != NULL && size == 0) {
+    if(UNLIKELY(size == 0)) {
         iso_free(p);
         return NULL;
     }

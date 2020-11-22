@@ -62,14 +62,14 @@ HOOKS = $(MALLOC_HOOK)
 ## In a release build you probably want them all to be 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
-OPTIMIZE = -O2
+OPTIMIZE = -O2 -DPERF_BUILD=1
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
-PERF_FLAGS = -pg -DPERF_BUILD
+PERF_FLAGS = -pg -DPERF_BUILD=1
 LIBRARY = -fPIC -shared
 SRC_DIR = src
 C_SRCS = $(SRC_DIR)/*.c

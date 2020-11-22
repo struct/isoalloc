@@ -966,7 +966,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * provides a strong guarantee that these chunks haven't
  * been modified in some way */
 #if ENABLE_ASAN || DISABLE_CANARY
-INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     return;
 }
 
@@ -975,7 +975,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     return;
 }
 
-INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     return OK;
 }
 #else
@@ -985,7 +985,7 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
  * freed, or when the API requests validation. We
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
-INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
     memcpy(p, &canary, CANARY_SIZE);
     p += (zone->chunk_size - sizeof(uint64_t));
@@ -1008,7 +1008,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     }
 }
 
-INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 
@@ -1081,7 +1081,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
     }
 }
 
-INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
+INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(UNLIKELY(((uintptr_t) p % ALIGNMENT) != 0)) {
         LOG_AND_ABORT("Chunk at %p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
