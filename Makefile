@@ -8,11 +8,12 @@ CXX = clang++
 ## SANITIZE_CHUNKS - Clear user chunks upon free
 ## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse custom zones
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0
+## DISABLE_CANARY - Disables the use of canaries, improves performance
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0
 
 ## This enables Address Sanitizer support for manually
-## poisoning and unpoisoning zones. It adds a significant
-## performance and memory penalty.
+## poisoning and unpoisoning zones. It adds significant
+## performance and memory overhead
 ## This is slow, and it's incompatible with other sanitizers
 #ENABLE_ASAN = -fsanitize=address -DENABLE_ASAN=1
 

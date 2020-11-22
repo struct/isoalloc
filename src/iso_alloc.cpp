@@ -9,7 +9,7 @@
 
 #include <new>
 
-// These hooks over ride the basic new/delete
+// These hooks override the basic new/delete
 // operators to use the iso_alloc API
 
 EXTERNAL_API void *operator new(size_t size) {

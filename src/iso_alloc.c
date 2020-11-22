@@ -965,7 +965,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
 /* Checking canaries under ASAN mode is not trivial. ASAN
  * provides a strong guarantee that these chunks haven't
  * been modified in some way */
-#if ENABLE_ASAN
+#if ENABLE_ASAN || DISABLE_CANARY
 INTERNAL_HIDDEN void write_canary(iso_alloc_zone *zone, void *p) {
     return;
 }
