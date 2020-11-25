@@ -6,6 +6,11 @@
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
+#if ENABLE_ASAN || DISABLE_CANARY
+INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
+    return;
+}
+#else
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     /* Canary chunks are only for default zone sizes. This
      * is because larger zones would waste a lot of memory
@@ -44,10 +49,20 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
         write_canary(zone, p);
     }
 }
+#endif
 
+#if ENABLE_ASAN
 /* Verify the integrity of all canary chunks and the
  * canary written to all free chunks. This function
  * either aborts or returns nothing */
+INTERNAL_HIDDEN void verify_all_zones(void) {
+    return;
+}
+
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+    return;
+}
+#else
 INTERNAL_HIDDEN void verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
@@ -76,11 +91,6 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     }
 }
 
-#if ENABLE_ASAN
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
-    return;
-}
-#else
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
@@ -291,13 +301,13 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
         if(!(zone = iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
-
-        /* This call to mlock may fail if memory limits
-         * are set too low. This will not affect us
-         * at runtime. It just means some of the default
-         * zone meta data may get swapped to disk */
-        mlock(zone, sizeof(iso_alloc_zone));
     }
+
+    /* This call to mlock may fail if memory limits
+     * are set too low. This will not affect us
+     * at runtime. It just means some of the default
+     * zone meta data may get swapped to disk */
+    mlock(&default_zones, sizeof(default_zones));
 
     _root->zone_handle_mask = rand_uint64();
     _root->big_zone_next_mask = rand_uint64();
@@ -871,7 +881,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
      * or it's a canary chunk. In either case this means it
      * has a canary written in its first dword. Here we check
      * that canary and abort if its been corrupted */
-#if !ENABLE_ASAN
+#if !ENABLE_ASAN && !DISABLE_CANARY
     if((GET_BIT(b, (which_bit + 1))) == 1) {
         check_canary(zone, p);
         memset(p, 0x0, CANARY_SIZE);
@@ -1136,7 +1146,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
      * we can verify */
-#if !ENABLE_ASAN
+#if !ENABLE_ASAN && !DISABLE_CANARY
     if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);

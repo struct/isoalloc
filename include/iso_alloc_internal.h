@@ -102,11 +102,11 @@
 #endif
 
 #if PERF_BUILD
-#define INLINE
-#define FLATTEN
-#else
 #define INLINE __attribute__((always_inline))
 #define FLATTEN __attribute__((flatten))
+#else
+#define INLINE
+#define FLATTEN
 #endif
 
 #if DEBUG
