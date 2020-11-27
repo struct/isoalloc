@@ -68,7 +68,7 @@ BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
-GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
+GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer -rdynamic
 PERF_FLAGS = -pg -DPERF_BUILD=1
 LIBRARY = -fPIC -shared
 SRC_DIR = src

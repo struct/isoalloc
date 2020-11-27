@@ -572,8 +572,6 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
         return zone;
     }
 
-    UNMASK_ZONE_PTRS(zone);
-
     /* This zone may fit this chunk but if the zone was
      * created for chunks more than N* larger than the
      * requested allocation size then we would be wasting
@@ -583,9 +581,10 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * with some wasted space in zones that manage chunks
      * smaller than that */
     if(size > ZONE_1024 && zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER)) {
-        MASK_ZONE_PTRS(zone);
         return NULL;
     }
+
+    UNMASK_ZONE_PTRS(zone);
 
     /* If the cache for this zone is empty we should
      * refill it to make future allocations faster */
