@@ -42,19 +42,17 @@ STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=1
 
 ## Instructs the kernel (via mmap) to prepopulate
 ## page tables which will reduce page faults and
-## improve performance. If you're using IsoAlloc
-## for small short lived programs you probably
+## sometimes improve performance. If you're using
+## IsoAlloc for small short lived programs you probably
 ## want to disable this. This is ignored on MacOS
-PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
+PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=0
 
 ## Enable some functionality that like IsoAlloc internals
 ## for tests that need to verify security properties
 UNIT_TESTING = -DUNIT_TESTING=1
 
 ## Enable the malloc/free and new/delete hooks
-## This is not recommended. The IsoAlloc APIs
-## should be called directly instead
-#MALLOC_HOOK = -DMALLOC_HOOK=1
+MALLOC_HOOK = -DMALLOC_HOOK=1
 
 HOOKS = $(MALLOC_HOOK)
 
