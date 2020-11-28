@@ -10,6 +10,11 @@
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
+
+/* This primitive printf implementation is only ever called
+ * called from the LOG and LOG_AND_ABORT macros. We need to
+ * be able to print basic log messages without invoking
+ * malloc() or we will deadlock anytime we want to log */
 static int8_t fmt_buf[64];
 static int8_t asc_hex[] = "0123456789abcdef";
 
