@@ -110,16 +110,16 @@
 #endif
 
 #if DEBUG
-#define LOG(msg, ...)                                                                                              \
-    fprintf(stdout, "[LOG][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+#define LOG(msg, ...)                                                                                                \
+    _iso_alloc_printf("[LOG][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
     fflush(stdout);
 #else
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                                                         \
-    fprintf(stdout, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-    fflush(stdout);                                                                                                     \
+#define LOG_AND_ABORT(msg, ...)                                                                                           \
+    _iso_alloc_printf("[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+    fflush(stdout);                                                                                                       \
     abort();
 
 /* The number of bits in the bitmap that correspond
@@ -182,10 +182,10 @@
 
 #if THREAD_SUPPORT
 #define LOCK_ROOT_MUTEX() \
-    pthread_mutex_lock(&_root->zone_mutex);
+    pthread_mutex_lock(&root_zone_mutex);
 
 #define UNLOCK_ROOT_MUTEX() \
-    pthread_mutex_unlock(&_root->zone_mutex);
+    pthread_mutex_unlock(&root_zone_mutex);
 #else
 #define LOCK_ROOT_MUTEX()
 #define UNLOCK_ROOT_MUTEX()
@@ -353,12 +353,13 @@ typedef struct {
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
-#if THREAD_SUPPORT
-    pthread_mutex_t zone_mutex;
-#endif
     iso_alloc_zone zones[MAX_ZONES];
     iso_alloc_big_zone *big_zone_head;
 } iso_alloc_root;
+
+#if THREAD_SUPPORT
+pthread_mutex_t root_zone_mutex;
+#endif
 
 /* The global root */
 iso_alloc_root *_root;
@@ -399,6 +400,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
+INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
+INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...);
 
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root();

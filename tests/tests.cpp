@@ -31,7 +31,7 @@ int allocate(size_t array_size, size_t allocation_size) {
         alloc_count++;
 
         /* Randomly free some allocations */
-        if((rand() % 5) > 1) {
+        if((rand() % 2) == 1) {
             delete[](uint8_t *) p[i];
             p[i] = NULL;
         }

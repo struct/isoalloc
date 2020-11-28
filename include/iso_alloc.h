@@ -5,7 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef EXTERNAL_API
 #define EXTERNAL_API __attribute__((visibility("default")))
+#endif
 
 typedef void iso_alloc_zone_handle;
 

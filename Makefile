@@ -72,6 +72,7 @@ LIBRARY = -fPIC -shared
 SRC_DIR = src
 C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp
+ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
 LDFLAGS = -L$(BUILD_DIR) -lisoalloc
 
@@ -139,18 +140,18 @@ cpp_library_debug: clean c_library_objects_debug
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
 	@echo "make library_debug_unit_tests"
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_underflow.c -o $(BUILD_DIR)/heap_underflow $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/thread_tests.c -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/leaks_test.c -o $(BUILD_DIR)/leaks_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/wild_free.c -o $(BUILD_DIR)/wild_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/big_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/double_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/double_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_overflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_overflow $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_underflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_underflow $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/interfaces_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/thread_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/leaks_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/leaks_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/wild_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/wild_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
 	utils/run_tests.sh
 
 fuzz_test: clean
@@ -174,7 +175,7 @@ perf_tests: clean
 malloc_cmp_test: clean
 	@echo "make malloc_cmp_test"
 	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
-	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST tests/tests.c -o $(BUILD_DIR)/malloc_tests
+	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"
 	build/tests
 	echo "Running glibc malloc Performance Test"
@@ -183,7 +184,7 @@ malloc_cmp_test: clean
 ## C++ Support - Build a debug version of the unit test
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(EXE_CFLAGS) tests/tests.cpp -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/libisoalloc.so $(BUILD_DIR)/cxx_tests
 
 install:

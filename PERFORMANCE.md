@@ -76,7 +76,7 @@ realloc/free 1441616 tests completed in 0.832934 seconds
        2.018058123 seconds time elapsed
 ```
 
-The test above is on a free tier Amazon t2.micro instance with 1 CPU and 1 Gb of RAM. IsoAlloc just barely beats ptmalloc here. Below are the results from an Amazon c5n.large instance with 2 CPUs and 4Gb of memory.
+The test above is on a free tier Amazon t2.micro instance with 1 CPU and 1 Gb of RAM. IsoAlloc just barely beats ptmalloc here. Below are the results from an Amazon c5n.large instance with 2 CPUs and 4Gb of memory. The IsoAlloc configuration had `PRE_POPULATE_PAGES=1` which reduces page faults.
 
 ```
 $ sudo perf stat build/tests

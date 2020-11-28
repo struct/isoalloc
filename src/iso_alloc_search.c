@@ -82,13 +82,13 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
                     continue;
                 } else {
                     total_leaks++;
-                    LOG("Leaked chunk of %d bytes detected in zone[%d] at %p (bit position = %" PRIu64 ")", zone->chunk_size, zone->index, leak, bit_slot);
+                    LOG("Leaked chunk in zone[%d] of %d bytes detected at 0x%p (bit position = %" PRIu64 ")", zone->index, zone->chunk_size, leak, bit_slot);
                 }
             }
         }
     }
 
-    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%%%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
+    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%d percent)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
         was_used, (int32_t)((float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0));
 
     MASK_ZONE_PTRS(zone);
