@@ -1129,21 +1129,23 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     /* Unset the bit and write the value into the bitmap
      * if this is not a permanent free. A permanent free
      * means this chunk will be marked as if it is a canary */
-    if(permanent == false) {
+    if(LIKELY(permanent == false)) {
         UNSET_BIT(b, which_bit);
+        insert_free_bit_slot(zone, bit_slot);
+        zone->is_full = false;
     }
 
     bm[dwords_to_bit_slot] = b;
 
     iso_clear_user_chunk(p, zone->chunk_size);
 
-    write_canary(zone, p);
-
     /* Now that we have free'd this chunk lets validate the
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
      * we can verify */
 #if !ENABLE_ASAN && !DISABLE_CANARY
+    write_canary(zone, p);
+
     if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);
@@ -1166,11 +1168,6 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         }
     }
 #endif
-
-    if(LIKELY(permanent == false)) {
-        insert_free_bit_slot(zone, bit_slot);
-        zone->is_full = false;
-    }
 
     POISON_ZONE_CHUNK(zone, p);
 
