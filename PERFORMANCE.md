@@ -111,7 +111,7 @@ realloc/free 1441616 tests completed in 0.503063 seconds
 IsoAlloc seems to outperform ptmalloc in these artificial benchmarks.
 
 
-The following benchmarks were collected from (mimalloc-bench)[https://github.com/daanx/mimalloc-bench] with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for most benchmarks but clearly falls behind in the Redis and cfrac benchmarks. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. Its worth noting that IsoAlloc was able to stay competitive even with performing numerous security checks not present in other allocators.
+The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for most benchmarks but clearly falls behind in the Redis and cfrac benchmarks. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. Its worth noting that IsoAlloc was able to stay competitive even with performing numerous security checks not present in other allocators.
 
 ```
 espresso tcmalloc 04.94 8668 4.91 0.02 0 1524
