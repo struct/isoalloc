@@ -337,8 +337,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
          * from scratch here */
         create_canary_chunks(zone);
 
-        /* When we create a new zone its an opportunity to
-         * populate our free list cache with random entries */
         fill_free_bit_slot_cache(zone);
 
         /* Prime the next_free_bit_slot member */
@@ -594,7 +592,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     /* Free list failed, use a fast search */
     bit_slot = iso_scan_zone_free_slot(zone);
 
-    if(bit_slot == BAD_BIT_SLOT) {
+    if(UNLIKELY(bit_slot == BAD_BIT_SLOT)) {
         /* Fast search failed, search bit by bit */
         bit_slot = iso_scan_zone_free_slot_slow(zone);
         MASK_ZONE_PTRS(zone);
@@ -1169,7 +1167,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     }
 #endif
 
-    if(permanent == false) {
+    if(LIKELY(permanent == false)) {
         insert_free_bit_slot(zone, bit_slot);
         zone->is_full = false;
     }
