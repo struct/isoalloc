@@ -937,10 +937,6 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        if(i == _root->zones_used) {
-            break;
-        }
-
         UNMASK_ZONE_PTRS(zone);
 
         if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
