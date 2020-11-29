@@ -38,7 +38,7 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## performance penalty for setting it to 0 is a one time
 ## startup cost but more memory may be wasted. See the
 ## comments in iso_alloc_internal.h for modifying this
-STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=1
+STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=0
 
 ## Instructs the kernel (via mmap) to prepopulate
 ## page tables which will reduce page faults and
