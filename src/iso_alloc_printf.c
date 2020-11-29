@@ -10,7 +10,6 @@
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
-
 /* This primitive printf implementation is only ever called
  * called from the LOG and LOG_AND_ABORT macros. We need to
  * be able to print basic log messages without invoking

@@ -266,15 +266,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     }
 
     r = (iso_alloc_root *) (p + g_page_size);
-
-#if THREAD_SUPPORT
-    if((pthread_mutex_init(&root_zone_mutex, NULL)) != 0) {
-        LOG_AND_ABORT("Cannot initialize zone mutex for root")
-    }
-#endif
-
     r->system_page_size = g_page_size;
-
     r->guard_below = p;
     create_guard_page(r->guard_below);
 
@@ -315,8 +307,10 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
+    LOCK_ROOT();
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
+    UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
@@ -435,9 +429,6 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 #ifndef MALLOC_HOOK
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
-#if THREAD_SUPPORT
-    pthread_mutex_destroy(&root_zone_mutex);
-#endif
     munmap(_root, sizeof(iso_alloc_root));
 #endif
 }
@@ -464,6 +455,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
+
     new_zone->internally_managed = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
@@ -779,12 +771,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 #endif
 
-    /* Allocation requests of 8mb or larger are handled
-     * by the 'big allocation' path. If a zone was passed
-     * in we abort because its a misuse of the API */
+    /* Allocation requests of 262144  bytes or larger are
+     * handled by the 'big allocation' path. If a zone was
+     * passed in we abort because its a misuse of the API */
     if(UNLIKELY(size > SMALL_SZ_MAX)) {
         if(zone != NULL) {
-            LOG_AND_ABORT("Allocations of >= 8mb cannot use custom zones");
+            LOG_AND_ABORT("Allocations of >= %d cannot use custom zones", SMALL_SZ_MAX);
         }
 
         return _iso_big_alloc(size);
@@ -807,6 +799,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
             if(size < default_zones[i]) {
                 size = default_zones[i];
+                /* iso_new_zone returns a zone thats already marked busy */
                 zone = iso_new_zone(size, true);
 
                 if(zone == NULL) {

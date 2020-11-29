@@ -5,37 +5,37 @@
 #include "iso_alloc_internal.h"
 
 EXTERNAL_API void *iso_alloc(size_t size) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     void *p = _iso_alloc(NULL, size);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return p;
 }
 
 EXTERNAL_API void *iso_calloc(size_t nmemb, size_t size) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     void *p = _iso_calloc(nmemb, size);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return p;
 }
 
 EXTERNAL_API void iso_free(void *p) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     _iso_free(p, false);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return;
 }
 
 EXTERNAL_API void iso_free_permanently(void *p) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     _iso_free(p, true);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return;
 }
 
 EXTERNAL_API size_t iso_chunksz(void *p) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     size_t s = _iso_chunk_size(p);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return s;
 }
 
@@ -85,9 +85,9 @@ EXTERNAL_API char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char 
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     char *p = (char *) _iso_alloc(zone, size);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
 
     if(p == NULL) {
         return NULL;
@@ -112,9 +112,9 @@ EXTERNAL_API char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     char *p = (char *) _iso_alloc(zone, n);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
 
     if(p == NULL) {
         return NULL;
@@ -136,9 +136,9 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *z
     }
 
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     void *p = _iso_alloc(zone, size);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return p;
 }
 
@@ -148,27 +148,27 @@ EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
     }
 
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     _iso_alloc_destroy_zone(zone);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return;
 }
 
 EXTERNAL_API iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     iso_alloc_zone_handle *zone = (iso_alloc_zone_handle *) iso_new_zone(size, false);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     return zone;
 }
 
 EXTERNAL_API void iso_alloc_protect_root() {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     _iso_alloc_protect_root();
 }
 
 EXTERNAL_API void iso_alloc_unprotect_root() {
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     _iso_alloc_unprotect_root();
 }
 
@@ -179,16 +179,16 @@ EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     uint64_t r = _iso_alloc_zone_leak_detector(zone);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return r;
 }
 
 EXTERNAL_API uint64_t iso_alloc_detect_leaks() {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     uint64_t r = _iso_alloc_detect_leaks();
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return r;
 }
 
@@ -199,23 +199,23 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     uint64_t r = _iso_alloc_zone_mem_usage(zone);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return r;
 }
 
 EXTERNAL_API uint64_t iso_alloc_mem_usage() {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     uint64_t r = _iso_alloc_mem_usage();
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return r;
 }
 
 EXTERNAL_API void iso_verify_zones() {
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     verify_all_zones();
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return;
 }
 
@@ -226,8 +226,8 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    LOCK_ROOT_MUTEX();
+    LOCK_ROOT();
     verify_zone(zone);
-    UNLOCK_ROOT_MUTEX();
+    UNLOCK_ROOT();
     return;
 }

@@ -32,6 +32,7 @@
 
 #if THREAD_SUPPORT
 #include <pthread.h>
+#include <stdatomic.h>
 #endif
 
 #ifndef MADV_DONTNEED
@@ -181,14 +182,16 @@
     ((iso_alloc_big_zone *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
 
 #if THREAD_SUPPORT
-#define LOCK_ROOT_MUTEX() \
-    pthread_mutex_lock(&root_zone_mutex);
+#define LOCK_ROOT() \
+    do {            \
+    } while(atomic_flag_test_and_set(&root_busy));
 
-#define UNLOCK_ROOT_MUTEX() \
-    pthread_mutex_unlock(&root_zone_mutex);
+#define UNLOCK_ROOT() \
+    atomic_flag_clear(&root_busy);
+
 #else
-#define LOCK_ROOT_MUTEX()
-#define UNLOCK_ROOT_MUTEX()
+#define LOCK_ROOT()
+#define UNLOCK_ROOT()
 #endif
 
 #define GET_CHUNK_COUNT(zone) \
@@ -358,7 +361,7 @@ typedef struct {
 } iso_alloc_root;
 
 #if THREAD_SUPPORT
-pthread_mutex_t root_zone_mutex;
+static atomic_flag root_busy;
 #endif
 
 /* The global root */
