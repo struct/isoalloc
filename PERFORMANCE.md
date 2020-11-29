@@ -109,3 +109,53 @@ realloc/free 1441616 tests completed in 0.503063 seconds
 ```
 
 IsoAlloc seems to outperform ptmalloc in these artificial benchmarks.
+
+
+The following benchmarks were collected from (mimalloc-bench)[https://github.com/daanx/mimalloc-bench] with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for most benchmarks but clearly falls behind in the Redis and cfrac benchmarks. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. Its worth noting that IsoAlloc was able to stay competitive even with performing numerous security checks not present in other allocators.
+
+```
+espresso tcmalloc 04.94 8668 4.91 0.02 0 1524
+espresso jemalloc 05.19 5040 5.18 0.01 0 678
+espresso isoalloc 06.80 91344 6.65 0.14 0 23240
+espresso ptmalloc 05.63 2328 5.62 0.01 0 460
+
+barnes tcmalloc 03.10 63672 3.07 0.02 0 16603
+barnes jemalloc 03.17 60360 3.15 0.02 0 15738
+barnes isoalloc 03.14 74804 3.09 0.05 0 19507
+barnes ptmalloc 03.09 58492 3.07 0.02 0 15605
+
+alloc-test1 tcmalloc 03.81 16212 3.79 0.01 1 3359
+alloc-test1 jemalloc 04.12 12180 4.10 0.01 0 2500
+alloc-test1 isoalloc 07.65 64460 7.46 0.19 0 15727
+alloc-test1 ptmalloc 04.74 13336 4.73 0.00 0 2932
+
+cache-thrash1 tcmalloc 01.67 7604 1.66 0.00 0 1171
+cache-thrash1 jemalloc 01.67 4116 1.67 0.00 0 288
+cache-thrash1 isoalloc 01.68 19272 1.68 0.00 0 4094
+cache-thrash1 ptmalloc 01.67 3476 1.66 0.00 0 217
+
+cache-thrashN tcmalloc 04.03 7588 28.27 0.00 0 1190
+cache-thrashN jemalloc 00.42 4928 3.34 0.00 0 420
+cache-thrashN isoalloc 02.14 19336 16.85 0.01 0 4106
+cache-thrashN ptmalloc 00.42 3876 3.31 0.00 0 241
+
+cache-scratch1 tcmalloc 01.67 7532 1.67 0.00 0 1167
+cache-scratch1 jemalloc 01.67 4236 1.67 0.00 0 287
+cache-scratch1 isoalloc 01.68 19256 1.67 0.01 0 4079
+cache-scratch1 ptmalloc 01.67 3628 1.67 0.00 0 217
+
+cache-scratchN tcmalloc 04.51 7716 30.21 0.00 0 1194
+cache-scratchN jemalloc 04.40 4504 31.06 0.00 0 391
+cache-scratchN isoalloc 02.16 19296 17.00 0.00 0 4096
+cache-scratchN ptmalloc 02.06 3784 9.59 0.00 0 241
+
+cfrac tcmalloc 06.40 8192 6.39 0.00 2 1370
+cfrac jemalloc 06.65 4708 6.65 0.00 0 476
+cfrac isoalloc 10.89 25400 10.67 0.21 0 5744
+cfrac ptmalloc 06.82 3136 6.82 0.00 0 426
+
+redis tcmalloc 4.409 37896 1.93 0.27 0 8479
+redis jemalloc 5.097 31772 2.33 0.22 0 7082
+redis isoalloc 13.020 104688 6.11 0.43 0 25329
+redis ptmalloc 4.866 30076 2.16 0.27 0 6807
+```
