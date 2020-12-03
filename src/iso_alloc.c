@@ -35,7 +35,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
      * that collision as canary chunks only provide a
      * small security property anyway */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx));
+        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx - 1)));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -132,7 +132,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This may negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % max_bitmap_idx));
+    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx - 1)));
 
     if(0 > bm_idx) {
         bm_idx = 0;
@@ -437,7 +437,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     }
 
     /* Chunk size must be aligned */
-    if((size % ALIGNMENT) != 0) {
+    if(IS_ALIGNED(size) != 0) {
         size = ALIGN_SZ_UP(size);
     }
 
@@ -851,7 +851,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     zone->next_free_bit_slot = BAD_BIT_SLOT;
 
     bitmap_index_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_QWORD);
-    int64_t which_bit = (free_bit_slot % BITS_PER_QWORD);
+    int64_t which_bit = WHICH_BIT(free_bit_slot);
 
     void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
     UNPOISON_ZONE_CHUNK(zone, p);
@@ -1086,7 +1086,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
 
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
-    if(UNLIKELY(((uintptr_t) p % ALIGNMENT) != 0)) {
+    if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
@@ -1105,7 +1105,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
-    int64_t which_bit = (bit_slot % BITS_PER_QWORD);
+    int64_t which_bit = WHICH_BIT(bit_slot);
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     /* Read out 64 bits from the bitmap. We will write
@@ -1145,7 +1145,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);
-        which_bit = (bit_slot_over % BITS_PER_QWORD);
+        which_bit = WHICH_BIT(bit_slot_over);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
             void *p_over = POINTER_FROM_BITSLOT(zone, bit_slot_over);
@@ -1156,7 +1156,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     if((p - zone->chunk_size) > zone->user_pages_start) {
         bit_slot_t bit_slot_under = ((chunk_number - 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_under / BITS_PER_QWORD);
-        which_bit = (bit_slot_under % BITS_PER_QWORD);
+        which_bit = WHICH_BIT(bit_slot_under);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
             void *p_under = POINTER_FROM_BITSLOT(zone, bit_slot_under);

@@ -141,6 +141,12 @@
 
 #define ALIGNMENT 8
 
+#define WHICH_BIT(bit_slot) \
+    (bit_slot & (BITS_PER_QWORD - 1))
+
+#define IS_ALIGNED(v) \
+    (v & (ALIGNMENT - 1))
+
 #define GET_BIT(n, k) \
     (n >> k) & 1UL
 
