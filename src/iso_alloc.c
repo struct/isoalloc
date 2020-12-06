@@ -1183,7 +1183,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 #if !ENABLE_ASAN && !DISABLE_CANARY
     write_canary(zone, p);
 
-    if((p + zone->chunk_size) < (zone->user_pages_start + ZONE_USER_SIZE)) {
+    if((chunk_number + 1) != (ZONE_USER_SIZE / zone->chunk_size)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);
         which_bit = WHICH_BIT(bit_slot_over);
@@ -1194,7 +1194,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         }
     }
 
-    if((p - zone->chunk_size) > zone->user_pages_start) {
+    if(chunk_number != 0) {
         bit_slot_t bit_slot_under = ((chunk_number - 1) * BITS_PER_CHUNK);
         dwords_to_bit_slot = (bit_slot_under / BITS_PER_QWORD);
         which_bit = WHICH_BIT(bit_slot_under);
