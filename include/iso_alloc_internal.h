@@ -241,7 +241,10 @@
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
 /* The size of our bit slot freelist */
-#define BIT_SLOT_CACHE_SZ 254
+#define BIT_SLOT_CACHE_SZ 128
+
+/* The size of the thread cache */
+#define THREAD_CACHE_SZ 8
 
 #define MEGABYTE_SIZE 1000000
 
@@ -337,6 +340,20 @@ typedef struct {
     bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } iso_alloc_zone;
 
+#if THREAD_SUPPORT
+/* Each thread gets a local cache of the most recently
+ * used zones. This can greatly speed up allocations
+ * if your threads are reusing the same zones. This
+ * cache is first in last out, and is populated during
+ * both alloc and free operations */
+typedef struct {
+    iso_alloc_zone *zone;
+} _tzc;
+
+static __thread _tzc thread_zone_cache[THREAD_CACHE_SZ];
+static __thread size_t thread_zone_cache_count;
+#endif
+
 /* Meta data for big allocations are allocated near the
  * user pages themselves but separated via guard pages.
  * This meta data is stored at a random offset from the
@@ -389,6 +406,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
+INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN void create_guard_page(void *p);

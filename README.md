@@ -37,7 +37,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 
 ## Thread Safety
 
-IsoAlloc is thread safe by way of protecting the root structure with an atomic lock built with c11 atomic_flag support. This means every thread that wants to allocate or free a chunk needs to wait until it can grab the lock. This design choice has some big pros and cons. It can negatively impact performance of multi threaded programs that perform a lot of allocations. This is because every thread shares the same set of global zones. The benefit of this is that you can allocate and free any chunk from any thread with little code complexity required. Given how bad this performance hit is I am evaluating different strategies to improve the situation.
+IsoAlloc is thread safe by way of protecting the root structure with an atomic lock built with c11 atomic_flag support. This means every thread that wants to allocate or free a chunk needs to wait until it can grab the lock. This design choice has some big pros and cons. It can negatively impact performance of multi threaded programs that perform a lot of allocations. This is because every thread shares the same set of global zones. The benefit of this is that you can allocate and free any chunk from any thread with little code complexity required. In order to help alleviate contention on this atomic lock each thread has a zone cache built using thread local storage. This is implemented as a simple FILO cache of the most recently used zones by that thread. It's size can be increased using the `THREAD_CACHE_SZ` define in the internal header file.
 
 ## Security Properties
 

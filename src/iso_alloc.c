@@ -614,6 +614,26 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     }
 }
 
+/* Implements the check for iso_find_zone_fit */
+INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
+    if(zone == NULL) {
+        return false;
+    }
+
+    if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
+        return false;
+    }
+
+    /* We found a zone, lets try to find a free slot in it */
+    zone = is_zone_usable(zone, size);
+
+    if(zone == NULL) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
 /* Finds a zone that can fit this allocation request */
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     iso_alloc_zone *zone = NULL;
@@ -636,20 +656,9 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        if(zone == NULL) {
-            return NULL;
-        }
+        bool fits = iso_does_zone_fit(zone, size);
 
-        if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
-            continue;
-        }
-
-        /* We found a zone, lets try to find a free slot in it */
-        zone = is_zone_usable(zone, size);
-
-        if(zone == NULL) {
-            continue;
-        } else {
+        if(fits == true) {
             return zone;
         }
     }
@@ -769,7 +778,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 #endif
 
-    /* Allocation requests of 262144  bytes or larger are
+    /* Allocation requests of SMALL_SZ_MAX bytes or larger are
      * handled by the 'big allocation' path. If a zone was
      * passed in we abort because its a misuse of the API */
     if(UNLIKELY(size > SMALL_SZ_MAX)) {
@@ -784,13 +793,33 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     verify_all_zones();
 #endif
 
+#if THREAD_SUPPORT
+    /* Hot Path: Check the thread cache for a zone this
+     * thread recently used for an alloc/free operation */
+    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+        if(thread_zone_cache[i].zone->chunk_size >= size) {
+            bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
+
+            if(fit == true) {
+                zone = thread_zone_cache[i].zone;
+                break;
+            }
+        }
+    }
+#endif
+
+    /* Slow Path: This will iterate through all zones
+     * looking for a suitable one, this includes the
+     * zones we cached above */
     if(zone == NULL) {
         zone = iso_find_zone_fit(size);
     }
 
     bit_slot_t free_bit_slot = BAD_BIT_SLOT;
 
-    if(zone == NULL) {
+    /* Extra Slow Path: We need a new zone in order
+     * to satisfy this allocation request */
+    if(UNLIKELY(zone == NULL)) {
         /* In order to guarantee an 8 byte memory alignment
          * for all allocations we only create zones that
          * work with default allocation sizes */
@@ -896,6 +925,16 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     bm[dwords_to_bit_slot] = b;
 
     MASK_ZONE_PTRS(zone);
+
+#if THREAD_SUPPORT
+    if(thread_zone_cache_count < THREAD_CACHE_SZ) {
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache_count++;
+    } else {
+        thread_zone_cache_count = 0;
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+    }
+#endif
 
     return p;
 }
@@ -1166,6 +1205,16 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 #endif
 
     POISON_ZONE_CHUNK(zone, p);
+
+#if THREAD_SUPPORT
+    if(thread_zone_cache_count < THREAD_CACHE_SZ) {
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache_count++;
+    } else {
+        thread_zone_cache_count = 0;
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+    }
+#endif
 
     return;
 }
