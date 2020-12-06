@@ -347,6 +347,7 @@ typedef struct {
  * cache is first in last out, and is populated during
  * both alloc and free operations */
 typedef struct {
+    size_t chunk_size;
     iso_alloc_zone *zone;
 } _tzc;
 

@@ -797,7 +797,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     /* Hot Path: Check the thread cache for a zone this
      * thread recently used for an alloc/free operation */
     for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-        if(thread_zone_cache[i].zone->chunk_size >= size) {
+        if(thread_zone_cache[i].chunk_size >= size) {
             bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
 
             if(fit == true) {
@@ -929,10 +929,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #if THREAD_SUPPORT
     if(thread_zone_cache_count < THREAD_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
         thread_zone_cache_count++;
     } else {
         thread_zone_cache_count = 0;
         thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
     }
 #endif
 
@@ -1209,10 +1211,12 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 #if THREAD_SUPPORT
     if(thread_zone_cache_count < THREAD_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
         thread_zone_cache_count++;
     } else {
         thread_zone_cache_count = 0;
         thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
     }
 #endif
 
