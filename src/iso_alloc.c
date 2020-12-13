@@ -1142,6 +1142,7 @@ INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void 
 #endif
 
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent) {
+    LOCK_BIG_ZONE();
     if(UNLIKELY(big_zone->free == true)) {
         LOG_AND_ABORT("Double free of big zone 0x%p has been detected!", big_zone);
     }
@@ -1192,6 +1193,8 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         /* Big zone meta data is at a random offset from its base page */
         mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), _root->system_page_size, PROT_NONE);
     }
+
+    UNLOCK_BIG_ZONE();
 }
 
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
@@ -1315,17 +1318,14 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
-        LOCK_BIG_ZONE();
         iso_free_big_zone(big_zone, permanent);
-        UNLOCK_BIG_ZONE();
         return;
     } else {
         UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
         MASK_ZONE_PTRS(zone);
+        UNLOCK_ROOT();
     }
-
-    UNLOCK_ROOT();
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
