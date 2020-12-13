@@ -195,6 +195,13 @@
 #define UNLOCK_ROOT() \
     atomic_flag_clear(&root_busy);
 
+#define LOCK_BIG_ZONE() \
+    do {                \
+    } while(atomic_flag_test_and_set(&big_zone_busy));
+
+#define UNLOCK_BIG_ZONE() \
+    atomic_flag_clear(&big_zone_busy);
+
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()
@@ -386,6 +393,7 @@ typedef struct {
 
 #if THREAD_SUPPORT
 static atomic_flag root_busy;
+static atomic_flag big_zone_busy;
 #endif
 
 /* The global root */
@@ -402,6 +410,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
+INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
@@ -414,6 +423,8 @@ INTERNAL_HIDDEN void flush_thread_zone_cache();
 INTERNAL_HIDDEN void create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone);
+INTERNAL_HIDDEN void _verify_all_zones(void);
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
@@ -425,6 +436,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);

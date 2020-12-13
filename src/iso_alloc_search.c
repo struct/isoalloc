@@ -7,6 +7,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     uint64_t total_leaks = 0;
     uint64_t big_leaks = 0;
 
+    LOCK_ROOT();
+
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
@@ -16,6 +18,9 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
 
         total_leaks += _iso_alloc_zone_leak_detector(zone);
     }
+
+    UNLOCK_ROOT();
+    LOCK_BIG_ZONE();
 
     iso_alloc_big_zone *big = _root->big_zone_head;
 
@@ -36,9 +41,16 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
         }
     }
 
-    LOG("Total leaked in big zones: bytes (%" PRIu64 ") megabytes (%" PRIu64 ")", big_leaks, (big_leaks / MEGABYTE_SIZE));
+    UNLOCK_BIG_ZONE();
 
+    LOG("Total leaked in big zones: bytes (%" PRIu64 ") megabytes (%" PRIu64 ")", big_leaks, (big_leaks / MEGABYTE_SIZE));
     return total_leaks + big_leaks;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone) {
+    LOCK_ROOT();
+    return _iso_alloc_zone_leak_detector(zone);
+    UNLOCK_ROOT();
 }
 
 /* This is the built-in leak detector. It works by scanning
@@ -99,14 +111,17 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
+    LOCK_ROOT();
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
     LOG("Zone[%d] holds %d byte chunks. Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    UNLOCK_ROOT();
     return (mem_usage / MEGABYTE_SIZE);
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
+    LOCK_ROOT();
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
@@ -114,6 +129,9 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
         mem_usage += ZONE_USER_SIZE;
         LOG("Zone[%d] holds %d byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
     }
+
+    UNLOCK_ROOT();
+    LOCK_BIG_ZONE();
 
     iso_alloc_big_zone *big = _root->big_zone_head;
 
@@ -130,6 +148,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
             big = NULL;
         }
     }
+
+    UNLOCK_BIG_ZONE();
 
     LOG("Total megabytes allocated (%" PRIu64 ")", (mem_usage / MEGABYTE_SIZE));
 

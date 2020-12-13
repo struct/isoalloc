@@ -62,8 +62,33 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     return;
 }
+INTERNAL_HIDDEN void _verify_all_zones(void) {
+    return;
+}
+
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
+    return;
+}
 #else
+
+/* Verify the integrity of all canary chunks and the
+ * canary written to all free chunks. This function
+ * either aborts or returns nothing */
 INTERNAL_HIDDEN void verify_all_zones(void) {
+    LOCK_ROOT();
+    _verify_all_zones();
+    UNLOCK_ROOT();
+    return;
+}
+
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+    LOCK_ROOT();
+    _verify_zone(zone);
+    UNLOCK_ROOT();
+    return;
+}
+
+INTERNAL_HIDDEN void _verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
@@ -71,9 +96,11 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
             break;
         }
 
-        verify_zone(zone);
+        _verify_zone(zone);
     }
 
+    /* No need to lock big zone here since the
+     * root should be locked by our caller */
     iso_alloc_big_zone *big = _root->big_zone_head;
 
     if(big != NULL) {
@@ -91,7 +118,7 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     }
 }
 
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot;
@@ -290,7 +317,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     iso_alloc_zone *zone = NULL;
 
     for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
-        if(!(zone = iso_new_zone(default_zones[i], true))) {
+        if(!(zone = _iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
@@ -307,10 +334,8 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
-    LOCK_ROOT();
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
-    UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN void flush_thread_zone_cache() {
@@ -320,6 +345,7 @@ INTERNAL_HIDDEN void flush_thread_zone_cache() {
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
+    LOCK_ROOT();
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
 
@@ -351,8 +377,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 
         POISON_ZONE(zone);
         MASK_ZONE_PTRS(zone);
-        return;
 #endif
+        UNLOCK_ROOT();
+        return;
     } else {
         /* The only time we ever destroy a default non-custom zone
          * is from the destructor so its safe unmap pages */
@@ -363,10 +390,12 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
         munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
         flush_thread_zone_cache();
+        UNLOCK_ROOT();
     }
 }
 
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
+    LOCK_ROOT();
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
     uint64_t mb = 0;
 
@@ -401,7 +430,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
             break;
         }
 
-        verify_zone(zone);
+        _verify_zone(zone);
 #ifndef MALLOC_HOOK
         _iso_alloc_destroy_zone(zone);
 #endif
@@ -437,9 +466,18 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(_root->guard_above, _root->system_page_size);
     munmap(_root, sizeof(iso_alloc_root));
 #endif
+
+    UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
+    LOCK_ROOT();
+    iso_alloc_zone *zone = _iso_new_zone(size, internal);
+    UNLOCK_ROOT();
+    return zone;
+}
+
+INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     if(_root->zones_used >= MAX_ZONES) {
         LOG_AND_ABORT("Cannot allocate additional zones");
     }
@@ -521,6 +559,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     MASK_ZONE_PTRS(new_zone);
 
     _root->zones_used++;
+
     return new_zone;
 }
 
@@ -689,6 +728,8 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     size = ROUND_UP_PAGE(size);
 
+    LOCK_BIG_ZONE();
+
     /* Let's first see if theres an existing set of
      * pages that can satisfy this allocation request */
     iso_alloc_big_zone *big = _root->big_zone_head;
@@ -769,11 +810,13 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         big->canary_a = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
         big->canary_b = big->canary_a;
 
+        UNLOCK_BIG_ZONE();
         return big->user_pages_start;
     } else {
         check_big_canary(big);
         big->free = false;
         UNPOISON_BIG_ZONE(big);
+        UNLOCK_BIG_ZONE();
         return big->user_pages_start;
     }
 }
@@ -827,6 +870,8 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+    LOCK_ROOT();
+
 #if THREAD_SUPPORT
     if(UNLIKELY(_root == NULL)) {
         g_page_size = sysconf(_SC_PAGESIZE);
@@ -842,11 +887,14 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             LOG_AND_ABORT("Allocations of >= %d cannot use custom zones", SMALL_SZ_MAX);
         }
 
+        /* It's safe to unlock the root at this point because
+         * the big zone allocation path uses a different lock */
+        UNLOCK_ROOT();
         return _iso_big_alloc(size);
     }
 
 #if FUZZ_MODE
-    verify_all_zones();
+    _verify_all_zones();
 #endif
 
 #if THREAD_SUPPORT
@@ -883,7 +931,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             if(size < default_zones[i]) {
                 size = default_zones[i];
                 /* iso_new_zone returns a zone thats already marked busy */
-                zone = iso_new_zone(size, true);
+                zone = _iso_new_zone(size, true);
 
                 if(zone == NULL) {
                     LOG_AND_ABORT("Failed to create a new zone for allocation of %zu bytes", size);
@@ -897,7 +945,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
          * but we can still create it. iso_new_zone will
          * align the requested size for us */
         if(zone == NULL) {
-            zone = iso_new_zone(size, true);
+            zone = _iso_new_zone(size, true);
 
             if(zone == NULL) {
                 LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
@@ -920,6 +968,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             zone = is_zone_usable(zone, size);
 
             if(zone == NULL) {
+                UNLOCK_ROOT();
                 return NULL;
             }
         }
@@ -928,6 +977,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     if(free_bit_slot == BAD_BIT_SLOT) {
+        UNLOCK_ROOT();
         return NULL;
     }
 
@@ -948,10 +998,13 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 #endif
 
+    UNLOCK_ROOT();
     return p;
 }
 
 INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
+    LOCK_BIG_ZONE();
+
     /* Its possible we are trying to unmap a big allocation */
     iso_alloc_big_zone *big_zone = _root->big_zone_head;
 
@@ -964,6 +1017,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 
         /* Only a free of the exact address is valid */
         if(p == big_zone->user_pages_start) {
+            UNLOCK_BIG_ZONE();
             return big_zone;
         }
 
@@ -979,6 +1033,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
         }
     }
 
+    UNLOCK_BIG_ZONE();
     return NULL;
 }
 
@@ -1001,6 +1056,27 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     return NULL;
 }
 
+/* Checking canaries under ASAN mode is not trivial. ASAN
+ * provides a strong guarantee that these chunks haven't
+ * been modified in some way */
+#if ENABLE_ASAN || DISABLE_CANARY
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
+    return;
+}
+
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
+    return;
+}
+
+/* Verify the canary value in an allocation */
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
+    return;
+}
+
+INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+    return OK;
+}
+#else
 /* Verifies both canaries in a big zone structure. This
  * is a fast operation so we call it anytime we iterate
  * through the linked list of big zones */
@@ -1016,23 +1092,6 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
     }
 }
 
-/* Checking canaries under ASAN mode is not trivial. ASAN
- * provides a strong guarantee that these chunks haven't
- * been modified in some way */
-#if ENABLE_ASAN || DISABLE_CANARY
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
-    return;
-}
-
-/* Verify the canary value in an allocation */
-INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
-    return;
-}
-
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
-    return OK;
-}
-#else
 /* All free chunks get a canary written at both
  * the start and end of their chunks. These canaries
  * are verified when adjacent chunks are allocated,
@@ -1238,8 +1297,10 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
+    LOCK_ROOT();
+
 #if FUZZ_MODE
-    verify_all_zones();
+    _verify_all_zones();
 #endif
 
     iso_alloc_zone *zone = iso_find_zone_range(p);
@@ -1251,22 +1312,30 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
+        UNLOCK_ROOT();
+        LOCK_BIG_ZONE();
         iso_free_big_zone(big_zone, permanent);
+        UNLOCK_BIG_ZONE();
+        return;
     } else {
         UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
         MASK_ZONE_PTRS(zone);
     }
+
+    UNLOCK_ROOT();
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void) {
+    LOCK_ROOT();
     mprotect_pages(_root, sizeof(iso_alloc_root), PROT_NONE);
 }
 
 /* Unprotect all use of iso_alloc by allowing R/W of the _root */
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void) {
     mprotect_pages(_root, sizeof(iso_alloc_root), PROT_READ | PROT_WRITE);
+    UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
@@ -1274,19 +1343,26 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
         return 0;
     }
 
+    LOCK_ROOT();
+
     /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
     if(zone == NULL) {
+        UNLOCK_ROOT();
+        LOCK_BIG_ZONE();
+
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
 
         if(big_zone == NULL) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
+        UNLOCK_BIG_ZONE();
         return big_zone->size;
     }
 
+    UNLOCK_ROOT();
     return zone->chunk_size;
 }
 
