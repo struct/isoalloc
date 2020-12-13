@@ -1243,7 +1243,9 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     bm[dwords_to_bit_slot] = b;
 
+#if SANITIZE_CHUNKS
     iso_clear_user_chunk(p, zone->chunk_size);
+#endif
 
     /* Now that we have free'd this chunk lets validate the
      * chunks before and after it. If they were previously
@@ -1307,12 +1309,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
     if(zone == NULL) {
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
+        UNLOCK_ROOT();
 
         if(big_zone == NULL) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
-        UNLOCK_ROOT();
         LOCK_BIG_ZONE();
         iso_free_big_zone(big_zone, permanent);
         UNLOCK_BIG_ZONE();
@@ -1350,15 +1352,12 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     if(zone == NULL) {
         UNLOCK_ROOT();
-        LOCK_BIG_ZONE();
-
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
 
         if(big_zone == NULL) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
-        UNLOCK_BIG_ZONE();
         return big_zone->size;
     }
 
