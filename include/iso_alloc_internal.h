@@ -244,7 +244,7 @@
 #define BIT_SLOT_CACHE_SZ 128
 
 /* The size of the thread cache */
-#define THREAD_CACHE_SZ 8
+#define THREAD_ZONE_CACHE_SZ 8
 
 #define MEGABYTE_SIZE 1000000
 
@@ -351,7 +351,7 @@ typedef struct {
     iso_alloc_zone *zone;
 } _tzc;
 
-static __thread _tzc thread_zone_cache[THREAD_CACHE_SZ];
+static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
 #endif
 
@@ -410,6 +410,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
+INTERNAL_HIDDEN void flush_thread_zone_cache();
 INTERNAL_HIDDEN void create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
@@ -421,6 +422,7 @@ INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
+INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);

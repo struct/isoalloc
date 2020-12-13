@@ -128,7 +128,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
     bit_slot_t bit_slot;
     bitmap_index_t max_bitmap_idx = (zone->bitmap_size / sizeof(bitmap_index_t));
 
-    /* This gives us an arbitrary spot in the bitmap to 
+    /* This gives us an arbitrary spot in the bitmap to
      * start searching but may mean we end up with a smaller
      * cache. This may negatively affect performance but
      * leads to a less predictable free list */
@@ -313,6 +313,12 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN void flush_thread_zone_cache() {
+    /* The thread zone cache needs to be invalidated */
+    memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
+    thread_zone_cache_count = 0;
+}
+
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
@@ -327,6 +333,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         memset(zone, 0x0, sizeof(iso_alloc_zone));
         /* Mark the zone as full so no attempts are made to use it */
         zone->is_full = true;
+        flush_thread_zone_cache();
 #else
         memset(zone->bitmap_start, 0x0, zone->bitmap_size);
         memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
@@ -355,6 +362,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         munmap(zone->user_pages_start, ZONE_USER_SIZE);
         munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
         munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
+        flush_thread_zone_cache();
     }
 }
 
@@ -576,7 +584,8 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     UNMASK_ZONE_PTRS(zone);
 
     /* If the cache for this zone is empty we should
-     * refill it to make future allocations faster */
+     * refill it to make future allocations faster 
+     * for all threads */
     if(zone->free_bit_slot_cache_usable == zone->free_bit_slot_cache_index) {
         fill_free_bit_slot_cache(zone);
     }
@@ -769,6 +778,54 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     }
 }
 
+INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone) {
+    bitmap_index_t dwords_to_bit_slot = (bitslot / BITS_PER_QWORD);
+    int64_t which_bit = WHICH_BIT(bitslot);
+
+    void *p = POINTER_FROM_BITSLOT(zone, bitslot);
+    UNPOISON_ZONE_CHUNK(zone, p);
+
+    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+
+    /* Read out 64 bits from the bitmap. We will write
+     * them back before we return. This reduces the
+     * number of times we have to hit the bitmap page
+     * which could result in a page fault */
+    bitmap_index_t b = bm[dwords_to_bit_slot];
+
+    if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
+        LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %" PRIu64 " %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
+                      p, zone->index, bitslot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
+    }
+
+    if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
+        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %" PRIu64 ", bit number was %" PRIu64,
+                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], bitslot, which_bit);
+    }
+
+    /* This chunk was either previously allocated and free'd
+     * or it's a canary chunk. In either case this means it
+     * has a canary written in its first dword. Here we check
+     * that canary and abort if its been corrupted */
+#if !ENABLE_ASAN && !DISABLE_CANARY
+    if((GET_BIT(b, (which_bit + 1))) == 1) {
+        check_canary(zone, p);
+        memset(p, 0x0, CANARY_SIZE);
+    }
+#endif
+
+    /* Set the in-use bit */
+    SET_BIT(b, which_bit);
+
+    /* The second bit is flipped to 0 while in use. This
+     * is because a previously in use chunk would have
+     * a bit pattern of 11 which makes it looks the same
+     * as a canary chunk. This bit is set again upon free */
+    UNSET_BIT(b, (which_bit + 1));
+    bm[dwords_to_bit_slot] = b;
+    return p;
+}
+
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #if THREAD_SUPPORT
     if(UNLIKELY(_root == NULL)) {
@@ -875,58 +932,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     UNMASK_ZONE_PTRS(zone);
-
     zone->next_free_bit_slot = BAD_BIT_SLOT;
-
-    bitmap_index_t dwords_to_bit_slot = (free_bit_slot / BITS_PER_QWORD);
-    int64_t which_bit = WHICH_BIT(free_bit_slot);
-
-    void *p = POINTER_FROM_BITSLOT(zone, free_bit_slot);
-    UNPOISON_ZONE_CHUNK(zone, p);
-
-    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-
-    /* Read out 64 bits from the bitmap. We will write
-     * them back before we return. This reduces the
-     * number of times we have to hit the bitmap page
-     * which could result in a page fault */
-    bitmap_index_t b = bm[dwords_to_bit_slot];
-
-    if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
-        LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %" PRIu64 " %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
-                      p, zone->index, free_bit_slot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
-    }
-
-    if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %" PRIu64 ", bit number was %" PRIu64,
-                      zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], free_bit_slot, which_bit);
-    }
-
-    /* This chunk was either previously allocated and free'd
-     * or it's a canary chunk. In either case this means it
-     * has a canary written in its first dword. Here we check
-     * that canary and abort if its been corrupted */
-#if !ENABLE_ASAN && !DISABLE_CANARY
-    if((GET_BIT(b, (which_bit + 1))) == 1) {
-        check_canary(zone, p);
-        memset(p, 0x0, CANARY_SIZE);
-    }
-#endif
-
-    /* Set the in-use bit */
-    SET_BIT(b, which_bit);
-
-    /* The second bit is flipped to 0 while in use. This
-     * is because a previously in use chunk would have
-     * a bit pattern of 11 which makes it looks the same
-     * as a canary chunk. This bit is set again upon free */
-    UNSET_BIT(b, (which_bit + 1));
-    bm[dwords_to_bit_slot] = b;
-
+    void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
     MASK_ZONE_PTRS(zone);
 
 #if THREAD_SUPPORT
-    if(thread_zone_cache_count < THREAD_CACHE_SZ) {
+    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
         thread_zone_cache_count++;
@@ -1208,7 +1219,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     POISON_ZONE_CHUNK(zone, p);
 
 #if THREAD_SUPPORT
-    if(thread_zone_cache_count < THREAD_CACHE_SZ) {
+    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
         thread_zone_cache_count++;
