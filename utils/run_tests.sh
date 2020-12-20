@@ -7,6 +7,8 @@ tests=("tests" "big_tests" "interfaces_test" "thread_tests")
 failure=0
 succeeded=0
 
+$(ulimit -c 0)
+
 export LD_LIBRARY_PATH=build/
 export LD_PRELOAD=build/libisoalloc.so
 

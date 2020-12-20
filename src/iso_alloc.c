@@ -869,14 +869,14 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
     return p;
 }
 
-INTERNAL_HIDDEN INLINE size_t pow2(size_t sz) {
-    sz = sz - 1;
-
-    while(sz & sz - 1) {
-        sz = sz & sz - 1;
-    }
-
-    return sz << 1;
+INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
+    sz |= sz >> 1;
+    sz |= sz >> 2;
+    sz |= sz >> 4;
+    sz |= sz >> 8;
+    sz |= sz >> 16;
+    sz |= sz >> 32;
+    return sz + 1;
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
@@ -942,7 +942,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         } else {
             /* For chunks smaller than 8192 bytes we
              * bump the size up to the next power of 2 */
-            size = pow2(size);
+            size = next_pow2(size);
             zone = _iso_new_zone(size, true);
         }
 
