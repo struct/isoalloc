@@ -869,6 +869,16 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
     return p;
 }
 
+INTERNAL_HIDDEN INLINE size_t pow2(size_t sz) {
+    sz = sz - 1;
+
+    while(sz & sz - 1) {
+        sz = sz & sz - 1;
+    }
+
+    return sz << 1;
+}
+
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     LOCK_ROOT();
 
@@ -924,32 +934,20 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     /* Extra Slow Path: We need a new zone in order
      * to satisfy this allocation request */
     if(UNLIKELY(zone == NULL)) {
-        /* In order to guarantee an 8 byte memory alignment
-         * for all allocations we only create zones that
-         * work with default allocation sizes */
-        for(int64_t i = 0; i < (sizeof(default_zones) / sizeof(uint64_t)); i++) {
-            if(size < default_zones[i]) {
-                size = default_zones[i];
-                /* iso_new_zone returns a zone thats already marked busy */
-                zone = _iso_new_zone(size, true);
-
-                if(zone == NULL) {
-                    LOG_AND_ABORT("Failed to create a new zone for allocation of %zu bytes", size);
-                } else {
-                    break;
-                }
-            }
-        }
-
         /* The size requested is above default zone sizes
          * but we can still create it. iso_new_zone will
          * align the requested size for us */
-        if(zone == NULL) {
+        if(size > ZONE_8192) {
             zone = _iso_new_zone(size, true);
+        } else {
+            /* For chunks smaller than 8192 bytes we
+             * bump the size up to the next power of 2 */
+            size = pow2(size);
+            zone = _iso_new_zone(size, true);
+        }
 
-            if(zone == NULL) {
-                LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
-            }
+        if(zone == NULL) {
+            LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
         }
 
         /* This is a brand new zone, so the fast path
