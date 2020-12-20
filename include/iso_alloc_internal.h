@@ -213,8 +213,10 @@
 /* This is the maximum number of zones iso_alloc can
  * create. This is a completely arbitrary number but
  * it does correspond to the size of the _root.zones
- * array that lives in global memory */
-#define MAX_ZONES 8192
+ * array that lives in global memory. Currently the
+ * iso_alloc_zone structure is roughly 1096 bytes so
+ * this allocates 4489216 bytes (~4.4 MB) */
+#define MAX_ZONES 4096
 
 /* Each user allocation zone we make is 8mb in size */
 #define ZONE_USER_SIZE 8388608
@@ -334,10 +336,10 @@ typedef struct {
 typedef struct {
     void *user_pages_start;                                /* Start of the pages backing this zone */
     void *bitmap_start;                                    /* Start of the bitmap */
-    int32_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
-    int32_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
+    uint16_t free_bit_slot_cache_index;                    /* Tracks how many entries in the cache are filled */
+    uint16_t free_bit_slot_cache_usable;                   /* The oldest members of the free cache are served first */
+    uint16_t index;                                        /* Zone index */
     int64_t next_free_bit_slot;                            /* The last bit slot returned by get_next_free_bit_slot */
-    int32_t index;                                         /* Zone index */
     uint64_t canary_secret;                                /* Each zone has its own canary secret */
     uint64_t pointer_mask;                                 /* Each zone has its own pointer protection secret */
     uint32_t chunk_size;                                   /* Size of chunks managed by this zone */
