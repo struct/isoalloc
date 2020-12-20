@@ -334,18 +334,20 @@ typedef struct {
 } iso_alloc_zone_configuration;
 
 typedef struct {
-    void *user_pages_start;                                /* Start of the pages backing this zone */
-    void *bitmap_start;                                    /* Start of the bitmap */
-    uint16_t free_bit_slot_cache_index;                    /* Tracks how many entries in the cache are filled */
-    uint16_t free_bit_slot_cache_usable;                   /* The oldest members of the free cache are served first */
-    uint16_t index;                                        /* Zone index */
-    int64_t next_free_bit_slot;                            /* The last bit slot returned by get_next_free_bit_slot */
-    uint64_t canary_secret;                                /* Each zone has its own canary secret */
-    uint64_t pointer_mask;                                 /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;                                   /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;                                  /* Size of the bitmap in bytes */
-    bool internally_managed;                               /* Zones can be managed by iso_alloc or custom */
-    bool is_full;                                          /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    void *user_pages_start;     /* Start of the pages backing this zone */
+    void *bitmap_start;         /* Start of the bitmap */
+    uint16_t index;             /* Zone index */
+    int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
+    uint64_t canary_secret;     /* Each zone has its own canary secret */
+    uint64_t pointer_mask;      /* Each zone has its own pointer protection secret */
+    uint32_t chunk_size;        /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;       /* Size of the bitmap in bytes */
+    bool internally_managed;    /* Zones can be managed by iso_alloc or custom */
+    bool is_full;               /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+
+    /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
+    uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
+    uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
     bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } iso_alloc_zone;
 
