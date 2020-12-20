@@ -1,4 +1,4 @@
-# Hacking
+# Contributing
 
 If you're looking to contribute to IsoAlloc then you will want to start with this guide. It contains some steps you will want to follow before making a pull request, and a basic style guide.
 
@@ -6,15 +6,19 @@ If you're looking to contribute to IsoAlloc then you will want to start with thi
 
 Contributing to IsoAlloc is a pretty standard process of forking the repo, making a pull request, and optionally linking it to an existing issue. Before you make your pull request please run the following commands on both Linux and MacOS:
 
-`make format` - Run the clang formatter to ensure your code conforms to the rest of the project
+`make format` - Run the clang formatter to ensure your changes conform to the rest of the project
 
 `make tests` - Make sure all tests still pass
 
 `make malloc_cmp_test` - Check for major performance regressions
 
-`make library` - Make sure you can still build a release version of the library
+`make cpp_tests` - Make sure all C++ tests still pass
 
-If you're making changes to the C++ wrapper you will want to run those build targets and test with `make cpp_tests` as well.
+`make library` - Build a release version of the library
+
+`make cpp_library` - Build a release version of the library with C++ support
+
+Compile a debug version of the library with `make cpp_library_debug` and then run a basic test using `LD_PRELOAD` and another binary.
 
 ## Style Guide
 

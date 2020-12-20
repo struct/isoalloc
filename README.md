@@ -2,7 +2,9 @@
 
 # Isolation Alloc
 
-Isolation Alloc is a secure and fast(ish) memory allocator written in C. Its security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed up as keeping objects of different sizes or types separate from one another. Isolation Alloc is designed and tested for 64 bit Linux. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux (it currently compiles on Mac OS) but that is also untested at this time.
+Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD`. Its security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed up as keeping objects of different sizes or types separate from one another. Strict allocation isolation can be achieved using the IsoAlloc APIs directly.
+
+Isolation Alloc is designed and tested for 64 bit Linux. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. It may work in a 32 bit address space but it remains untested and the number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux/Mac OS but that is also untested at this time.
 
 Additional information about the allocator and some of its design choices can be found [here](http://struct.github.io/iso_alloc.html).
 
@@ -68,13 +70,13 @@ IsoAlloc is thread safe by way of protecting the root structure with an atomic l
 
 The Makefile targets are very simple:
 
-`make library` - Builds a release version of the library
+`make library` - Builds a release version of the library without C++ support
 
 `make library_debug` - Builds a debug version of the library
 
-`make analyze_library_debug` - Builds the library with Clang's scan-build if installed
-
 `make library_debug_no_output` - Builds a debug version of the library with no logging output
+
+`make analyze_library_debug` - Builds the library with clang's scan-build if installed
 
 `make tests` - Builds and runs all tests
 
@@ -86,7 +88,9 @@ The Makefile targets are very simple:
 
 `make c_library_objects_debug` - Builds debug .o files to be linked in another compilation step
 
-`make cpp_library` - Builds the library with a simple C++ interface that overloads new/delete operators
+`make cpp_library` - Builds the library with a C++ interface that overloads operators `new` and `delete`
+
+`make cpp_library_debug` - Builds a debug version of the library with a C++ interface that overloads operators `new` and `delete`
 
 `make cpp_tests` - Builds and runs the C++ tests
 
