@@ -482,16 +482,15 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
         LOG_AND_ABORT("Cannot allocate additional zones");
     }
 
+    if(size > SMALL_SZ_MAX) {
+        LOG("Request for chunk of %ld bytes should be handled by big alloc path", size);
+        return NULL;
+    }
+
     /* Chunk size must be aligned */
     if(IS_ALIGNED(size) != 0) {
         size = ALIGN_SZ_UP(size);
     }
-
-#if DEBUG
-    if(size > SMALL_SZ_MAX) {
-        LOG_AND_ABORT("Request for chunk of %ld bytes should be handled by big alloc path", size);
-    }
-#endif
 
     /* Minimum chunk size */
     if(size < SMALLEST_ZONE) {
