@@ -205,6 +205,8 @@
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()
+#define LOCK_BIG_ZONE()
+#define UNLOCK_BIG_ZONE()
 #endif
 
 #define GET_CHUNK_COUNT(zone) \
@@ -336,7 +338,6 @@ typedef struct {
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
     void *bitmap_start;         /* Start of the bitmap */
-    uint16_t index;             /* Zone index */
     int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
     uint64_t canary_secret;     /* Each zone has its own canary secret */
     uint64_t pointer_mask;      /* Each zone has its own pointer protection secret */
@@ -344,12 +345,12 @@ typedef struct {
     uint32_t bitmap_size;       /* Size of the bitmap in bytes */
     bool internally_managed;    /* Zones can be managed by iso_alloc or custom */
     bool is_full;               /* Indicates whether this zone is full to avoid expensive free bit slot searches */
-
+    uint16_t index;             /* Zone index */
     /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
     uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
     uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
     bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
-} iso_alloc_zone;
+} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
 #if THREAD_SUPPORT
 /* Each thread gets a local cache of the most recently
@@ -360,7 +361,7 @@ typedef struct {
 typedef struct {
     size_t chunk_size;
     iso_alloc_zone *zone;
-} _tzc;
+} __attribute__((aligned(sizeof(int64_t)))) _tzc;
 
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
@@ -377,7 +378,7 @@ typedef struct iso_alloc_big_zone {
     void *user_pages_start;
     struct iso_alloc_big_zone *next;
     uint64_t canary_b;
-} iso_alloc_big_zone;
+} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_big_zone;
 
 /* There is only one iso_alloc root per-process.
  * It contains an array of zone structures. Each
@@ -391,9 +392,9 @@ typedef struct {
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
-    iso_alloc_zone zones[MAX_ZONES];
     iso_alloc_big_zone *big_zone_head;
-} iso_alloc_root;
+    iso_alloc_zone zones[MAX_ZONES];
+} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 #if THREAD_SUPPORT
 static atomic_flag root_busy;
@@ -411,7 +412,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
-INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
+INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *restrict p, bool permanent);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
@@ -440,6 +441,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
+INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);

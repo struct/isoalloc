@@ -60,7 +60,7 @@ HOOKS = $(MALLOC_HOOK)
 ## In a release build you probably want them all to be 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
-OPTIMIZE = -O2 -DPERF_BUILD=1
+OPTIMIZE = -O2 -DPERF_BUILD=1 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
@@ -163,8 +163,8 @@ fuzz_test: clean
 ## monitoring enabled. Linux only
 perf_tests: clean
 	@echo "make perf_tests"
-	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
-	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof

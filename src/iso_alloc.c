@@ -152,8 +152,8 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
  * find any free slots. */
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bit_slot_t bit_slot;
     bitmap_index_t max_bitmap_idx = (zone->bitmap_size / sizeof(bitmap_index_t));
+    bit_slot_t bit_slot;
 
     /* This gives us an arbitrary spot in the bitmap to
      * start searching but may mean we end up with a smaller
@@ -339,9 +339,11 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 }
 
 INTERNAL_HIDDEN void flush_thread_zone_cache() {
+#if THREAD_SUPPORT
     /* The thread zone cache needs to be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
     thread_zone_cache_count = 0;
+#endif
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
@@ -662,7 +664,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 
 /* Implements the check for iso_find_zone_fit */
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
-    if(zone == NULL) {
+    if(UNLIKELY(zone == NULL)) {
         return false;
     }
 
@@ -881,12 +883,10 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     LOCK_ROOT();
 
-#if THREAD_SUPPORT
     if(UNLIKELY(_root == NULL)) {
         g_page_size = sysconf(_SC_PAGESIZE);
         iso_alloc_initialize_global_root();
     }
-#endif
 
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
      * handled by the 'big allocation' path. If a zone was
@@ -945,7 +945,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             zone = _iso_new_zone(size, true);
         }
 
-        if(zone == NULL) {
+        if(UNLIKELY(zone == NULL)) {
             LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
         }
 
@@ -953,7 +953,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
          * should always work. Abort if it doesn't */
         free_bit_slot = zone->next_free_bit_slot;
 
-        if(free_bit_slot == BAD_BIT_SLOT) {
+        if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
             LOG_AND_ABORT("Allocated a new zone with no free bit slots");
         }
     } else {
@@ -1036,8 +1036,9 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
+    int32_t zones_used = _root->zones_used;
 
-    for(int32_t i = 0; i < _root->zones_used; i++) {
+    for(int32_t i = 0; i < zones_used; i++) {
         zone = &_root->zones[i];
 
         UNMASK_ZONE_PTRS(zone);
