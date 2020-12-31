@@ -102,12 +102,12 @@
 #define EXTERNAL_API __attribute__((visibility("default")))
 #endif
 
-#if PERF_BUILD
-#define INLINE __attribute__((always_inline))
-#define FLATTEN __attribute__((flatten))
-#else
+#if PERF_TEST_BUILD
 #define INLINE
 #define FLATTEN
+#else
+#define INLINE __attribute__((always_inline))
+#define FLATTEN __attribute__((flatten))
 #endif
 
 #if DEBUG
@@ -412,7 +412,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
-INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *restrict p, bool permanent);
+INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
