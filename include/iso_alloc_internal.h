@@ -171,6 +171,9 @@
 #define ROUND_DOWN_PAGE(n) \
     (ROUND_UP_PAGE(n) - g_page_size)
 
+#define GET_MAX_BITMASK_INDEX(zone) \
+    (zone->bitmap_size >> 3)
+
 #define MASK_ZONE_PTRS(zone) \
     MASK_BITMAP_PTRS(zone);  \
     MASK_USER_PTRS(zone);
@@ -286,6 +289,8 @@ uint32_t g_page_size;
  * ZONE_1024 at which point a new zone is created for that
  * specific size request. You can create additional startup
  * profile by adjusting the next few lines below. */
+uint32_t _default_zone_count;
+
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
 #define SMALLEST_ZONE ZONE_64
