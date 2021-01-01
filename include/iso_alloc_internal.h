@@ -130,10 +130,13 @@
  *  01 was used, now free
  *  11 canary chunk / permanently free'd */
 #define BITS_PER_CHUNK 2
+#define BITS_PER_CHUNK_SHIFT 1
 
 #define BITS_PER_BYTE 8
+#define BITS_PER_BYTE_SHIFT 3
 
 #define BITS_PER_QWORD 64
+#define BITS_PER_QWORD_SHIFT 6
 
 #define CANARY_SIZE 8
 
@@ -230,9 +233,11 @@
 #define SMALL_SZ_MAX 262144
 
 #define WASTED_SZ_MULTIPLIER 8
+#define WASTED_SZ_MULTIPLIER_SHIFT 3
 
 #define BIG_ZONE_META_DATA_PAGE_COUNT 3
 #define BIG_ZONE_USER_PAGE_COUNT 2
+#define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
 /* We allocate (1) zone at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes

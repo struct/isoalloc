@@ -20,7 +20,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
     }
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bitmap_index_t max_bitmap_idx = (zone->bitmap_size / sizeof(bitmap_index_t));
+    bitmap_index_t max_bitmap_idx = (zone->bitmap_size / sizeof(bitmap_index_t)) - 1;
     uint64_t chunk_count = (ZONE_USER_SIZE / zone->chunk_size);
     bit_slot_t bit_slot;
 
@@ -35,7 +35,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
      * that collision as canary chunks only provide a
      * small security property anyway */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx - 1)));
+        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx)));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -44,7 +44,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
         /* Set the 1st and 2nd bits as 1 */
         SET_BIT(bm[bm_idx], 0);
         SET_BIT(bm[bm_idx], 1);
-        bit_slot = (bm_idx * BITS_PER_QWORD);
+        bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT);
         void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
         write_canary(zone, p);
     }
@@ -132,7 +132,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
              * a canary chunk. Either way it should have a set
              * of canaries we can verify */
             if(bit == 1) {
-                bit_slot = (i * BITS_PER_QWORD) + j;
+                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
             }
@@ -183,7 +183,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
             int64_t bit = GET_BIT(bm[bm_idx], j);
 
             if(bit == 0) {
-                bit_slot = (bm_idx * BITS_PER_QWORD) + j;
+                bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 zone->free_bit_slot_cache[zone->free_bit_slot_cache_index] = bit_slot;
                 zone->free_bit_slot_cache_index++;
             }
@@ -212,7 +212,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
      * introduce bugs. Its too aggressive for release builds */
     for(int32_t i = zone->free_bit_slot_cache_usable; i < (sizeof(zone->free_bit_slot_cache) / sizeof(bit_slot_t)); i++) {
         if(UNLIKELY(zone->free_bit_slot_cache[i] == bit_slot)) {
-            LOG_AND_ABORT("Zone[%d] already contains bit slot %" PRIu64 " in cache", zone->index, bit_slot);
+            LOG_AND_ABORT("Zone[%d] already contains bit slot %lu in cache", zone->index, bit_slot);
         }
     }
 #endif
@@ -414,7 +414,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     mb = _iso_alloc_mem_usage();
 
 #if MEM_USAGE
-    LOG("Total megabytes consumed by all zones: %" PRIu64, mb);
+    LOG("Total megabytes consumed by all zones: %lu", mb);
 #endif
 
 #endif
@@ -507,7 +507,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
-    size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) * BITS_PER_CHUNK) / BITS_PER_BYTE;
+    size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
 
     /* Most of the following fields are effectively immutable
@@ -530,7 +530,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     /* All user pages use MAP_POPULATE. This might seem like we are asking
      * the kernel to commit a lot of memory for us that we may never use
      * but when we call create_canary_chunks() that will happen anyway */
-    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size * 2), true);
+    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), true);
 
     void *user_pages_guard_below = p;
     new_zone->user_pages_start = (p + _root->system_page_size);
@@ -575,7 +575,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
-            bit_slot = (i * BITS_PER_QWORD);
+            bit_slot = (i << BITS_PER_QWORD_SHIFT);
             return bit_slot;
         }
     }
@@ -596,7 +596,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
             bit = GET_BIT(bm[i], j);
 
             if(bit == 0) {
-                bit_slot = (i * BITS_PER_QWORD) + j;
+                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 return bit_slot;
             }
         }
@@ -617,7 +617,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * sizes beyond ZONE_1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
-    if(size > ZONE_1024 && zone->chunk_size >= (size * WASTED_SZ_MULTIPLIER)) {
+    if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
     }
 
@@ -784,12 +784,12 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         }
 
         /* Create the guard page after the meta data */
-        void *next_gp = (p + _root->system_page_size * 2);
+        void *next_gp = (p + (_root->system_page_size << 1));
         create_guard_page(next_gp);
 
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((_root->system_page_size * BIG_ZONE_USER_PAGE_COUNT) + size, false);
+        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false);
 
         /* The first page is a guard page */
         create_guard_page(user_pages);
@@ -823,7 +823,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone) {
-    bitmap_index_t dwords_to_bit_slot = (bitslot / BITS_PER_QWORD);
+    bitmap_index_t dwords_to_bit_slot = (bitslot >> BITS_PER_QWORD_SHIFT);
     int64_t which_bit = WHICH_BIT(bitslot);
 
     void *p = POINTER_FROM_BITSLOT(zone, bitslot);
@@ -838,12 +838,12 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
     bitmap_index_t b = bm[dwords_to_bit_slot];
 
     if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
-        LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %" PRIu64 " %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
+        LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %lu %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
                       p, zone->index, bitslot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
     if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %" PRIu64 ", bit number was %" PRIu64,
+        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %lu, bit number was %" PRIu64,
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], bitslot, which_bit);
     }
 
@@ -1205,12 +1205,12 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     /* Ensure the pointer is a multiple of chunk size */
     if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
-        LOG_AND_ABORT("Chunk at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %" PRIu64 " bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
+        LOG_AND_ABORT("Chunk at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
     }
 
     size_t chunk_number = (chunk_offset / zone->chunk_size);
-    bit_slot_t bit_slot = (chunk_number * BITS_PER_CHUNK);
-    bit_slot_t dwords_to_bit_slot = (bit_slot / BITS_PER_QWORD);
+    bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
+    bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
     if(UNLIKELY((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size))) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
@@ -1227,7 +1227,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     /* Double free detection */
     if(UNLIKELY((GET_BIT(b, which_bit)) == 0)) {
-        LOG_AND_ABORT("Double free of chunk 0x%p detected from zone[%d] dwords_to_bit_slot=%" PRIu64 " bit_slot=%" PRIu64, p, zone->index, dwords_to_bit_slot, bit_slot);
+        LOG_AND_ABORT("Double free of chunk 0x%p detected from zone[%d] dwords_to_bit_slot=%lu bit_slot=%" PRIu64, p, zone->index, dwords_to_bit_slot, bit_slot);
     }
 
     /* Set the next bit so we know this chunk was used */
@@ -1256,8 +1256,8 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     write_canary(zone, p);
 
     if((chunk_number + 1) != (ZONE_USER_SIZE / zone->chunk_size)) {
-        bit_slot_t bit_slot_over = ((chunk_number + 1) * BITS_PER_CHUNK);
-        dwords_to_bit_slot = (bit_slot_over / BITS_PER_QWORD);
+        bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
+        dwords_to_bit_slot = (bit_slot_over >> BITS_PER_QWORD_SHIFT);
         which_bit = WHICH_BIT(bit_slot_over);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
@@ -1267,8 +1267,8 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
     }
 
     if(chunk_number != 0) {
-        bit_slot_t bit_slot_under = ((chunk_number - 1) * BITS_PER_CHUNK);
-        dwords_to_bit_slot = (bit_slot_under / BITS_PER_QWORD);
+        bit_slot_t bit_slot_under = ((chunk_number - 1) << BITS_PER_CHUNK_SHIFT);
+        dwords_to_bit_slot = (bit_slot_under >> BITS_PER_QWORD_SHIFT);
         which_bit = WHICH_BIT(bit_slot_under);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
