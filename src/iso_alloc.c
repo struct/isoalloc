@@ -166,26 +166,31 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 
     memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
     zone->free_bit_slot_cache_usable = 0;
+    uint8_t free_bit_slot_cache_index;
 
-    for(zone->free_bit_slot_cache_index = 0; zone->free_bit_slot_cache_index < BIT_SLOT_CACHE_SZ; bm_idx++) {
+    for(free_bit_slot_cache_index = 0; free_bit_slot_cache_index < BIT_SLOT_CACHE_SZ; bm_idx++) {
         /* Don't index outside of the bitmap or
          * we will return inaccurate bit slots */
         if(bm_idx >= max_bitmap_idx) {
+            zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
             return;
         }
 
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+            if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+                zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
                 return;
             }
 
             if((GET_BIT(bm[bm_idx], j)) == 0) {
                 bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
-                zone->free_bit_slot_cache[zone->free_bit_slot_cache_index] = bit_slot;
-                zone->free_bit_slot_cache_index++;
+                zone->free_bit_slot_cache[free_bit_slot_cache_index] = bit_slot;
+                free_bit_slot_cache_index++;
             }
         }
     }
+
+    zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
 }
 
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
