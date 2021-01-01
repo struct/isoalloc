@@ -362,7 +362,7 @@ typedef struct {
     bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
-#if THREAD_SUPPORT
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
  * if your threads are reusing the same zones. This
@@ -422,6 +422,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
+INTERNAL_HIDDEN INLINE void flush_thread_zone_cache();
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
@@ -435,7 +436,6 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
-INTERNAL_HIDDEN void flush_thread_zone_cache();
 INTERNAL_HIDDEN void create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);

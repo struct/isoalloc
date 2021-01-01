@@ -31,7 +31,8 @@ SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN)
 ## You can safely disable it here if you know your
 ## program does not require concurrent access
 ## to the IsoAlloc APIs
-THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
+## THREAD_ZONE_CACHE - Enables thread zone cache
+THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread -DTHREAD_ZONE_CACHE=1
 
 ## This tells IsoAlloc to only start with 4 default zones.
 ## If you set it to 0 IsoAlloc will startup with 10. The

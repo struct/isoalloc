@@ -24,7 +24,7 @@ By default user chunks are not sanitized upon free. While this helps mitigate un
 
 The meta data for all default zones will be locked with `mlock`. This means this data will never be swapped to disk. We do this because iterating over these data structures is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure. Zones that are created on demand after initialization will not have their memory locked.
 
-If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic lock/unlock operations from the allocator, which will speed things up substantially in some programs.
+If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic lock/unlock operations from the allocator, which will speed things up substantially in some programs. If you do require thread support then you may want to profile your program to determine if `THREAD_ZONE_CACHE` will benefit your performance or harm it. The assumption this cache makes is that your threads will make similarly sized allocations. If this is unlikely then you can disable it in the Makefile.
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance.
 

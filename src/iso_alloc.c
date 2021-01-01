@@ -337,8 +337,8 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     iso_alloc_initialize_global_root();
 }
 
-INTERNAL_HIDDEN void flush_thread_zone_cache() {
-#if THREAD_SUPPORT
+INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
     /* The thread zone cache needs to be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
     thread_zone_cache_count = 0;
@@ -906,9 +906,11 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     _verify_all_zones();
 #endif
 
-#if THREAD_SUPPORT
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
     /* Hot Path: Check the thread cache for a zone this
-     * thread recently used for an alloc/free operation */
+     * thread recently used for an alloc/free operation.
+     * It's likely we are allocating a similar size chunk
+     * and this will speed up that operation */
     for(int64_t i = 0; i < thread_zone_cache_count; i++) {
         if(thread_zone_cache[i].chunk_size >= size) {
             bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
@@ -983,7 +985,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
     MASK_ZONE_PTRS(zone);
 
-#if THREAD_SUPPORT
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
     if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
@@ -1280,7 +1282,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     POISON_ZONE_CHUNK(zone, p);
 
-#if THREAD_SUPPORT
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
     if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
