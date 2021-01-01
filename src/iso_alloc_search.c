@@ -31,7 +31,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     while(big != NULL) {
         if(big->free == true) {
             big_leaks += big->size;
-            LOG("Big zone leaked %" PRIu64 " bytes", big->size);
+            LOG("Big zone leaked %lu bytes", big->size);
         }
 
         if(big->next != NULL) {
@@ -43,7 +43,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
 
     UNLOCK_BIG_ZONE();
 
-    LOG("Total leaked in big zones: bytes (%" PRIu64 ") megabytes (%" PRIu64 ")", big_leaks, (big_leaks / MEGABYTE_SIZE));
+    LOG("Total leaked in big zones: bytes (%lu) megabytes (%lu)", big_leaks, (big_leaks / MEGABYTE_SIZE));
     return total_leaks + big_leaks;
 }
 
@@ -94,13 +94,13 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone) {
                     continue;
                 } else {
                     total_leaks++;
-                    LOG("Leaked chunk in zone[%d] of %d bytes detected at 0x%p (bit position = %" PRIu64 ")", zone->index, zone->chunk_size, leak, bit_slot);
+                    LOG("Leaked chunk in zone[%d] of %d bytes detected at 0x%p (bit position = %lu)", zone->index, zone->chunk_size, leak, bit_slot);
                 }
             }
         }
     }
 
-    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%" PRIu64 ") (%d percent)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
+    LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%lu) (%d percent)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
         was_used, (int32_t)((float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0));
 
     MASK_ZONE_PTRS(zone);
@@ -114,7 +114,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     LOCK_ROOT();
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] holds %d byte chunks. Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] holds %d byte chunks. Total bytes (%lu), megabytes (%lu)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
     UNLOCK_ROOT();
     return (mem_usage / MEGABYTE_SIZE);
 }
@@ -140,7 +140,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     }
 
     while(big != NULL) {
-        LOG("Big Zone Total bytes (%" PRIu64 "), megabytes (%" PRIu64 ")", big->size, (big->size / MEGABYTE_SIZE));
+        LOG("Big Zone Total bytes (%lu), megabytes (%lu)", big->size, (big->size / MEGABYTE_SIZE));
         mem_usage += big->size;
         if(big->next != NULL) {
             big = UNMASK_BIG_ZONE_NEXT(big->next);
@@ -151,7 +151,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
 
     UNLOCK_BIG_ZONE();
 
-    LOG("Total megabytes allocated (%" PRIu64 ")", (mem_usage / MEGABYTE_SIZE));
+    LOG("Total megabytes allocated (%lu)", (mem_usage / MEGABYTE_SIZE));
 
     return (mem_usage / MEGABYTE_SIZE);
 }
