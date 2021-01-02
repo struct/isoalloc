@@ -194,7 +194,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
-    if(UNLIKELY(0 > zone->free_bit_slot_cache_usable) || UNLIKELY((0 > zone->free_bit_slot_cache_index))) {
+    if(0 > zone->free_bit_slot_cache_usable || 0 > zone->free_bit_slot_cache_index) {
         LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
     }
 
@@ -214,7 +214,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
      * introduce bugs. Its too aggressive for release builds */
     int32_t max_cache_slots = sizeof(zone->free_bit_slot_cache) >> 3;
     for(int32_t i = zone->free_bit_slot_cache_usable; i < max_cache_slots; i++) {
-        if(UNLIKELY(zone->free_bit_slot_cache[i] == bit_slot)) {
+        if(zone->free_bit_slot_cache[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %lu in cache", zone->index, bit_slot);
         }
     }
@@ -670,10 +670,6 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 
 /* Implements the check for iso_find_zone_fit */
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
-    if(UNLIKELY(zone == NULL)) {
-        return false;
-    }
-
     if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
         return false;
     }
@@ -1315,7 +1311,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
-    if(zone == NULL) {
+    if(zone != NULL) {
+        UNMASK_ZONE_PTRS(zone);
+        iso_free_chunk_from_zone(zone, p, permanent);
+        MASK_ZONE_PTRS(zone);
+        UNLOCK_ROOT();
+    } else {
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
         UNLOCK_ROOT();
 
@@ -1325,11 +1326,6 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
         iso_free_big_zone(big_zone, permanent);
         return;
-    } else {
-        UNMASK_ZONE_PTRS(zone);
-        iso_free_chunk_from_zone(zone, p, permanent);
-        MASK_ZONE_PTRS(zone);
-        UNLOCK_ROOT();
     }
 }
 
