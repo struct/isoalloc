@@ -37,7 +37,7 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base) {
     return ptr;
 }
 
-INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...) {
+INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
     if(f == NULL) {
         return;
     }
@@ -47,14 +47,15 @@ INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...) {
     char *s;
     va_list arg;
     va_start(arg, f);
-    char _out[65535];
-    char *p = _out;
-    memset(_out, 0x0, sizeof(_out));
+    char out[65535];
+    char *p = out;
+    memset(out, 0x0, sizeof(out));
 
     for(const char *idx = f; *idx != '\0'; idx++) {
-        if(p >= (char *) (_out + sizeof(_out))) {
+        if(p >= (char *) (out + sizeof(out))) {
             break;
         }
+
         while(*idx != '%' && *idx != '\0') {
             *p = *idx;
             p++;
@@ -67,7 +68,6 @@ INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...) {
         }
 
         idx++;
-        p++;
 
         if(*idx == '\0') {
             break;
@@ -120,7 +120,6 @@ INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...) {
         }
     }
 
-    write(STDOUT_FILENO, _out, sizeof(_out));
-    fflush(stdout);
+    write(fd, out, strlen(out));
     va_end(arg);
 }

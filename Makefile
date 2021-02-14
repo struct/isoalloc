@@ -55,16 +55,22 @@ UNIT_TESTING = -DUNIT_TESTING=1
 ## Enable the malloc/free and new/delete hooks
 MALLOC_HOOK = -DMALLOC_HOOK=1
 
-HOOKS = $(MALLOC_HOOK)
+## Enable the built-in heap profiler. When this is enabled
+## IsoAlloc will write a file to disk upon exit of the
+## program. This file encodes the heap usage patterns of
+## the target. This file can be consumed by the profiler
+## CLI utility. See PROFILER.md for the format of this file
+HEAP_PROFILER = -DHEAP_PROFILER=0
 
 ## These control log, memory leak, and memory usage code
 ## In a release build you probably want them all to be 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
+HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer -rdynamic
@@ -195,5 +201,5 @@ format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
-	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core*
+	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core* profiler.data
 	mkdir -p build/

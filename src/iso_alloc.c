@@ -340,6 +340,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
+    _initialize_profiler();
 }
 
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
@@ -402,6 +403,33 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
+
+#if HEAP_PROFILER
+    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _allocation_count);
+    _iso_alloc_printf(profiler_fd, "sampled=%d,%d\n", _sampled_count, (uint32_t)(_allocation_count / (_sampled_count * 100.0)));
+
+    for(uint32_t i = 0; i < _root->zones_used; i++) {
+        iso_alloc_zone *zone = &_root->zones[i];
+
+        if(zone == NULL) {
+            break;
+        }
+
+        _zone_profiler_map[zone->chunk_size].total++;
+    }
+
+    for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
+        if(_zone_profiler_map[i].count != 0) {
+            _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
+        }
+    }
+
+    if(profiler_fd != ERR) {
+        close(profiler_fd);
+        profiler_fd = ERR;
+    }
+#endif
+
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
     uint64_t mb = 0;
 
@@ -412,7 +440,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
             break;
         }
 
-        _iso_alloc_zone_leak_detector(zone);
+        _iso_alloc_zone_leak_detector(zone, false);
     }
 
     mb = _iso_alloc_mem_usage();
@@ -882,6 +910,10 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+#if HEAP_PROFILER
+    _iso_alloc_profile();
+#endif
+
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
@@ -933,9 +965,25 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
     bit_slot_t free_bit_slot = BAD_BIT_SLOT;
 
-    /* Extra Slow Path: We need a new zone in order
-     * to satisfy this allocation request */
-    if(UNLIKELY(zone == NULL)) {
+    if(LIKELY(zone != NULL)) {
+        /* We only need to check if the zone is usable
+         * if we didn't choose the zone ourselves. If
+         * we chose this zone then its guaranteed to
+         * already be usable */
+        if(zone->internally_managed == false) {
+            zone = is_zone_usable(zone, size);
+
+            if(zone == NULL) {
+                UNLOCK_ROOT();
+                return NULL;
+            }
+        }
+
+        free_bit_slot = zone->next_free_bit_slot;
+    } else {
+        /* Extra Slow Path: We need a new zone in order
+         * to satisfy this allocation request */
+
         /* The size requested is above default zone sizes
          * but we can still create it. iso_new_zone will
          * align the requested size for us */
@@ -959,21 +1007,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
             LOG_AND_ABORT("Allocated a new zone with no free bit slots");
         }
-    } else {
-        /* We only need to check if the zone is usable
-         * if we didn't choose the zone ourselves. If
-         * we chose this zone then its guaranteed to
-         * already be usable */
-        if(zone->internally_managed == false) {
-            zone = is_zone_usable(zone, size);
-
-            if(zone == NULL) {
-                UNLOCK_ROOT();
-                return NULL;
-            }
-        }
-
-        free_bit_slot = zone->next_free_bit_slot;
     }
 
     if(free_bit_slot == BAD_BIT_SLOT) {

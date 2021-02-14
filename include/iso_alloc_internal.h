@@ -35,6 +35,10 @@
 #include <stdatomic.h>
 #endif
 
+#if HEAP_PROFILER
+#include <fcntl.h>
+#endif
+
 #ifndef MADV_DONTNEED
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
 #endif
@@ -111,16 +115,14 @@
 #endif
 
 #if DEBUG
-#define LOG(msg, ...)                                                                                                \
-    _iso_alloc_printf("[LOG][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-    fflush(stdout);
+#define LOG(msg, ...) \
+    _iso_alloc_printf(STDOUT_FILENO, "[LOG][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);
 #else
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                                                           \
-    _iso_alloc_printf("[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
-    fflush(stdout);                                                                                                       \
+#define LOG_AND_ABORT(msg, ...)                                                                                                          \
+    _iso_alloc_printf(STDOUT_FILENO, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
     abort();
 
 /* The number of bits in the bitmap that correspond
@@ -196,18 +198,17 @@
 #if THREAD_SUPPORT
 #define LOCK_ROOT() \
     do {            \
-    } while(atomic_flag_test_and_set(&root_busy));
+    } while(atomic_flag_test_and_set(&root_busy_flag));
 
 #define UNLOCK_ROOT() \
-    atomic_flag_clear(&root_busy);
+    atomic_flag_clear(&root_busy_flag);
 
 #define LOCK_BIG_ZONE() \
     do {                \
-    } while(atomic_flag_test_and_set(&big_zone_busy));
+    } while(atomic_flag_test_and_set(&big_zone_busy_flag));
 
 #define UNLOCK_BIG_ZONE() \
-    atomic_flag_clear(&big_zone_busy);
-
+    atomic_flag_clear(&big_zone_busy_flag);
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()
@@ -226,7 +227,11 @@
  * this allocates 4489216 bytes (~4.4 MB) */
 #define MAX_ZONES 4096
 
-/* Each user allocation zone we make is 8mb in size */
+/* Each user allocation zone we make is 8mb in size.
+ * With MAX_ZONES at 4096 this means we top out at
+ * about 32 gb of heap. We don't allocate that many
+ * zones by default but its the maximum we could in
+ * any one process runtime */
 #define ZONE_USER_SIZE 8388608
 
 /* This is the largest divisor of ZONE_USER_SIZE we can
@@ -407,8 +412,24 @@ typedef struct {
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 #if THREAD_SUPPORT
-static atomic_flag root_busy;
-static atomic_flag big_zone_busy;
+static atomic_flag root_busy_flag;
+static atomic_flag big_zone_busy_flag;
+#endif
+
+#if HEAP_PROFILER
+#define PROFILER_ODDS 10000
+#define CHUNK_USAGE_THRESHOLD 75
+
+uint64_t _allocation_count;
+uint64_t _sampled_count;
+
+int32_t profiler_fd;
+typedef struct {
+    int32_t total;
+    int32_t count;
+} zone_profiler_map_t;
+
+zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
 #endif
 
 /* The global root */
@@ -422,7 +443,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
-INTERNAL_HIDDEN INLINE void flush_thread_zone_cache();
+INTERNAL_HIDDEN INLINE void flush_thread_zone_cache(void);
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
@@ -452,7 +473,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n);
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, bool profile);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
@@ -460,8 +481,10 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
-INTERNAL_HIDDEN void _iso_alloc_printf(const char *f, ...);
+INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
+INTERNAL_HIDDEN void _initialize_profiler(void);
+INTERNAL_HIDDEN void _iso_alloc_profile(void);
 
 #if UNIT_TESTING
-EXTERNAL_API iso_alloc_root *_get_root();
+EXTERNAL_API iso_alloc_root *_get_root(void);
 #endif
