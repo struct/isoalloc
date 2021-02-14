@@ -1,5 +1,5 @@
 /* iso_alloc.c - A secure memory allocator
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
 
@@ -385,6 +385,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         POISON_ZONE(zone);
         MASK_ZONE_PTRS(zone);
 #endif
+        /* If we are destroying the zone lets give the memory
+         * back to the OS. It will still be available if we
+         * try to use it */
+        madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
+        madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
         UNLOCK_ROOT();
         return;
     } else {
@@ -925,13 +930,14 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
      * handled by the 'big allocation' path. If a zone was
      * passed in we abort because its a misuse of the API */
     if(UNLIKELY(size > SMALL_SZ_MAX)) {
+        /* It's safe to unlock the root at this point because
+         * the big zone allocation path uses a different lock */
+        UNLOCK_ROOT();
+
         if(zone != NULL) {
             LOG_AND_ABORT("Allocations of >= %d cannot use custom zones", SMALL_SZ_MAX);
         }
 
-        /* It's safe to unlock the root at this point because
-         * the big zone allocation path uses a different lock */
-        UNLOCK_ROOT();
         return _iso_big_alloc(size);
     }
 
