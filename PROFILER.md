@@ -29,7 +29,7 @@ sampled=42796,1
 16384,63,30208
 ```
 
-The 'Zone data' shown above is a simple CSV format that is displaying the size of chunks, the number of zones holding chunks of that size, and the number of times the zone was more than `CHUNK_USAGE_THRESHOLD` % (currently 75%) full when being sampled.
+The 'Zone data' shown above is a simple CSV format that is displaying the size of chunks, the number of zones holding chunks of that size, and the number of times the zone was more than `CHUNK_USAGE_THRESHOLD` % (currently 75%) full when being sampled. In the example above this program was making a high number of 16384, and 4096 byte allocations.
 
 ## Profiler Tool
 
