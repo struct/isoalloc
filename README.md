@@ -33,7 +33,7 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * The free bit slot cache is 255 entries, it helps speed up allocations
 * All allocations >262144 bytes live in specially handled big zones which have no size limitations
 
-There is experimental support for Address Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN` compiler flags in the `Makefile`.
+There is support for Address Sanitizer, Memory Sanitizer, and Undefined Behavior Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN`, `ENABLE_MSAN`, or `ENABLE_UBSAN` flags in the `Makefile`. Like any other usage of Address Sanitizer these are mutually exclusive. IsoAlloc will use Address Sanitizer macros to poison and unpoison user chunks appropriately. IsoAlloc still catches a number of issues Address Sanitizer does not including double/unaligned/wild free's.
 
 See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 
