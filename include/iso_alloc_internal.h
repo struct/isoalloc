@@ -35,6 +35,10 @@
 #include <stdatomic.h>
 #endif
 
+#if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
+#include <sched.h>
+#endif
+
 #if HEAP_PROFILER
 #include <fcntl.h>
 #endif
@@ -361,6 +365,9 @@ typedef struct {
     bool internally_managed;    /* Zones can be managed by iso_alloc or custom */
     bool is_full;               /* Indicates whether this zone is full to avoid expensive free bit slot searches */
     uint16_t index;             /* Zone index */
+#if CPU_PIN
+    uint8_t cpu_core; /* What CPU core this zone is pinned to */
+#endif
     /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
     uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
     uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */

@@ -593,6 +593,10 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     /* Prime the next_free_bit_slot member */
     get_next_free_bit_slot(new_zone);
 
+#if CPU_PIN
+    new_zone->cpu_core = sched_getcpu();
+#endif
+
     POISON_ZONE(new_zone);
     MASK_ZONE_PTRS(new_zone);
 
@@ -703,6 +707,12 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 
 /* Implements the check for iso_find_zone_fit */
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
+#if CPU_PIN
+    if(zone->cpu_core != sched_getcpu()) {
+        return false;
+    }
+#endif
+
     if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
         return false;
     }

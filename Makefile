@@ -62,15 +62,32 @@ MALLOC_HOOK = -DMALLOC_HOOK=1
 ## CLI utility. See PROFILER.md for the format of this file
 HEAP_PROFILER = -DHEAP_PROFILER=0
 
+## Enable CPU pinning support on a per-zone basis. This is
+## a minor security feature which introduces an allocation
+## isolation property that is defined by CPU core. See the
+## README for more detailed information. (Linux only)
+CPU_PIN = -DCPU_PIN=1
+
 ## These control log, memory leak, and memory usage code
 ## In a release build you probably want them all to be 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
+
+UNAME := $(shell uname)
+ifeq ($(UNAME), Darwin)
+OS_FLAGS = -framework Security
+CPU_PIN = ""
+endif
+
+ifeq ($(UNAME), Linux)
+STRIP = strip -s $(BUILD_DIR)/libisoalloc.so
+endif
 
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden -std=c11 $(SANITIZER_SUPPORT)
+CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
+	-std=c11 $(SANITIZER_SUPPORT) $(CPU_PIN)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer -rdynamic
@@ -82,15 +99,6 @@ CXX_SRCS = $(SRC_DIR)/*.cpp
 ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
 LDFLAGS = -L$(BUILD_DIR) -lisoalloc
-
-UNAME := $(shell uname)
-ifeq ($(UNAME), Darwin)
-OS_FLAGS = -framework Security
-endif
-
-ifeq ($(UNAME), Linux)
-STRIP = strip -s $(BUILD_DIR)/libisoalloc.so
-endif
 
 all: library tests
 
