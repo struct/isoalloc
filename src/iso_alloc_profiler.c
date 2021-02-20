@@ -217,13 +217,3 @@ INTERNAL_HIDDEN void _initialize_profiler() {
 #endif
     return;
 }
-
-#ifdef PROFILER_CLI
-int main(int argc, char *argv[]) {
-
-    // 1) open the profiler output
-    // 2) generate a iso_alloc_conf.h
-
-    return 0;
-}
-#endif
