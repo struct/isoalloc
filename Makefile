@@ -66,7 +66,7 @@ HEAP_PROFILER = -DHEAP_PROFILER=0
 ## a minor security feature which introduces an allocation
 ## isolation property that is defined by CPU core. See the
 ## README for more detailed information. (Linux only)
-CPU_PIN = -DCPU_PIN=1
+CPU_PIN = -DCPU_PIN=0
 
 ## These control log, memory leak, and memory usage code
 ## In a release build you probably want them all to be 0
