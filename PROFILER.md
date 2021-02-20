@@ -6,7 +6,9 @@ The heap profiler is designed to sample heap allocations over time across your w
 
 ## Profiler Tuning
 
-Currently theres only one way to tune the profiler and thats by changing `PROFILER_ODDS` or `CHUNK_USAGE_THRESHOLD`. These control the rate at which we sample allocations and the % a zone must be full before being recorded as such.
+You can control the file profiler data is written to with the `ISO_ALLOC_PROFILER_FILE_PATH` environment variable. The default path is `$CWD/iso_alloc_profiler.data`.
+
+Currently theres only one way to tune the profiler internals and thats by changing `PROFILER_ODDS` or `CHUNK_USAGE_THRESHOLD`. These control the rate at which we sample allocations and the % a zone must be full before being recorded as such.
 
 ## Profiler Output Format
 

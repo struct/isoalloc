@@ -208,8 +208,11 @@ INTERNAL_HIDDEN void _initialize_profiler() {
     /* We don't need thread safety for this file descriptor
      * as long as we guarantee to never use it if the root
      * is not locked */
-    // TODO make this env var or hardcoded file string
-    profiler_fd = open("profiler.data", O_RDWR | O_CREAT, 0666);
+    if(getenv(PROFILER_ENV_STR) != NULL) {
+        profiler_fd = open(getenv(PROFILER_ENV_STR), O_RDWR | O_CREAT, 0666);
+    } else {
+        profiler_fd = open(PROFILER_FILE_PATH, O_RDWR | O_CREAT, 0666);
+    }
 
     if(profiler_fd == ERR) {
         LOG_AND_ABORT("Cannot open file descriptor for profiler.data");

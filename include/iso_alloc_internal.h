@@ -426,6 +426,8 @@ static atomic_flag big_zone_busy_flag;
 #if HEAP_PROFILER
 #define PROFILER_ODDS 10000
 #define CHUNK_USAGE_THRESHOLD 75
+#define PROFILER_ENV_STR "ISO_ALLOC_PROFILER_FILE_PATH"
+#define PROFILER_FILE_PATH "iso_alloc_profiler.data"
 
 uint64_t _allocation_count;
 uint64_t _sampled_count;
