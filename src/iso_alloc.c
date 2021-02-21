@@ -1086,6 +1086,26 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
     return NULL;
 }
 
+INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
+    iso_alloc_zone *zone = NULL;
+    int32_t zones_used = _root->zones_used;
+
+    for(int32_t i = 0; i < zones_used; i++) {
+        zone = &_root->zones[i];
+
+        UNMASK_ZONE_PTRS(zone);
+
+        if(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p) {
+            MASK_ZONE_PTRS(zone);
+            return zone;
+        }
+
+        MASK_ZONE_PTRS(zone);
+    }
+
+    return NULL;
+}
+
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
     int32_t zones_used = _root->zones_used;

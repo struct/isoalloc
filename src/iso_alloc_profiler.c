@@ -125,8 +125,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
-    uint64_t mem_usage = 0;
     LOCK_ROOT();
+    uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
     LOG("Zone[%d] holds %d byte chunks. Total bytes (%lu), megabytes (%lu)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));

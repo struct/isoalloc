@@ -197,3 +197,9 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     verify_zone(zone);
     return;
 }
+
+#if EXPERIMENTAL
+EXTERNAL_API void iso_alloc_search_stack(void *p) {
+    _iso_alloc_search_stack(p);
+}
+#endif

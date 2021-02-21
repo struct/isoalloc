@@ -12,10 +12,12 @@
 
 #if __linux__
 #include <byteswap.h>
+#define ENVIRON environ
 #elif __APPLE__
 #include <libkern/OSByteOrder.h>
 #define bswap_32(x) OSSwapInt32(x)
 #define bswap_64(x) OSSwapInt64(x)
+#define ENVIRON NULL
 #endif
 
 #include <errno.h>
@@ -458,6 +460,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal);
+INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
@@ -493,6 +496,10 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 INTERNAL_HIDDEN void _initialize_profiler(void);
 INTERNAL_HIDDEN void _iso_alloc_profile(void);
+
+#if EXPERIMENTAL
+INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
+#endif
 
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root(void);
