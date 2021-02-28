@@ -5,13 +5,11 @@
 #include "iso_alloc_internal.h"
 
 EXTERNAL_API void *iso_alloc(size_t size) {
-    void *p = _iso_alloc(NULL, size);
-    return p;
+    return _iso_alloc(NULL, size);
 }
 
 EXTERNAL_API void *iso_calloc(size_t nmemb, size_t size) {
-    void *p = _iso_calloc(nmemb, size);
-    return p;
+    return _iso_calloc(nmemb, size);
 }
 
 EXTERNAL_API void iso_free(void *p) {
@@ -25,8 +23,7 @@ EXTERNAL_API void iso_free_permanently(void *p) {
 }
 
 EXTERNAL_API size_t iso_chunksz(void *p) {
-    size_t s = _iso_chunk_size(p);
-    return s;
+    return _iso_chunk_size(p);
 }
 
 EXTERNAL_API void *iso_realloc(void *p, size_t size) {
@@ -122,8 +119,7 @@ EXTERNAL_API iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *z
     }
 
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
-    void *p = _iso_alloc(zone, size);
-    return p;
+    return _iso_alloc(zone, size);
 }
 
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
@@ -157,13 +153,11 @@ EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    uint64_t r = _iso_alloc_detect_leaks_in_zone(zone);
-    return r;
+    return _iso_alloc_detect_leaks_in_zone(zone);
 }
 
 EXTERNAL_API uint64_t iso_alloc_detect_leaks() {
-    uint64_t r = _iso_alloc_detect_leaks();
-    return r;
+    return _iso_alloc_detect_leaks();
 }
 
 EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
@@ -173,13 +167,11 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
         zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     }
 
-    uint64_t r = _iso_alloc_zone_mem_usage(zone);
-    return r;
+    return _iso_alloc_zone_mem_usage(zone);
 }
 
 EXTERNAL_API uint64_t iso_alloc_mem_usage() {
-    uint64_t r = _iso_alloc_mem_usage();
-    return r;
+    return _iso_alloc_mem_usage();
 }
 
 EXTERNAL_API void iso_verify_zones() {

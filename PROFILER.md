@@ -18,20 +18,32 @@ The profiler outputs a file (example below) that contains information about the 
 
 ```
 # Total allocations
-allocated=5766464
-# Sample allocations, % of total allocations sampled
-sampled=42796,1
+allocated=5766465
+
+# Sample allocations
+sampled=606
+
+# Sampling of callers
+backtrace_hash=0x13bb,calls=157
+backtrace_hash=0x2408,calls=149
+backtrace_hash=0xb2a3,calls=14
+backtrace_hash=0xb2f0,calls=138
+backtrace_hash=0xb470,calls=11
+backtrace_hash=0xb4a3,calls=137
+
 # Zone data
-64,1,122
-128,1,482
-256,1,524
-512,1,545
-1024,1,564
-2048,1,572
-4096,14,6811
-8192,1,573
-16384,63,30208
+64,1,128
+128,1,514
+256,1,558
+512,1,582
+1024,1,592
+2048,1,599
+4096,14,7217
+8192,1,606
+16384,63,31755
 ```
+
+The profiler will collect backtraces in order to produce a report about callers into IsoAlloc. This data is helpful for understanding memory allocation patterns in a program.
 
 The 'Zone data' shown above is a simple CSV format that is displaying the size of chunks, the number of zones holding chunks of that size, and the number of times the zone was more than `CHUNK_USAGE_THRESHOLD` % (currently 75%) full when being sampled. In the example above this program was making a high number of 16384, and 4096 byte allocations.
 

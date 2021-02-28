@@ -160,6 +160,8 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
 INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames) {
     uint64_t hash = 0;
 
+    hash ^= (uint64_t) __builtin_return_address(0);
+
     if(frames >= 1) {
         hash ^= (uint64_t) __builtin_return_address(1);
     }
