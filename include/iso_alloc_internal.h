@@ -52,14 +52,20 @@
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 
-#define POISON_ZONE(zone)                                                  \
-    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) == 0) {   \
-        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE); \
+#define POISON_ZONE(zone)                                                     \
+    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) == 0) {      \
+        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE);    \
+    }                                                                         \
+    if(IS_POISONED_RANGE(zone->bitmap_start, zone->bitmap_size) == 0) {       \
+        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, zone->bitmap_size); \
     }
 
 #define UNPOISON_ZONE(zone)                                                  \
     if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) != 0) {     \
         ASAN_UNPOISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE); \
+    }                                                                        \
+    if(IS_POISONED_RANGE(zone->bitmap_start, zone->bitmap_size) != 0) {      \
+        ASAN_UNPOISON_MEMORY_REGION(zone->bitmap_start, zone->bitmap_size);  \
     }
 
 #define POISON_ZONE_CHUNK(zone, ptr)                      \
@@ -201,27 +207,6 @@
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
     ((iso_alloc_big_zone *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
 
-#if THREAD_SUPPORT
-#define LOCK_ROOT() \
-    do {            \
-    } while(atomic_flag_test_and_set(&root_busy_flag));
-
-#define UNLOCK_ROOT() \
-    atomic_flag_clear(&root_busy_flag);
-
-#define LOCK_BIG_ZONE() \
-    do {                \
-    } while(atomic_flag_test_and_set(&big_zone_busy_flag));
-
-#define UNLOCK_BIG_ZONE() \
-    atomic_flag_clear(&big_zone_busy_flag);
-#else
-#define LOCK_ROOT()
-#define UNLOCK_ROOT()
-#define LOCK_BIG_ZONE()
-#define UNLOCK_BIG_ZONE()
-#endif
-
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
 
@@ -289,6 +274,30 @@
 /* Calculate the user pointer given a zone and a bit slot */
 #define POINTER_FROM_BITSLOT(zone, bit_slot) \
     ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
+
+#if THREAD_SUPPORT
+atomic_flag root_busy_flag;
+atomic_flag big_zone_busy_flag;
+
+#define LOCK_ROOT() \
+    do {            \
+    } while(atomic_flag_test_and_set(&root_busy_flag));
+
+#define UNLOCK_ROOT() \
+    atomic_flag_clear(&root_busy_flag);
+
+#define LOCK_BIG_ZONE() \
+    do {                \
+    } while(atomic_flag_test_and_set(&big_zone_busy_flag));
+
+#define UNLOCK_BIG_ZONE() \
+    atomic_flag_clear(&big_zone_busy_flag);
+#else
+#define LOCK_ROOT()
+#define UNLOCK_ROOT()
+#define LOCK_BIG_ZONE()
+#define UNLOCK_BIG_ZONE()
+#endif
 
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
@@ -420,24 +429,23 @@ typedef struct {
     iso_alloc_zone zones[MAX_ZONES];
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
-#if THREAD_SUPPORT
-static atomic_flag root_busy_flag;
-static atomic_flag big_zone_busy_flag;
-#endif
-
 #if HEAP_PROFILER
 #define PROFILER_ODDS 10000
+#define HG_SIZE 65535
 #define CHUNK_USAGE_THRESHOLD 75
 #define PROFILER_ENV_STR "ISO_ALLOC_PROFILER_FILE_PATH"
 #define PROFILER_FILE_PATH "iso_alloc_profiler.data"
+#define PROFILER_STACK_DEPTH 3
 
 uint64_t _allocation_count;
 uint64_t _sampled_count;
 
 int32_t profiler_fd;
+uint32_t caller_hg[HG_SIZE];
+
 typedef struct {
-    int32_t total;
-    int32_t count;
+    uint64_t total;
+    uint64_t count;
 } zone_profiler_map_t;
 
 zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
@@ -453,6 +461,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
+INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache(void);
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
@@ -480,6 +489,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
+INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
@@ -489,7 +499,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
+INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage();
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage();
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
+INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);

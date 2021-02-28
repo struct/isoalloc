@@ -4,6 +4,8 @@ Different workloads can affect the performance of IsoAlloc. For example, if your
 
 The heap profiler is designed to sample heap allocations over time across your workload. This profiler emits a machine readable file throughout the lifetime of the sampled target. These files are then passed to the profiler tool where they are merged. After merging the profiler tool will emit a C header file `iso_alloc_target_config.h`. This tooling is still under development.
 
+In order to get the most out of the profiler it is recommended to compile all of your code with `-fno-omit-frame-pointer`. Without this flag IsoAlloc can't properly collect backtrace information and may even be unstable.
+
 ## Profiler Tuning
 
 You can control the file profiler data is written to with the `ISO_ALLOC_PROFILER_FILE_PATH` environment variable. The default path is `$CWD/iso_alloc_profiler.data`.

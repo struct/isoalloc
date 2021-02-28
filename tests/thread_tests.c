@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     pthread_create(&tt, NULL, allocate, NULL);
     pthread_join(tt, NULL);
     pthread_exit(NULL);
-
+    iso_alloc_detect_leaks();
     iso_verify_zones();
 #endif
 

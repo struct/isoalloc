@@ -90,7 +90,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
 
-        if(zone == NULL || zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
+        if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
             break;
         }
 
@@ -351,26 +351,38 @@ INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
 #endif
 }
 
+INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
+    munmap(zone->bitmap_start, zone->bitmap_size);
+    munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
+    munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
+    munmap(zone->user_pages_start, ZONE_USER_SIZE);
+    munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
+    munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
+}
+
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     LOCK_ROOT();
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
 
     if(zone->internally_managed == false) {
-#if FUZZ_MODE || NEVER_REUSE_ZONES
-        /* If this zone was a custom zone then we don't want
-         * to reuse any of its backing pages. Mark them unusable
-         * and ensure any future accesses result in a segfault */
-        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
-        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
-        memset(zone, 0x0, sizeof(iso_alloc_zone));
+#if NEVER_REUSE_ZONES || FUZZ_MODE
+        _unmap_zone(zone);
+        zone->user_pages_start = NULL;
+        zone->bitmap_start = NULL;
+
         /* Mark the zone as full so no attempts are made to use it */
         zone->is_full = true;
         flush_thread_zone_cache();
 #else
+        /* This zone can be used again, we just need to wipe
+         * any sensitive data from it and prime it for use */
         memset(zone->bitmap_start, 0x0, zone->bitmap_size);
         memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
+
+        /* Take over the zone to be used internally */
         zone->internally_managed = true;
+        zone->is_full = false;
 
         /* Reusing custom zones has the potential for introducing
          * zone-use-after-free patterns. So we bootstrap the zone
@@ -382,7 +394,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         /* Prime the next_free_bit_slot member */
         get_next_free_bit_slot(zone);
 
-        POISON_ZONE(zone);
         MASK_ZONE_PTRS(zone);
 #endif
         /* If we are destroying the zone lets give the memory
@@ -390,17 +401,13 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
          * try to use it */
         madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
+        POISON_ZONE(zone);
         UNLOCK_ROOT();
         return;
     } else {
         /* The only time we ever destroy a default non-custom zone
          * is from the destructor so its safe unmap pages */
-        munmap(zone->bitmap_start, zone->bitmap_size);
-        munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
-        munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
-        munmap(zone->user_pages_start, ZONE_USER_SIZE);
-        munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
-        munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
+        _unmap_zone(zone);
         flush_thread_zone_cache();
         UNLOCK_ROOT();
     }
@@ -411,16 +418,17 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 
 #if HEAP_PROFILER
     _iso_alloc_printf(profiler_fd, "allocated=%d\n", _allocation_count);
-    _iso_alloc_printf(profiler_fd, "sampled=%d,%d\n", _sampled_count, (uint32_t)(_allocation_count / (_sampled_count * 100.0)));
+    _iso_alloc_printf(profiler_fd, "sampled=%d\n", _sampled_count);
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
-
-        if(zone == NULL) {
-            break;
-        }
-
         _zone_profiler_map[zone->chunk_size].total++;
+    }
+
+    for(uint32_t i = 0; i < HG_SIZE; i++) {
+        if(caller_hg[i] != 0) {
+            _iso_alloc_printf(profiler_fd, "backtrace_hash=0x%x,calls=%d\n", i, caller_hg[i]);
+        }
     }
 
     for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
@@ -440,15 +448,10 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
-
-        if(zone == NULL) {
-            break;
-        }
-
         _iso_alloc_zone_leak_detector(zone, false);
     }
 
-    mb = _iso_alloc_mem_usage();
+    mb = __iso_alloc_mem_usage();
 
 #if MEM_USAGE
     LOG("Total megabytes consumed by all zones: %lu", mb);
@@ -464,11 +467,6 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
      * exiting anyway. */
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
-
-        if(zone == NULL) {
-            break;
-        }
-
         _verify_zone(zone);
 #ifndef MALLOC_HOOK
         _iso_alloc_destroy_zone(zone);
@@ -649,10 +647,6 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
-    if(zone->next_free_bit_slot != BAD_BIT_SLOT) {
-        return zone;
-    }
-
     /* This zone may fit this chunk but if the zone was
      * created for chunks more than N* larger than the
      * requested allocation size then we would be wasting
@@ -662,6 +656,10 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * chunks smaller than ZONE_1024 */
     if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
+    }
+
+    if(zone->next_free_bit_slot != BAD_BIT_SLOT) {
+        return zone;
     }
 
     UNMASK_ZONE_PTRS(zone);
@@ -925,11 +923,10 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+    LOCK_ROOT();
 #if HEAP_PROFILER
     _iso_alloc_profile();
 #endif
-
-    LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
         g_page_size = sysconf(_SC_PAGESIZE);
@@ -956,30 +953,32 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #endif
 
 #if THREAD_SUPPORT && THREAD_ZONE_CACHE
-    /* Hot Path: Check the thread cache for a zone this
-     * thread recently used for an alloc/free operation.
-     * It's likely we are allocating a similar size chunk
-     * and this will speed up that operation */
-    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-        if(thread_zone_cache[i].chunk_size >= size) {
-            bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
+    if(LIKELY(zone == NULL)) {
+        /* Hot Path: Check the thread cache for a zone this
+         * thread recently used for an alloc/free operation.
+         * It's likely we are allocating a similar size chunk
+         * and this will speed up that operation */
+        for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+            if(thread_zone_cache[i].chunk_size >= size) {
+                bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
 
-            if(fit == true) {
-                zone = thread_zone_cache[i].zone;
-                break;
+                if(fit == true) {
+                    zone = thread_zone_cache[i].zone;
+                    break;
+                }
             }
         }
     }
 #endif
 
+    bit_slot_t free_bit_slot = BAD_BIT_SLOT;
+
     /* Slow Path: This will iterate through all zones
      * looking for a suitable one, this includes the
      * zones we cached above */
-    if(zone == NULL) {
+    if(LIKELY(zone == NULL)) {
         zone = iso_find_zone_fit(size);
     }
-
-    bit_slot_t free_bit_slot = BAD_BIT_SLOT;
 
     if(LIKELY(zone != NULL)) {
         /* We only need to check if the zone is usable
@@ -1031,6 +1030,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     }
 
     UNMASK_ZONE_PTRS(zone);
+
     zone->next_free_bit_slot = BAD_BIT_SLOT;
     void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
     MASK_ZONE_PTRS(zone);
@@ -1088,9 +1088,8 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     iso_alloc_zone *zone = NULL;
-    int32_t zones_used = _root->zones_used;
 
-    for(int32_t i = 0; i < zones_used; i++) {
+    for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         UNMASK_ZONE_PTRS(zone);
@@ -1108,9 +1107,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
-    int32_t zones_used = _root->zones_used;
 
-    for(int32_t i = 0; i < zones_used; i++) {
+    for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
         UNMASK_ZONE_PTRS(zone);
@@ -1433,6 +1431,35 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     UNLOCK_ROOT();
     return zone->chunk_size;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone) {
+    LOCK_ROOT();
+    uint64_t leaks = _iso_alloc_zone_leak_detector(zone, false);
+    UNLOCK_ROOT();
+    return leaks;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
+    LOCK_ROOT();
+    uint64_t mem_usage = __iso_alloc_mem_usage();
+    mem_usage += _iso_alloc_big_zone_mem_usage();
+    UNLOCK_ROOT();
+    return mem_usage;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage() {
+    LOCK_BIG_ZONE();
+    uint64_t mem_usage = __iso_alloc_big_zone_mem_usage();
+    UNLOCK_BIG_ZONE();
+    return mem_usage;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
+    LOCK_ROOT();
+    uint64_t zone_mem_usage = __iso_alloc_zone_mem_usage(zone);
+    UNLOCK_ROOT();
+    return zone_mem_usage;
 }
 
 #if UNIT_TESTING

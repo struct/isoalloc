@@ -11,11 +11,6 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
-
-        if(zone == NULL) {
-            break;
-        }
-
         total_leaks += _iso_alloc_zone_leak_detector(zone, false);
     }
 
@@ -47,12 +42,6 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     return total_leaks + big_leaks;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone) {
-    LOCK_ROOT();
-    return _iso_alloc_zone_leak_detector(zone, false);
-    UNLOCK_ROOT();
-}
-
 /* This is the built-in leak detector. It works by scanning
  * the bitmap for every allocated zone and looking for
  * uncleared bits. This does not search for references from
@@ -69,7 +58,6 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
     UNMASK_ZONE_PTRS(zone);
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bit_slot_t bit_slot;
     int64_t was_used = 0;
 
     for(int64_t i = 0; i < zone->bitmap_size / sizeof(bitmap_index_t); i++) {
@@ -88,7 +76,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
                  * to accurately report on leaks we need to verify the
                  * canary value. If it doesn't validate then we assume
                  * its a true leak and increment the in_use counter */
-                bit_slot = (i * BITS_PER_QWORD) + j;
+                bit_slot_t bit_slot = (i * BITS_PER_QWORD) + j;
                 void *leak = (zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
                 if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
@@ -124,18 +112,15 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
     return in_use;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
-    LOCK_ROOT();
+INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
     LOG("Zone[%d] holds %d byte chunks. Total bytes (%lu), megabytes (%lu)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
-    UNLOCK_ROOT();
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
-    LOCK_ROOT();
+INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
@@ -145,9 +130,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
         LOG("Zone[%d] holds %d byte chunks, megabytes (%d)", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE));
     }
 
-    UNLOCK_ROOT();
-    LOCK_BIG_ZONE();
+    return (mem_usage / MEGABYTE_SIZE);
+}
 
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
+    uint64_t mem_usage = 0;
     iso_alloc_big_zone *big = _root->big_zone_head;
 
     if(big != NULL) {
@@ -164,15 +151,35 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
         }
     }
 
-    UNLOCK_BIG_ZONE();
-
     LOG("Total megabytes allocated (%lu)", (mem_usage / MEGABYTE_SIZE));
 
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN void _iso_alloc_profile() {
 #if HEAP_PROFILER
+INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames) {
+    uint64_t hash = 0;
+
+    if(frames >= 1) {
+        hash ^= (uint64_t) __builtin_return_address(1);
+    }
+
+    if(frames >= 2) {
+        hash ^= (uint64_t) __builtin_return_address(2);
+    }
+
+    if(frames >= 3) {
+        hash ^= (uint64_t) __builtin_return_address(3);
+    }
+
+    if(frames >= 4) {
+        hash ^= (uint64_t) __builtin_return_address(4);
+    }
+
+    return hash;
+}
+
+INTERNAL_HIDDEN void _iso_alloc_profile() {
     _allocation_count++;
 
     /* Don't run the profiler on every allocation */
@@ -180,28 +187,35 @@ INTERNAL_HIDDEN void _iso_alloc_profile() {
         return;
     }
 
-    LOCK_ROOT();
+    _sampled_count++;
+
+    /* Set the byte in the table. This will be transformed
+     * into a histogram when we dump the data upon exit */
+    caller_hg[(_get_backtrace_hash(PROFILER_STACK_DEPTH) & HG_SIZE)]++;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
         uint32_t used = 0;
+        iso_alloc_zone *zone = &_root->zones[i];
 
-        if(zone == NULL) {
-            break;
+        if(zone->user_pages_start == NULL) {
+            continue;
         }
 
-        used = _iso_alloc_zone_leak_detector(zone, true);
+        /* For the purposes of the profiler we don't care about
+         * the differences between canary and leaked chunks.
+         * So lets just use the full count */
+        if(zone->is_full) {
+            used = GET_CHUNK_COUNT(zone);
+        } else {
+            used = _iso_alloc_zone_leak_detector(zone, true);
+        }
 
         if(used > CHUNK_USAGE_THRESHOLD) {
             _zone_profiler_map[zone->chunk_size].count++;
         }
-
-        _sampled_count++;
     }
-
-    UNLOCK_ROOT();
-#endif
 }
+#endif
 
 INTERNAL_HIDDEN void _initialize_profiler() {
 #if HEAP_PROFILER
