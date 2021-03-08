@@ -43,9 +43,9 @@ backtrace_hash=0xb4a3,calls=137
 16384,63,31755
 ```
 
-The profiler will collect backtraces in order to produce a report about callers into IsoAlloc. This data is helpful for understanding memory allocation patterns in a program.
+The profiler will collect backtraces in order to produce a report about callers into IsoAlloc. This data is helpful for understanding memory allocation patterns in a program. These hashes are not immediately usable, the profiler uses them internally to track unique call stacks. If the profiler data shows a large number of backtraces then its unlikely using just a handful of memory allocation abstractions (e.g. its frequently calling malloc/new). Due to their size (16 bits) calculated backtraces may not be entirely unique. To get the most accurate results from this feature please compile IsoAlloc and your program with the `-fno-omit-frame-pointer` option.
 
-The 'Zone data' shown above is a simple CSV format that is displaying the size of chunks, the number of zones holding chunks of that size, and the number of times the zone was more than `CHUNK_USAGE_THRESHOLD` % (currently 75%) full when being sampled. In the example above this program was making a high number of 16384, and 4096 byte allocations.
+The 'Zone data' shown above is a simple CSV format that is displaying the size of chunks, the number of zones holding chunks of that size, and the number of times the zone was more than `CHUNK_USAGE_THRESHOLD` % (default=75%) full when being sampled. In the example above this program was making a high number of 16384, and 4096 byte allocations.
 
 ## Profiler Tool
 
