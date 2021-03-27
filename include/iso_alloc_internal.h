@@ -476,6 +476,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
+INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN void create_guard_page(void *p);
