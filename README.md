@@ -35,6 +35,10 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 
 There is support for Address Sanitizer, Memory Sanitizer, and Undefined Behavior Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN`, `ENABLE_MSAN`, or `ENABLE_UBSAN` flags in the `Makefile`. Like any other usage of Address Sanitizer these are mutually exclusive. IsoAlloc will use Address Sanitizer macros to poison and unpoison user chunks appropriately. IsoAlloc still catches a number of issues Address Sanitizer does not including double/unaligned/wild free's.
 
+A feature similar to [GWP-ASAN](https://www.chromium.org/Home/chromium-security/articles/gwp-asan) can be enabled with `ALLOC_SANITY` in the Makefile. It samples calls to `iso_alloc/malloc` and allocates a page of memory surrounded by guard pages in order to detect Use-After-Free and linear heap overflows. This feature works on all supported platforms.
+
+You can also enable `UNINIT_READ_SANITY` for detecting uninitialized read vulnerabilities using the `userfaultfd` syscall. You can read more about that feature [here](https://struct.github.io/isoalloc_uninit_read.html). This feature is only available on Linux.
+
 See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 
 ## Thread Safety

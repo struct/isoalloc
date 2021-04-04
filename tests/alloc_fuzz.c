@@ -46,6 +46,7 @@ int reallocate(size_t array_size, size_t allocation_size) {
         }
 
         void *d = iso_alloc(allocation_size / 2);
+        memset(d, 0x0, allocation_size / 2);
         p[i] = iso_realloc(d, allocation_size);
 
         if(p[i] == NULL) {

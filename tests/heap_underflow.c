@@ -5,7 +5,7 @@
 #include "iso_alloc_internal.h"
 
 int main(int argc, char *argv[]) {
-    int64_t *p = (int64_t *) iso_alloc(32);
+    uint8_t *p = (uint8_t *) iso_alloc(32);
     memset(p - 50, 0x42, 32768);
     iso_verify_zones();
     iso_free(p);

@@ -19,7 +19,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone) - 1;
-    uint64_t chunk_count = (ZONE_USER_SIZE / zone->chunk_size);
+    uint64_t chunk_count = GET_CHUNK_COUNT(zone);
     bit_slot_t bit_slot;
 
     /* Roughly %1 of the chunks in this zone will become a canary */
@@ -60,6 +60,7 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     return;
 }
+
 INTERNAL_HIDDEN void _verify_all_zones(void) {
     return;
 }
@@ -213,6 +214,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
      * This is mainly used for testing that new features don't
      * introduce bugs. Its too aggressive for release builds */
     int32_t max_cache_slots = sizeof(zone->free_bit_slot_cache) >> 3;
+
     for(int32_t i = zone->free_bit_slot_cache_usable; i < max_cache_slots; i++) {
         if(zone->free_bit_slot_cache[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %lu in cache", zone->index, bit_slot);
@@ -335,12 +337,37 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zone_handle_mask = rand_uint64();
     _root->big_zone_next_mask = rand_uint64();
     _root->big_zone_canary_secret = rand_uint64();
+
+#if UNINIT_READ_SANITY
+    _uf_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+
+    if(_uf_fd == ERR) {
+        LOG_AND_ABORT("This kernel does not support userfaultfd");
+    }
+
+    _uffd_api.api = UFFD_API;
+    _uffd_api.features = 0;
+
+    if(ioctl(_uf_fd, UFFDIO_API, &_uffd_api) == ERR) {
+        LOG_AND_ABORT("Failed to setup userfaultfd with ioctl");
+    }
+#endif
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
     _initialize_profiler();
+
+#if ALLOC_SANITY && UNINIT_READ_SANITY
+    if(_page_fault_thread == 0) {
+        int32_t s = pthread_create(&_page_fault_thread, NULL, _page_fault_thread_handler, NULL);
+
+        if(s != OK) {
+            LOG_AND_ABORT("Cannot create userfaultfd handler thread");
+        }
+    }
+#endif
 }
 
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
@@ -711,6 +738,14 @@ INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
     }
 #endif
 
+    /* Don't return a zone that handles a size far larger
+     * than we need. This could lead to high memory usage
+     * depending on allocation patterns but helps enforce
+     * spatial separation based on sized */
+    if(zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
+        return false;
+    }
+
     if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
         return false;
     }
@@ -769,7 +804,13 @@ INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
 }
 
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
-    size = ROUND_UP_PAGE(size);
+    size_t new_size = ROUND_UP_PAGE(size);
+
+    if(new_size < size || new_size > BIG_SZ_MAX) {
+        LOG_AND_ABORT("Cannot allocate a big zone of %ld bytes", new_size);
+    }
+
+    size = new_size;
 
     LOCK_BIG_ZONE();
 
@@ -802,6 +843,15 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
     /* We need to setup a new set of pages */
     if(big == NULL) {
+        /* User data is allocated separately from big zone meta
+         * data to prevent an attacker from targeting it */
+        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false);
+
+        if(user_pages == NULL) {
+            UNLOCK_BIG_ZONE();
+            return NULL;
+        }
+
         void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false);
 
         /* The first page before meta data is a guard page */
@@ -828,10 +878,6 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         /* Create the guard page after the meta data */
         void *next_gp = (p + (_root->system_page_size << 1));
         create_guard_page(next_gp);
-
-        /* User data is allocated separately from big zone meta
-         * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false);
 
         /* The first page is a guard page */
         create_guard_page(user_pages);
@@ -923,7 +969,21 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+#if ALLOC_SANITY
+    /* We only sample allocations smaller than an individual
+     * page. We are unlikely to find uninitialized reads on
+     * larger size and it makes tracking them less complex */
+    if(size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+        void *ps = _iso_alloc_sample(size);
+
+        if(ps != NULL) {
+            return ps;
+        }
+    }
+#endif
+
     LOCK_ROOT();
+
 #if HEAP_PROFILER
     _iso_alloc_profile();
 #endif
@@ -1325,7 +1385,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 #if !ENABLE_ASAN && !DISABLE_CANARY
     write_canary(zone, p);
 
-    if((chunk_number + 1) != (ZONE_USER_SIZE / zone->chunk_size)) {
+    if((chunk_number + 1) != GET_CHUNK_COUNT(zone)) {
         bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
         dwords_to_bit_slot = (bit_slot_over >> BITS_PER_QWORD_SHIFT);
         which_bit = WHICH_BIT(bit_slot_over);
@@ -1370,6 +1430,14 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
+#if ALLOC_SANITY
+    int32_t r = _iso_alloc_free_sane_sample(p);
+
+    if(r == OK) {
+        return;
+    }
+#endif
+
     LOCK_ROOT();
 
 #if FUZZ_MODE
@@ -1412,6 +1480,19 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     if(p == NULL) {
         return 0;
     }
+
+#if ALLOC_SANITY
+    LOCK_SANITY_CACHE();
+    _sane_allocation_t *sane_alloc = _get_sane_alloc(p);
+
+    if(sane_alloc != NULL) {
+        size_t orig_size = sane_alloc->orig_size;
+        UNLOCK_SANITY_CACHE();
+        return orig_size;
+    }
+
+    UNLOCK_SANITY_CACHE();
+#endif
 
     LOCK_ROOT();
 

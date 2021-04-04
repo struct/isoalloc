@@ -3,4 +3,4 @@ r
 i r
 x/i $pc
 thread apply all bt
-info locals
+thread apply all info locals

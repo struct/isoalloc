@@ -73,6 +73,26 @@ MALLOC_HOOK = -DMALLOC_HOOK=1
 ## README for more detailed information. (Linux only)
 CPU_PIN = -DCPU_PIN=0
 
+## Enable the allocation sanity feature. This works a lot
+## like GWP-ASAN does. It samples calls to iso_alloc and
+## randomly swaps them out for raw page allocations that
+## are surrounded by guard pages. These pages are unmapped
+## upon free. Much like GWP-ASAN this is designed to be
+## used in production builds and should not incur too
+## much of a performance penalty
+#ALLOC_SANITY = -DALLOC_SANITY=1
+
+## Enable the userfaultfd based uninitialized read detection
+## feature. This samples calls to malloc, and allocates raw
+## pages of memory with mmap which are registered with the
+## userfaultfd subsystem. We detect uninitialized reads by
+## looking for the first read access of that page before a
+## previous call to write. Think of it as GWP-ASAN but for
+## uninitialized reads. Enabling this feature does incur a
+## performance penalty. This requires that both ALLOC_SANITY
+## and THREAD_SUPPORT are enabled. Linux only
+#UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=1
+
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
 EXPERIMENTAL = -DEXPERIMENTAL=0
@@ -96,7 +116,7 @@ OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
-	-std=c11 $(SANITIZER_SUPPORT) $(CPU_PIN) $(EXPERIMENTAL)
+	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer -rdynamic
@@ -176,6 +196,7 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/wild_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/wild_free $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
 	utils/run_tests.sh
 
 fuzz_test: clean

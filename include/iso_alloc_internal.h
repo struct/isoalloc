@@ -37,6 +37,14 @@
 #include <stdatomic.h>
 #endif
 
+#if UNINIT_READ_SANITY
+#include <fcntl.h>
+#include <linux/userfaultfd.h>
+#include <poll.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
+#endif
+
 #if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
 #include <sched.h>
 #endif
@@ -230,6 +238,9 @@
  * above this size will need to go through the big
  * mapping code path */
 #define SMALL_SZ_MAX 262144
+
+/* Cap our big zones at 4GB of memory */
+#define BIG_SZ_MAX 4294967296
 
 #define WASTED_SZ_MULTIPLIER 8
 #define WASTED_SZ_MULTIPLIER_SHIFT 3
@@ -451,6 +462,47 @@ typedef struct {
 zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
 #endif
 
+#if ALLOC_SANITY
+#define SANITY_SAMPLE_ODDS 10000
+#define MAX_SANE_SAMPLES 1024
+#define SANE_CACHE_SIZE 65535
+#define SANE_CACHE_IDX(p) (((uint64_t) p >> 8) & 0xffff)
+
+#if THREAD_SUPPORT
+atomic_flag sane_cache_flag;
+
+#define LOCK_SANITY_CACHE() \
+    do {                    \
+    } while(atomic_flag_test_and_set(&sane_cache_flag));
+
+#define UNLOCK_SANITY_CACHE() \
+    atomic_flag_clear(&sane_cache_flag);
+#else
+#define LOCK_SANITY_CACHE()
+#define UNLOCK_SANITY_CACHE()
+#endif
+
+#if UNINIT_READ_SANITY
+pthread_t _page_fault_thread;
+struct uffdio_api _uffd_api;
+int64_t _uf_fd;
+#endif
+
+int32_t _sane_sampled;
+uint8_t _sane_cache[SANE_CACHE_SIZE];
+
+typedef struct {
+    void *guard_below;
+    void *guard_above;
+    void *address;
+    size_t size;
+    size_t orig_size;
+} _sane_allocation_t;
+
+_sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+
+#endif
+
 /* The global root */
 iso_alloc_root *_root;
 
@@ -511,6 +563,16 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 INTERNAL_HIDDEN void _initialize_profiler(void);
 INTERNAL_HIDDEN void _iso_alloc_profile(void);
+
+#if ALLOC_SANITY
+#if UNINIT_READ_SANITY
+INTERNAL_HIDDEN void *_page_fault_thread_handler(void *uf_fd);
+#endif
+INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size);
+INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p);
+INTERNAL_HIDDEN int32_t _remove_from_sane_trace(void *p);
+INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p);
+#endif
 
 #if EXPERIMENTAL
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
