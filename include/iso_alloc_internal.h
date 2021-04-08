@@ -287,8 +287,8 @@
     ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
 #if THREAD_SUPPORT
-atomic_flag root_busy_flag;
-atomic_flag big_zone_busy_flag;
+extern atomic_flag root_busy_flag;
+extern atomic_flag big_zone_busy_flag;
 
 #define LOCK_ROOT() \
     do {            \
@@ -313,14 +313,14 @@ atomic_flag big_zone_busy_flag;
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
  * preferred but we need this to setup the root. */
-uint32_t g_page_size;
+extern uint32_t g_page_size;
 
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Allocations are 'first fit' up until
  * ZONE_1024 at which point a new zone is created for that
  * specific size request. You can create additional startup
  * profile by adjusting the next few lines below. */
-uint32_t _default_zone_count;
+extern uint32_t _default_zone_count;
 
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
@@ -469,7 +469,7 @@ zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
 #define SANE_CACHE_IDX(p) (((uint64_t) p >> 8) & 0xffff)
 
 #if THREAD_SUPPORT
-atomic_flag sane_cache_flag;
+extern atomic_flag sane_cache_flag;
 
 #define LOCK_SANITY_CACHE() \
     do {                    \
@@ -483,13 +483,13 @@ atomic_flag sane_cache_flag;
 #endif
 
 #if UNINIT_READ_SANITY
-pthread_t _page_fault_thread;
-struct uffdio_api _uffd_api;
-int64_t _uf_fd;
+extern pthread_t _page_fault_thread;
+extern struct uffdio_api _uffd_api;
+extern int64_t _uf_fd;
 #endif
 
-int32_t _sane_sampled;
-uint8_t _sane_cache[SANE_CACHE_SIZE];
+extern int32_t _sane_sampled;
+extern uint8_t _sane_cache[SANE_CACHE_SIZE];
 
 typedef struct {
     void *guard_below;
@@ -499,12 +499,12 @@ typedef struct {
     size_t orig_size;
 } _sane_allocation_t;
 
-_sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+extern _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
 
 #endif
 
 /* The global root */
-iso_alloc_root *_root;
+extern iso_alloc_root *_root;
 
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);

@@ -3,6 +3,32 @@
 
 #include "iso_alloc_internal.h"
 
+#if THREAD_SUPPORT
+atomic_flag root_busy_flag;
+atomic_flag big_zone_busy_flag;
+#endif
+
+uint32_t g_page_size;
+uint32_t _default_zone_count;
+iso_alloc_root *_root;
+
+
+#if ALLOC_SANITY
+#if THREAD_SUPPORT
+ atomic_flag sane_cache_flag;
+#endif
+
+#if UNINIT_READ_SANITY
+pthread_t _page_fault_thread;
+struct uffdio_api _uffd_api;
+int64_t _uf_fd;
+#endif
+
+int32_t _sane_sampled;
+uint8_t _sane_cache[SANE_CACHE_SIZE];
+_sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+#endif
+
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
