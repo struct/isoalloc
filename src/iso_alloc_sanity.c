@@ -103,7 +103,7 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 
         /* Detects a read of an uninitialized page */
         if((umsg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) == 0) {
-            LOG_AND_ABORT("Uninitialized read detected on page %p (%d byte allocation)", sane_alloc->address, sane_alloc->orig_size);
+            LOG_AND_ABORT("Uninitialized read detected on page %p", umsg.arg.pagefault.address);
         }
 
         UNLOCK_SANITY_CACHE();
