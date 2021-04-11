@@ -3,6 +3,15 @@
 
 #include "iso_alloc_internal.h"
 
+#if THREAD_SUPPORT
+atomic_flag root_busy_flag;
+atomic_flag big_zone_busy_flag;
+#endif
+
+uint32_t g_page_size;
+uint32_t _default_zone_count;
+iso_alloc_root *_root;
+
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
@@ -337,21 +346,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zone_handle_mask = rand_uint64();
     _root->big_zone_next_mask = rand_uint64();
     _root->big_zone_canary_secret = rand_uint64();
-
-#if UNINIT_READ_SANITY
-    _uf_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
-
-    if(_uf_fd == ERR) {
-        LOG_AND_ABORT("This kernel does not support userfaultfd");
-    }
-
-    _uffd_api.api = UFFD_API;
-    _uffd_api.features = 0;
-
-    if(ioctl(_uf_fd, UFFDIO_API, &_uffd_api) == ERR) {
-        LOG_AND_ABORT("Failed to setup userfaultfd with ioctl");
-    }
-#endif
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
@@ -360,13 +354,7 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     _initialize_profiler();
 
 #if ALLOC_SANITY && UNINIT_READ_SANITY
-    if(_page_fault_thread == 0) {
-        int32_t s = pthread_create(&_page_fault_thread, NULL, _page_fault_thread_handler, NULL);
-
-        if(s != OK) {
-            LOG_AND_ABORT("Cannot create userfaultfd handler thread");
-        }
-    }
+    _iso_alloc_setup_userfaultfd();
 #endif
 }
 
@@ -969,6 +957,13 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+    LOCK_ROOT();
+
+    if(UNLIKELY(_root == NULL)) {
+        g_page_size = sysconf(_SC_PAGESIZE);
+        iso_alloc_initialize_global_root();
+    }
+
 #if ALLOC_SANITY
     /* We only sample allocations smaller than an individual
      * page. We are unlikely to find uninitialized reads on
@@ -977,21 +972,15 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         void *ps = _iso_alloc_sample(size);
 
         if(ps != NULL) {
+            UNLOCK_ROOT();
             return ps;
         }
     }
 #endif
 
-    LOCK_ROOT();
-
 #if HEAP_PROFILER
     _iso_alloc_profile();
 #endif
-
-    if(UNLIKELY(_root == NULL)) {
-        g_page_size = sysconf(_SC_PAGESIZE);
-        iso_alloc_initialize_global_root();
-    }
 
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
      * handled by the 'big allocation' path. If a zone was

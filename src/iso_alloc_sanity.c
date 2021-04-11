@@ -4,7 +4,39 @@
 #include "iso_alloc_internal.h"
 
 #if ALLOC_SANITY
+atomic_flag sane_cache_flag;
+int32_t _sane_sampled;
+uint8_t _sane_cache[SANE_CACHE_SIZE];
+_sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+
 #if UNINIT_READ_SANITY
+pthread_t _page_fault_thread;
+struct uffdio_api _uffd_api;
+int64_t _uf_fd;
+
+INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd() {
+    _uf_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+
+    if(_uf_fd == ERR) {
+        LOG_AND_ABORT("This kernel does not support userfaultfd");
+    }
+
+    _uffd_api.api = UFFD_API;
+    _uffd_api.features = 0;
+
+    if(ioctl(_uf_fd, UFFDIO_API, &_uffd_api) == ERR) {
+        LOG_AND_ABORT("Failed to setup userfaultfd with ioctl");
+    }
+
+    if(_page_fault_thread == 0) {
+        int32_t s = pthread_create(&_page_fault_thread, NULL, _page_fault_thread_handler, NULL);
+
+        if(s != OK) {
+            LOG_AND_ABORT("Cannot create userfaultfd handler thread");
+        }
+    }
+}
+
 INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
     static struct uffd_msg umsg;
     ssize_t n;

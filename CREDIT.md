@@ -7,5 +7,7 @@ The following list of people have contributed to IsoAlloc through code, issues, 
 * [Max Blachman](https://github.com/struct/isoalloc/issues/3)
 * [Filippo Valsorda](https://github.com/struct/isoalloc/pull/2)
 * [Insu Yun](https://github.com/struct/isoalloc/issues/7)
+* [Jean-Michaël Celerier](https://github.com/struct/isoalloc/issues/8)
+* [theimpostor](https://github.com/struct/isoalloc/issues/10)
 
 If you belong on this list and I have forgotten you just reach out!

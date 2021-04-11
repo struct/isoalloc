@@ -1,0 +1,67 @@
+/* iso_alloc_sanity.h - A secure memory allocator
+ * Copyright 2021 - chris.rohlf@gmail.com */
+#pragma once
+
+#ifndef CPP_SUPPORT
+#define _GNU_SOURCE
+#endif
+
+#if !__x86_64__
+#pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
+#endif
+
+#if UNINIT_READ_SANITY
+#include <fcntl.h>
+#include <linux/userfaultfd.h>
+#include <poll.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
+#endif
+
+#define SANITY_SAMPLE_ODDS 10000
+#define MAX_SANE_SAMPLES 1024
+#define SANE_CACHE_SIZE 65535
+#define SANE_CACHE_IDX(p) (((uint64_t) p >> 8) & 0xffff)
+
+#if THREAD_SUPPORT
+extern atomic_flag sane_cache_flag;
+
+#define LOCK_SANITY_CACHE() \
+    do {                    \
+    } while(atomic_flag_test_and_set(&sane_cache_flag));
+
+#define UNLOCK_SANITY_CACHE() \
+    atomic_flag_clear(&sane_cache_flag);
+#else
+#define LOCK_SANITY_CACHE()
+#define UNLOCK_SANITY_CACHE()
+#endif
+
+#if UNINIT_READ_SANITY
+extern pthread_t _page_fault_thread;
+extern struct uffdio_api _uffd_api;
+extern int64_t _uf_fd;
+#endif
+
+extern int32_t _sane_sampled;
+extern uint8_t _sane_cache[SANE_CACHE_SIZE];
+
+typedef struct {
+    void *guard_below;
+    void *guard_above;
+    void *address;
+    size_t size;
+    size_t orig_size;
+} _sane_allocation_t;
+
+extern _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+
+#if UNINIT_READ_SANITY
+INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd();
+INTERNAL_HIDDEN void *_page_fault_thread_handler(void *uf_fd);
+#endif
+
+INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size);
+INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p);
+INTERNAL_HIDDEN int32_t _remove_from_sane_trace(void *p);
+INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p);

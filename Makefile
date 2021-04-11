@@ -119,7 +119,7 @@ CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
-GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer -rdynamic
+GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
 PERF_FLAGS = -pg -DPERF_TEST_BUILD=1
 LIBRARY = -fPIC -shared
 SRC_DIR = src
@@ -168,7 +168,7 @@ c_library_objects:
 ## C++ Support - Build debug object files for C code
 c_library_objects_debug:
 	@echo "make c_library_objects_debug"
-	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) -fPIC -c
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) -fPIC -c
 	mv *.o $(BUILD_DIR)
 
 ## C++ Support - Build the library with C++ support
@@ -179,7 +179,7 @@ cpp_library: clean c_library_objects
 
 cpp_library_debug: clean c_library_objects_debug
 	@echo "make cpp_library_debug"
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
 
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests

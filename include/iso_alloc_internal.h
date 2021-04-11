@@ -1,5 +1,5 @@
 /* iso_alloc_internal.h - A secure memory allocator
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 #pragma once
 
 #ifndef CPP_SUPPORT
@@ -8,6 +8,20 @@
 
 #if !__x86_64__
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
+#endif
+
+#define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
+
+#if UNIT_TESTING
+#define EXTERNAL_API __attribute__((visibility("default")))
+#endif
+
+#if PERF_TEST_BUILD
+#define INLINE
+#define FLATTEN
+#else
+#define INLINE __attribute__((always_inline))
+#define FLATTEN __attribute__((flatten))
 #endif
 
 #if __linux__
@@ -37,14 +51,6 @@
 #include <stdatomic.h>
 #endif
 
-#if UNINIT_READ_SANITY
-#include <fcntl.h>
-#include <linux/userfaultfd.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/syscall.h>
-#endif
-
 #if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
 #include <sched.h>
 #endif
@@ -55,6 +61,10 @@
 
 #ifndef MADV_DONTNEED
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
+#endif
+
+#if ALLOC_SANITY
+#include "iso_alloc_sanity.h"
 #endif
 
 #if ENABLE_ASAN
@@ -119,20 +129,6 @@
  * priority constructor for MALLOC_HOOK */
 #define FIRST_CTOR 101
 #define LAST_DTOR 65535
-
-#define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
-
-#if UNIT_TESTING
-#define EXTERNAL_API __attribute__((visibility("default")))
-#endif
-
-#if PERF_TEST_BUILD
-#define INLINE
-#define FLATTEN
-#else
-#define INLINE __attribute__((always_inline))
-#define FLATTEN __attribute__((flatten))
-#endif
 
 #if DEBUG
 #define LOG(msg, ...) \
@@ -287,8 +283,8 @@
     ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
 #if THREAD_SUPPORT
-atomic_flag root_busy_flag;
-atomic_flag big_zone_busy_flag;
+extern atomic_flag root_busy_flag;
+extern atomic_flag big_zone_busy_flag;
 
 #define LOCK_ROOT() \
     do {            \
@@ -313,14 +309,14 @@ atomic_flag big_zone_busy_flag;
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
  * preferred but we need this to setup the root. */
-uint32_t g_page_size;
+extern uint32_t g_page_size;
 
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Allocations are 'first fit' up until
  * ZONE_1024 at which point a new zone is created for that
  * specific size request. You can create additional startup
  * profile by adjusting the next few lines below. */
-uint32_t _default_zone_count;
+extern uint32_t _default_zone_count;
 
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
@@ -462,49 +458,8 @@ typedef struct {
 zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
 #endif
 
-#if ALLOC_SANITY
-#define SANITY_SAMPLE_ODDS 10000
-#define MAX_SANE_SAMPLES 1024
-#define SANE_CACHE_SIZE 65535
-#define SANE_CACHE_IDX(p) (((uint64_t) p >> 8) & 0xffff)
-
-#if THREAD_SUPPORT
-atomic_flag sane_cache_flag;
-
-#define LOCK_SANITY_CACHE() \
-    do {                    \
-    } while(atomic_flag_test_and_set(&sane_cache_flag));
-
-#define UNLOCK_SANITY_CACHE() \
-    atomic_flag_clear(&sane_cache_flag);
-#else
-#define LOCK_SANITY_CACHE()
-#define UNLOCK_SANITY_CACHE()
-#endif
-
-#if UNINIT_READ_SANITY
-pthread_t _page_fault_thread;
-struct uffdio_api _uffd_api;
-int64_t _uf_fd;
-#endif
-
-int32_t _sane_sampled;
-uint8_t _sane_cache[SANE_CACHE_SIZE];
-
-typedef struct {
-    void *guard_below;
-    void *guard_above;
-    void *address;
-    size_t size;
-    size_t orig_size;
-} _sane_allocation_t;
-
-_sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
-
-#endif
-
 /* The global root */
-iso_alloc_root *_root;
+extern iso_alloc_root *_root;
 
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p);
@@ -563,16 +518,6 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 INTERNAL_HIDDEN void _initialize_profiler(void);
 INTERNAL_HIDDEN void _iso_alloc_profile(void);
-
-#if ALLOC_SANITY
-#if UNINIT_READ_SANITY
-INTERNAL_HIDDEN void *_page_fault_thread_handler(void *uf_fd);
-#endif
-INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size);
-INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p);
-INTERNAL_HIDDEN int32_t _remove_from_sane_trace(void *p);
-INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p);
-#endif
 
 #if EXPERIMENTAL
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);

@@ -1,5 +1,5 @@
 /* iso_alloc interfaces_test.c
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
@@ -42,8 +42,7 @@ int main(int argc, char *argv[]) {
 
     p = iso_alloc(1024);
 
-    size_t size = iso_chunksz(p);
-    assert(size == 1024);
+    assert((iso_chunksz(p)) >= 1024);
 
     iso_free_permanently(p);
 
