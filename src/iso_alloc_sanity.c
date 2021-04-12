@@ -189,9 +189,14 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
 
     p = (p + g_page_size);
 
+    /* We may right align the mapping to catch overflows */
+    if(rand_uint64() % 1 == 1) {
+        p = (p + g_page_size) - sane_alloc->orig_size;
+    }
+
 #if UNINIT_READ_SANITY
     struct uffdio_register reg = {0};
-    reg.range.start = (uint64_t) p;
+    reg.range.start = (uint64_t) ROUND_DOWN_PAGE(p);
     reg.range.len = sane_alloc->size;
     reg.mode = UFFDIO_REGISTER_MODE_MISSING;
 #endif
