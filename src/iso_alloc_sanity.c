@@ -94,7 +94,7 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
             }
 
             if((ioctl(_uf_fd, UFFDIO_UNREGISTER, &reg.range)) == ERR) {
-                LOG_AND_ABORT("Failed to unregister address %p", sane_alloc->address);
+                LOG_AND_ABORT("Failed to unregister address %p", umsg.arg.pagefault.address);
             }
 
             UNLOCK_SANITY_CACHE();
