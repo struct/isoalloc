@@ -218,16 +218,16 @@
  * create. This is a completely arbitrary number but
  * it does correspond to the size of the _root.zones
  * array that lives in global memory. Currently the
- * iso_alloc_zone structure is roughly 1096 bytes so
- * this allocates 4489216 bytes (~4.4 MB) */
-#define MAX_ZONES 4096
+ * iso_alloc_zone structure is roughly 1088 bytes so
+ * this allocates 8912896 bytes (~8.5 MB) */
+#define MAX_ZONES 8192
 
-/* Each user allocation zone we make is 8mb in size.
- * With MAX_ZONES at 4096 this means we top out at
+/* Each user allocation zone we make is 4mb in size.
+ * With MAX_ZONES at 8192 this means we top out at
  * about 32 gb of heap. We don't allocate that many
  * zones by default but its the maximum we could in
  * any one process runtime */
-#define ZONE_USER_SIZE 8388608
+#define ZONE_USER_SIZE 4194304
 
 /* This is the largest divisor of ZONE_USER_SIZE we can
  * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
@@ -376,6 +376,10 @@ typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
     void *bitmap_start;         /* Start of the bitmap */
     int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
+    /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
+    uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
+    uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
+    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
     uint64_t canary_secret;     /* Each zone has its own canary secret */
     uint64_t pointer_mask;      /* Each zone has its own pointer protection secret */
     uint32_t chunk_size;        /* Size of chunks managed by this zone */
@@ -386,10 +390,6 @@ typedef struct {
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
-    /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
-    uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
-    uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
-    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
 #if THREAD_SUPPORT && THREAD_ZONE_CACHE
