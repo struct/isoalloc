@@ -28,7 +28,7 @@ If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a m
 * All allocations are 8 byte aligned
 * The `iso_alloc_root` structure is thread safe and guarded by an atomic lock 
 * The bitmap has 2 bits set aside per chunk
-* Zones are 8 MB in size regardless of the chunk sizes they manage
+* Zones are 4 MB in size regardless of the chunk sizes they manage
 * Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes. Zones are created on demand for larger allocations
 * The free bit slot cache is 255 entries, it helps speed up allocations
 * All allocations >262144 bytes live in specially handled big zones which have no size limitations
