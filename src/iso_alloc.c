@@ -470,6 +470,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 
 #if MEM_USAGE
     LOG("Total megabytes consumed by all zones: %lu", mb);
+    _iso_alloc_print_stats();
 #endif
 
 #endif

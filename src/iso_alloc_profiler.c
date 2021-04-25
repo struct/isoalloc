@@ -3,6 +3,27 @@
 
 #include "iso_alloc_internal.h"
 
+#if MEM_USAGE
+INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
+    struct rusage _rusage = {0};
+
+    int32_t ret = getrusage(RUSAGE_SELF, &_rusage);
+
+    if(ret == ERR) {
+        return ERR;
+    }
+
+#if __linux__
+    LOG("RSS: %d (mb)", (_rusage.ru_maxrss / KILOBYTE_SIZE));
+#elif __APPLE__
+    LOG("RSS: %d (mb)", (_rusage.ru_maxrss / MEGABYTE_SIZE));
+#endif
+    LOG("Soft Page Faults: %d", _rusage.ru_minflt);
+    LOG("Hard Page Faults: %d", _rusage.ru_majflt);
+    return OK;
+}
+#endif
+
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     uint64_t total_leaks = 0;
     uint64_t big_leaks = 0;

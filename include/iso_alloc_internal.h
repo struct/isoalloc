@@ -46,6 +46,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#if MEM_USAGE
+#include <sys/resource.h>
+#endif
+
 #if THREAD_SUPPORT
 #include <pthread.h>
 #include <stdatomic.h>
@@ -268,7 +272,8 @@
 /* The size of the thread cache */
 #define THREAD_ZONE_CACHE_SZ 8
 
-#define MEGABYTE_SIZE 1000000
+#define MEGABYTE_SIZE 1048576
+#define KILOBYTE_SIZE 1024
 
 /* This byte value will overwrite the contents
  * of all free'd user chunks */
@@ -380,13 +385,13 @@ typedef struct {
     uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
     uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
     bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
-    uint64_t canary_secret;     /* Each zone has its own canary secret */
-    uint64_t pointer_mask;      /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;        /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;       /* Size of the bitmap in bytes */
-    bool internally_managed;    /* Zones can be managed by iso_alloc or custom */
-    bool is_full;               /* Indicates whether this zone is full to avoid expensive free bit slot searches */
-    uint16_t index;             /* Zone index */
+    uint64_t canary_secret;                                /* Each zone has its own canary secret */
+    uint64_t pointer_mask;                                 /* Each zone has its own pointer protection secret */
+    uint32_t chunk_size;                                   /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;                                  /* Size of the bitmap in bytes */
+    bool internally_managed;                               /* Zones can be managed by iso_alloc or custom */
+    bool is_full;                                          /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    uint16_t index;                                        /* Zone index */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
@@ -513,6 +518,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage();
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
+INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
