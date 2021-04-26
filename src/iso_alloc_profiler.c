@@ -3,7 +3,7 @@
 
 #include "iso_alloc_internal.h"
 
-#if MEM_USAGE
+#if DEBUG && MEM_USAGE
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
     struct rusage _rusage = {0};
 
