@@ -8,6 +8,7 @@ atomic_flag sane_cache_flag;
 int32_t _sane_sampled;
 uint8_t _sane_cache[SANE_CACHE_SIZE];
 _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+uint64_t _sanity_canary;
 
 #if UNINIT_READ_SANITY
 pthread_t _page_fault_thread;
@@ -84,7 +85,7 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 
             if(sane_alloc != NULL) {
                 reg.range.start = (uint64_t) sane_alloc->address;
-                reg.range.len = sane_alloc->size;
+                reg.range.len = g_page_size;
             } else {
                 /* We received a page fault for an address we are no
                  * longer tracking. We don't know why but it's a write
@@ -114,14 +115,56 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 }
 #endif /* UNINIT_READ_SANITY */
 
+INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p) {
+    uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
+
+    for(int32_t i = 0; i < (g_page_size / sizeof(uint64_t)); i++) {
+        memcpy(p, &canary, SANITY_CANARY_SIZE);
+        p += sizeof(uint64_t);
+    }
+}
+
+/* Verify the canary value in an allocation */
+INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc) {
+    void *end = NULL;
+    void *start = NULL;
+
+    if(sane_alloc->right_aligned == true) {
+        end = ((sane_alloc->address + g_page_size) - sane_alloc->orig_size);
+        start = sane_alloc->address;
+    } else {
+        end = sane_alloc->address + g_page_size;
+        start = sane_alloc->address + sane_alloc->orig_size;
+    }
+
+    while(start < end) {
+        uint64_t v = *((uint64_t *) start);
+        uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
+
+        if(UNLIKELY(v != canary)) {
+            LOG_AND_ABORT("Sanity canary at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, v, canary);
+        }
+
+        start += sizeof(uint64_t);
+    }
+}
+
 /* Callers of this function should hold the sanity cache lock */
 INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p) {
     if(_sane_cache[SANE_CACHE_IDX(p)] == 0) {
         return NULL;
     }
 
+    void *pa = NULL;
+
+    if(IS_PAGE_ALIGNED((uintptr_t) p)) {
+        pa = (void *) ROUND_DOWN_PAGE((uintptr_t) p);
+    } else {
+        pa = p;
+    }
+
     for(uint32_t i = 0; i < MAX_SANE_SAMPLES; i++) {
-        if(_sane_allocations[i].address == p) {
+        if(_sane_allocations[i].address == pa) {
             return &_sane_allocations[i];
         }
     }
@@ -134,9 +177,11 @@ INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p) {
     _sane_allocation_t *sane_alloc = _get_sane_alloc(p);
 
     if(sane_alloc != NULL) {
+        check_sanity_canary(sane_alloc);
+
         munmap(sane_alloc->guard_below, g_page_size);
         munmap(sane_alloc->guard_above, g_page_size);
-        munmap(p, sane_alloc->size);
+        munmap(sane_alloc->address, g_page_size);
         memset(sane_alloc, 0x0, sizeof(_sane_allocation_t));
         _sane_cache[SANE_CACHE_IDX(p)]--;
         _sane_sampled--;
@@ -175,8 +220,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
     }
 
     sane_alloc->orig_size = size;
-    sane_alloc->size = ROUND_UP_PAGE(size);
-    void *p = mmap_rw_pages(sane_alloc->size + (g_page_size * 2), false);
+    void *p = mmap_rw_pages(g_page_size * 3, false);
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for sampled allocation");
@@ -184,7 +228,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
 
     sane_alloc->guard_below = p;
     create_guard_page(sane_alloc->guard_below);
-    sane_alloc->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sane_alloc->size + g_page_size));
+    sane_alloc->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + (g_page_size * 2)));
     create_guard_page(sane_alloc->guard_above);
 
     p = (p + g_page_size);
@@ -192,16 +236,18 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
     /* We may right align the mapping to catch overflows */
     if(rand_uint64() % 1 == 1) {
         p = (p + g_page_size) - sane_alloc->orig_size;
+        sane_alloc->right_aligned = true;
+        sane_alloc->address = (void *) ROUND_DOWN_PAGE((uintptr_t) p);
+    } else {
+        sane_alloc->address = p;
     }
 
 #if UNINIT_READ_SANITY
     struct uffdio_register reg = {0};
     reg.range.start = (uint64_t) ROUND_DOWN_PAGE(p);
-    reg.range.len = sane_alloc->size;
+    reg.range.len = g_page_size;
     reg.mode = UFFDIO_REGISTER_MODE_MISSING;
 #endif
-
-    sane_alloc->address = p;
 
     _sane_cache[SANE_CACHE_IDX(p)]++;
     _sane_sampled++;
@@ -210,6 +256,10 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
     if((ioctl(_uf_fd, UFFDIO_REGISTER, &reg)) == ERR) {
         LOG_AND_ABORT("Failed to register address %p", p);
     }
+#endif
+
+#if !UNINIT_READ_SANITY
+    write_sanity_canary(sane_alloc->address);
 #endif
 
     UNLOCK_SANITY_CACHE();

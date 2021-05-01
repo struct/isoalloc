@@ -172,6 +172,9 @@
 #define IS_ALIGNED(v) \
     (v & (ALIGNMENT - 1))
 
+#define IS_PAGE_ALIGNED(v) \
+    (v & (g_page_size - 1))
+
 #define GET_BIT(n, k) \
     (n >> k) & 1UL
 

@@ -22,6 +22,8 @@
 #define MAX_SANE_SAMPLES 1024
 #define SANE_CACHE_SIZE 65535
 #define SANE_CACHE_IDX(p) (((uint64_t) p >> 8) & 0xffff)
+#define SANITY_CANARY_VALIDATE_MASK 0xffffffffffffff00
+#define SANITY_CANARY_SIZE 8
 
 #if THREAD_SUPPORT
 extern atomic_flag sane_cache_flag;
@@ -50,17 +52,20 @@ typedef struct {
     void *guard_below;
     void *guard_above;
     void *address;
-    size_t size;
     size_t orig_size;
+    bool right_aligned;
 } _sane_allocation_t;
 
 extern _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
+extern uint64_t _sanity_canary;
 
 #if UNINIT_READ_SANITY
 INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd();
 INTERNAL_HIDDEN void *_page_fault_thread_handler(void *uf_fd);
 #endif
 
+INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p);
+INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc);
 INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size);
 INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p);
 INTERNAL_HIDDEN int32_t _remove_from_sane_trace(void *p);

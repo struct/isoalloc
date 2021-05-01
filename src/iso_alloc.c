@@ -356,6 +356,10 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #if ALLOC_SANITY && UNINIT_READ_SANITY
     _iso_alloc_setup_userfaultfd();
 #endif
+
+#if ALLOC_SANITY
+    _sanity_canary = rand_uint64();
+#endif
 }
 
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
