@@ -5,10 +5,10 @@
 
 #if ALLOC_SANITY
 atomic_flag sane_cache_flag;
+uint64_t _sanity_canary;
 int32_t _sane_sampled;
 uint8_t _sane_cache[SANE_CACHE_SIZE];
 _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
-uint64_t _sanity_canary;
 
 #if UNINIT_READ_SANITY
 pthread_t _page_fault_thread;

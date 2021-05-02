@@ -256,11 +256,20 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 #endif
 }
 
-INTERNAL_HIDDEN void create_guard_page(void *p) {
+INTERNAL_HIDDEN void *create_guard_page(void *p) {
+    if(p == NULL) {
+        p = mmap_rw_pages(g_page_size, false);
+
+        if(p == NULL) {
+            LOG_AND_ABORT("Could not allocate guard page");
+        }
+    }
+
     /* Use g_page_size here because we could be
      * calling this while we setup the root */
     mprotect_pages(p, g_page_size, PROT_NONE);
     madvise(p, g_page_size, MADV_DONTNEED);
+    return p;
 }
 
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
@@ -1449,6 +1458,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
         MASK_ZONE_PTRS(zone);
+
+#if UAF_PTR_PAGE
+        if(UNLIKELY((rand_uint64() % UAF_PTR_PAGE_ODDS) == 1)) {
+            _iso_alloc_ptr_search(p, true);
+        }
+#endif
         UNLOCK_ROOT();
     } else {
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);

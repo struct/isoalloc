@@ -444,6 +444,11 @@ typedef struct {
     iso_alloc_zone zones[MAX_ZONES];
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
+#if UAF_PTR_PAGE
+#define UAF_PTR_PAGE_ODDS 100000
+#define UAF_PTR_PAGE_ADDR 0xFF41414142434445
+#endif
+
 #if HEAP_PROFILER
 #define PROFILER_ODDS 10000
 #define HG_SIZE 65535
@@ -494,8 +499,6 @@ INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
-INTERNAL_HIDDEN void create_guard_page(void *p);
-INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _verify_all_zones(void);
@@ -506,11 +509,13 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone);
+INTERNAL_HIDDEN void *create_guard_page(void *p);
+INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
-INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n);
+INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, bool profile);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);

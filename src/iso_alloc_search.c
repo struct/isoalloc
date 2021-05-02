@@ -1,12 +1,12 @@
 /* iso_alloc_search.c - A secure memory allocator
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
 
-/* Search all zones for the first instance of a pointer value.
- * This is a slow way of finding dangling pointers. */
-INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n) {
-    LOCK_ROOT();
+/* Search all zones for either the first instance of a pointer
+ * value and return it or overwrite the first potentially
+ * dangling pointer with the address of an unmapped page */
+INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
     uint8_t *h = NULL;
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
@@ -16,21 +16,24 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n) {
         h = zone->user_pages_start;
 
         while(h <= (uint8_t *) (zone->user_pages_start + ZONE_USER_SIZE - sizeof(uint64_t))) {
-            if(LIKELY((int64_t *) *(uint64_t *) h != (int64_t *) n)) {
+            if(LIKELY((uint64_t) * (uint64_t *) h != (uint64_t) n)) {
                 h++;
-                continue;
             } else {
-                LOG_AND_ABORT("zone[%d] contains a reference to %p @ %p", zone->index, n, h);
-                MASK_ZONE_PTRS(zone);
-                UNLOCK_ROOT();
-                return h;
+                if(poison == false) {
+                    MASK_ZONE_PTRS(zone);
+                    return h;
+                } else {
+#if UAF_PTR_PAGE
+                    *(uint64_t *) h = UAF_PTR_PAGE_ADDR;
+                    return h;
+#endif
+                }
             }
         }
 
         MASK_ZONE_PTRS(zone);
     }
 
-    UNLOCK_ROOT();
     return NULL;
 }
 
