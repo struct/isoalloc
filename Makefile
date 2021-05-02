@@ -80,7 +80,7 @@ CPU_PIN = -DCPU_PIN=0
 ## upon free. Much like GWP-ASAN this is designed to be
 ## used in production builds and should not incur too
 ## much of a performance penalty
-#ALLOC_SANITY = -DALLOC_SANITY=1
+ALLOC_SANITY = -DALLOC_SANITY=0
 
 ## Enable the userfaultfd based uninitialized read detection
 ## feature. This samples calls to malloc, and allocates raw
@@ -91,13 +91,13 @@ CPU_PIN = -DCPU_PIN=0
 ## uninitialized reads. Enabling this feature does incur a
 ## performance penalty. This requires that both ALLOC_SANITY
 ## and THREAD_SUPPORT are enabled. Linux only
-#UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=1
+UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 
 ## Enable a sampling mechanism that searches for references
 ## to a chunk currently being freed. The search only overwrites
 ## the first reference to that chunk because searching all
 ## zones is very slow.
-#UAF_PTR_PAGE = -DUAF_PTR_PAGE=1
+UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
