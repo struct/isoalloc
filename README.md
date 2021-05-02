@@ -72,6 +72,7 @@ When enabled the `CPU_PIN` feature will restrict allocations from a given zone t
 * A call to `realloc` will always return a new chunk. Use `PERM_FREE_REALLOC` to make these free's permanent
 * Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse custom zones
 * When `CPU_PIN` is enabled allocation from a zone will be restricted to the CPU core that created it
+* When `UAF_PTR_PAGE` is enabled calls to `iso_free` will be sampled to search for dangling references
 
 ## Building
 
