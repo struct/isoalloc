@@ -11,7 +11,8 @@
 
 uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                ZONE_256, ZONE_512, ZONE_1024,
-                               ZONE_2048, ZONE_4096, ZONE_8192};
+                               ZONE_2048, ZONE_4096, ZONE_8192,
+                               SMALL_SZ_MAX/4, SMALL_SZ_MAX/2, SMALL_SZ_MAX };
 
 uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 
@@ -21,14 +22,14 @@ uint32_t alloc_count;
  * This will add up very quickly with the speed of allocations.
  * This should exercise all code including new internally
  * managed zone allocation. Eventually we get OOM and SIGKILL */
-#define LEAK_K 10
+#define LEAK_K 1000
 #define LEAK_V 8
 
 iso_alloc_zone_handle *custom_zone;
-#define NEW_ZONE_K 10
+#define NEW_ZONE_K 1000
 #define NEW_ZONE_V 1
 
-#define DESTROY_ZONE_K 10
+#define DESTROY_ZONE_K 1000
 #define DESTROY_ZONE_V 8
 
 #define MAYBE_VALIDATE_ZONES() \
@@ -131,7 +132,7 @@ int allocate(size_t array_size, size_t allocation_size) {
             allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
         }
 
-        if(rand() % 100 == 1 && custom_zone != NULL) {
+        if(rand() % 100 == 1 && custom_zone != NULL && allocation_size < SMALL_SZ_MAX) {
             p[i] = iso_alloc_from_zone(custom_zone, allocation_size);
         } else {
             p[i] = iso_alloc(allocation_size);

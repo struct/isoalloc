@@ -683,7 +683,8 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * sizes beyond ZONE_1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
-    if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
+    if(zone->internally_managed == true && size > ZONE_1024
+        && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
     }
 
@@ -929,7 +930,8 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 
     if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
         LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %lu %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
-                      p, zone->index, bitslot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size, zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
+                      p, zone->index, bitslot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size,
+                      zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
     if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
@@ -1050,9 +1052,8 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
     if(LIKELY(zone != NULL)) {
         /* We only need to check if the zone is usable
-         * if we didn't choose the zone ourselves. If
-         * we chose this zone then its guaranteed to
-         * already be usable */
+         * if it's a custom zone. If we chose this zone
+         * then its guaranteed to already be usable */
         if(zone->internally_managed == false) {
             zone = is_zone_usable(zone, size);
 

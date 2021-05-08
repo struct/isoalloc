@@ -226,21 +226,22 @@
  * it does correspond to the size of the _root.zones
  * array that lives in global memory. Currently the
  * iso_alloc_zone structure is roughly 1088 bytes so
- * this allocates 8912896 bytes (~8.5 MB) */
+ * this allocates 8912896 bytes (~8.5 MB) for _root */
 #define MAX_ZONES 8192
 
 /* Each user allocation zone we make is 4mb in size.
  * With MAX_ZONES at 8192 this means we top out at
- * about 32 gb of heap. We don't allocate that many
- * zones by default but its the maximum we could in
- * any one process runtime */
+ * about 32~ gb of heap. If you adjust this then
+ * you need to make sure that SMALL_SZ_MAX is correctly
+ * adjusted or you will calculate chunks outside of
+ * the zone user memory! */
 #define ZONE_USER_SIZE 4194304
 
 /* This is the largest divisor of ZONE_USER_SIZE we can
  * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
  * above this size will need to go through the big
  * mapping code path */
-#define SMALL_SZ_MAX 262144
+#define SMALL_SZ_MAX 131072
 
 /* Cap our big zones at 4GB of memory */
 #define BIG_SZ_MAX 4294967296
