@@ -1,5 +1,5 @@
 /* iso_alloc.c - A secure memory allocator
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 /* Contributed by Oscar Reparaz (@oreparaz)
  * https://github.com/struct/isoalloc/pull/5 */

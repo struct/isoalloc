@@ -1,5 +1,5 @@
 /* iso_alloc alloc_fuzz.c
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 /* This test is not meant to be run as a part of the IsoAlloc
  * test suite. It should be run stand alone during development

@@ -1,5 +1,6 @@
 /* iso_alloc_internal.h - A secure memory allocator
  * Copyright 2021 - chris.rohlf@gmail.com */
+
 #pragma once
 
 #ifndef CPP_SUPPORT
