@@ -340,7 +340,7 @@ static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256
 #endif
 
 #if SMALLEST_CHUNK_SZ < ZONE_8
-    #error "Smallest chunk size is 8 bytes, 16 is recommended!"
+#error "Smallest chunk size is 8 bytes, 16 is recommended!"
 #endif
 
 /* If you have specific allocation pattern requirements
@@ -391,18 +391,18 @@ typedef struct {
     void *bitmap_start;         /* Start of the bitmap */
     int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
     /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
-    uint8_t free_bit_slot_cache_index;                     /* Tracks how many entries in the cache are filled */
-    uint8_t free_bit_slot_cache_usable;                    /* The oldest members of the free cache are served first */
-    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ + 1]; /* A cache of bit slots that point to freed chunks */
-    uint64_t canary_secret;                                /* Each zone has its own canary secret */
-    uint64_t pointer_mask;                                 /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;                                   /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;                                  /* Size of the bitmap in bytes */
-    bool internally_managed;                               /* Zones can be managed by iso_alloc or custom */
-    bool is_full;                                          /* Indicates whether this zone is full to avoid expensive free bit slot searches */
-    uint16_t index;                                        /* Zone index */
+    uint8_t free_bit_slot_cache_index;                 /* Tracks how many entries in the cache are filled */
+    uint8_t free_bit_slot_cache_usable;                /* The oldest members of the free cache are served first */
+    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ]; /* A cache of bit slots that point to freed chunks */
+    uint64_t canary_secret;                            /* Each zone has its own canary secret */
+    uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
+    uint32_t chunk_size;                               /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
+    bool internally_managed;                           /* Zones can be managed by iso_alloc or custom */
+    bool is_full;                                      /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    uint16_t index;                                    /* Zone index */
 #if CPU_PIN
-    uint8_t cpu_core : 4; /* What CPU core this zone is pinned to */
+    uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 

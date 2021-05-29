@@ -682,8 +682,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * sizes beyond ZONE_1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
-    if(zone->internally_managed == true && size > ZONE_1024
-        && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
+    if(zone->internally_managed == true && size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
     }
 

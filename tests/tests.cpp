@@ -1,9 +1,9 @@
 /* iso_alloc tests.cpp
  * Copyright 2021 - chris.rohlf@gmail.com */
 
-#include <memory>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
+#include <memory>
 
 using namespace std;
 
@@ -26,7 +26,7 @@ class Derived : Base {
   public:
     Derived(int32_t i) {
         count = i;
-        type = count*count;
+        type = count * count;
         str = (char *) iso_alloc(1024);
         memcpy(str, "AAAAA", 5);
     }
