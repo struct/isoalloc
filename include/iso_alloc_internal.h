@@ -447,7 +447,8 @@ typedef struct {
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
     iso_alloc_big_zone *big_zone_head;
-    iso_alloc_zone zones[MAX_ZONES];
+    iso_alloc_zone *zones;
+    size_t zones_size;
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 #if UAF_PTR_PAGE

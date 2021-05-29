@@ -337,11 +337,20 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
         LOG_AND_ABORT("Could not initialize global root");
     }
 
-    iso_alloc_zone *zone = NULL;
     _default_zone_count = sizeof(default_zones) >> 3;
 
+    _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone));
+    _root->zones_size += (g_page_size * 2);
+    _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
+
+    void *p = mmap_rw_pages(_root->zones_size, false);
+    create_guard_page(p);
+    create_guard_page((p + _root->zones_size) - g_page_size);
+
+    _root->zones = p + g_page_size;
+
     for(int64_t i = 0; i < _default_zone_count; i++) {
-        if(!(zone = _iso_new_zone(default_zones[i], true))) {
+        if(!(_iso_new_zone(default_zones[i], true))) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
@@ -501,6 +510,9 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
         _iso_alloc_destroy_zone(zone);
 #endif
     }
+
+    /* Unmap all zone structures */
+    munmap(_root->zones - g_page_size, _root->zones_size);
 
     iso_alloc_big_zone *big_zone = _root->big_zone_head;
     iso_alloc_big_zone *big = NULL;
