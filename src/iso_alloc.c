@@ -559,8 +559,8 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     }
 
     /* Minimum chunk size */
-    if(size < SMALLEST_ZONE) {
-        size = SMALLEST_ZONE;
+    if(size < SMALLEST_CHUNK_SZ) {
+        size = SMALLEST_CHUNK_SZ;
     }
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
@@ -571,12 +571,11 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
-    size_t bitmap_size = (GET_CHUNK_COUNT(new_zone) << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
+    uint32_t bitmap_size = (GET_CHUNK_COUNT(new_zone) << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
 
-    /* Most of the following fields are effectively immutable
+    /* All of the following fields are immutable
      * and should not change once they are set */
-
     void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true);
 
     void *bitmap_pages_guard_below = p;

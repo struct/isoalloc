@@ -254,7 +254,7 @@
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
-/* We allocate (1) zone at startup for common sizes.
+/* We allocate zones at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
  * so ZONE_8192 holds less chunks than ZONE_128 for
  * example. These are inexpensive for us to create */
@@ -330,13 +330,17 @@ extern uint32_t _default_zone_count;
 
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
-#define SMALLEST_ZONE ZONE_64
+#define SMALLEST_CHUNK_SZ ZONE_64
 static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
 #else
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~80 mb */
-#define SMALLEST_ZONE ZONE_16
+#define SMALLEST_CHUNK_SZ ZONE_16
 static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                    ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
+#endif
+
+#if SMALLEST_CHUNK_SZ < ZONE_8
+    #error "Smallest chunk size is 8 bytes, 16 is recommended!"
 #endif
 
 /* If you have specific allocation pattern requirements
@@ -347,22 +351,22 @@ static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256
  * Each of these examples is 4 default zones which will
  * consume 32mb of memory in total */
 #if 0
-#define SMALLEST_ZONE ZONE_16
+#define SMALLEST_CHUNK_SZ ZONE_16
 static uint64_t default_zones[] = {ZONE_16, ZONE_16, ZONE_16, ZONE_16};
 #endif
 
 #if 0
-#define SMALLEST_ZONE ZONE_16
+#define SMALLEST_CHUNK_SZ ZONE_16
 static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128};
 #endif
 
 #if 0
-#define SMALLEST_ZONE ZONE_256
+#define SMALLEST_CHUNK_SZ ZONE_256
 static uint64_t default_zones[] = {ZONE_256, ZONE_256, ZONE_512, ZONE_512};
 #endif
 
 #if 0
-#define SMALLEST_ZONE ZONE_512
+#define SMALLEST_CHUNK_SZ ZONE_512
 static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 #endif
 
@@ -398,7 +402,7 @@ typedef struct {
     bool is_full;                                          /* Indicates whether this zone is full to avoid expensive free bit slot searches */
     uint16_t index;                                        /* Zone index */
 #if CPU_PIN
-    uint8_t cpu_core; /* What CPU core this zone is pinned to */
+    uint8_t cpu_core : 4; /* What CPU core this zone is pinned to */
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
