@@ -25,6 +25,7 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
                 } else {
 #if UAF_PTR_PAGE
                     *(uint64_t *) h = UAF_PTR_PAGE_ADDR;
+                    MASK_ZONE_PTRS(zone);
                     return h;
 #endif
                 }
