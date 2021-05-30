@@ -1,9 +1,9 @@
 /* iso_alloc tests.cpp
  * Copyright 2021 - chris.rohlf@gmail.com */
 
+#include <memory>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
-#include <memory>
 
 using namespace std;
 

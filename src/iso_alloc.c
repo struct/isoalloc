@@ -343,11 +343,12 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones_size += (g_page_size * 2);
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
 
+    /* Allocate memory with guard pages to hold zone data */
     void *p = mmap_rw_pages(_root->zones_size, false);
     create_guard_page(p);
-    create_guard_page((p + _root->zones_size) - g_page_size);
+    create_guard_page((void *) (uintptr_t)(p + _root->zones_size) - g_page_size);
 
-    _root->zones = p + g_page_size;
+    _root->zones = (void *) (p + g_page_size);
 
     for(int64_t i = 0; i < _default_zone_count; i++) {
         if(!(_iso_new_zone(default_zones[i], true))) {
@@ -512,7 +513,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     }
 
     /* Unmap all zone structures */
-    munmap(_root->zones - g_page_size, _root->zones_size);
+    munmap((void *) ((uintptr_t) _root->zones - g_page_size), _root->zones_size);
 
     iso_alloc_big_zone *big_zone = _root->big_zone_head;
     iso_alloc_big_zone *big = NULL;
