@@ -251,9 +251,7 @@ INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
-#if SANITIZE_CHUNKS && !ENABLE_ASAN
     memset(p, POISON_BYTE, size);
-#endif
 }
 
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
@@ -498,22 +496,18 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 
 #endif
 
-    /* Using MALLOC_HOOK is not recommended. But if you do
-     * use it you may find your program crashing in various
-     * dynamic linker routines that support destructors. In
-     * this case we verify each zone but don't destroy them.
-     * This will leak the root structure but we are probably
-     * exiting anyway. */
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
         _verify_zone(zone);
-#ifndef MALLOC_HOOK
+#ifdef ISO_DTOR_CLEANUP
         _iso_alloc_destroy_zone(zone);
 #endif
     }
 
+#ifdef ISO_DTOR_CLEANUP
     /* Unmap all zone structures */
     munmap((void *) ((uintptr_t) _root->zones - g_page_size), _root->zones_size);
+#endif
 
     iso_alloc_big_zone *big_zone = _root->big_zone_head;
     iso_alloc_big_zone *big = NULL;
@@ -531,16 +525,18 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
             big = NULL;
         }
 
+#ifdef ISO_DTOR_CLEANUP
         /* Free the user pages first */
         void *up = big_zone->user_pages_start - _root->system_page_size;
         munmap(up, (_root->system_page_size << 1) + big_zone->size);
 
         /* Free the meta data */
         munmap(big_zone - _root->system_page_size, (_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
+#endif
         big_zone = big;
     }
 
-#ifndef MALLOC_HOOK
+#ifdef ISO_DTOR_CLEANUP
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
     munmap(_root, sizeof(iso_alloc_root));
@@ -1390,6 +1386,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
         zone->is_full = false;
+        iso_clear_user_chunk(p, zone->chunk_size);
     }
 
     bm[dwords_to_bit_slot] = b;

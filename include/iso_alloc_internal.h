@@ -439,8 +439,8 @@ typedef struct iso_alloc_big_zone {
  * Zone represents a number of contiguous pages
  * that hold chunks containing caller data */
 typedef struct {
-    uint32_t zones_used;
-    uint32_t system_page_size;
+    uint16_t zones_used;
+    uint16_t system_page_size;
     void *guard_below;
     void *guard_above;
     uint64_t zone_handle_mask;

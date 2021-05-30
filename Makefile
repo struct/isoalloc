@@ -99,6 +99,12 @@ UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 ## zones is very slow.
 UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 
+## Unmap user and bitmap in the destructor. You probably
+## don't want this as theres no guarantee the IsoAlloc
+## destructor will be called last and other destructors
+## that call free will segfault
+#ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=1
+
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
 EXPERIMENTAL = -DEXPERIMENTAL=0
