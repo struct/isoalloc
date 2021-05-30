@@ -1,5 +1,5 @@
 /* iso_alloc.h - A secure memory allocator
- * Copyright 2020 - chris.rohlf@gmail.com */
+ * Copyright 2021 - chris.rohlf@gmail.com */
 
 #include <stdint.h>
 #include <stdio.h>
