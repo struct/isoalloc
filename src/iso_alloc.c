@@ -992,11 +992,8 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
      * page. We are unlikely to find uninitialized reads on
      * larger size and it makes tracking them less complex */
     size_t sampled_size = ALIGN_SZ_UP(size);
-#if UNINIT_READ_SANITY
-    if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES && _page_fault_thread != 0) {
-#else
+
     if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
-#endif
         void *ps = _iso_alloc_sample(sampled_size);
 
         if(ps != NULL) {
