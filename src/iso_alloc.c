@@ -1388,7 +1388,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     bm[dwords_to_bit_slot] = b;
 
-#if SANITIZE_CHUNKS
+#if !ENABLE_ASAN && SANITIZE_CHUNKS
     iso_clear_user_chunk(p, zone->chunk_size);
 #endif
 
