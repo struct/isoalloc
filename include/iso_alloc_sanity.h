@@ -3,7 +3,7 @@
 
 #pragma once
 
-#ifndef CPP_SUPPORT
+#if CPP_SUPPORT
 #define _GNU_SOURCE
 #endif
 

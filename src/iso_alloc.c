@@ -499,12 +499,12 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
         _verify_zone(zone);
-#ifdef ISO_DTOR_CLEANUP
+#if ISO_DTOR_CLEANUP
         _iso_alloc_destroy_zone(zone);
 #endif
     }
 
-#ifdef ISO_DTOR_CLEANUP
+#if ISO_DTOR_CLEANUP
     /* Unmap all zone structures */
     munmap((void *) ((uintptr_t) _root->zones - g_page_size), _root->zones_size);
 #endif
@@ -525,7 +525,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
             big = NULL;
         }
 
-#ifdef ISO_DTOR_CLEANUP
+#if ISO_DTOR_CLEANUP
         /* Free the user pages first */
         void *up = big_zone->user_pages_start - _root->system_page_size;
         munmap(up, (_root->system_page_size << 1) + big_zone->size);
@@ -1288,7 +1288,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         LOG_AND_ABORT("Double free of big zone 0x%p has been detected!", big_zone);
     }
 
-#ifndef ENABLE_ASAN
+#if !ENABLE_ASAN && SANITIZE_CHUNKS
     memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
 

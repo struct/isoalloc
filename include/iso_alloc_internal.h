@@ -3,8 +3,8 @@
 
 #pragma once
 
-#ifndef CPP_SUPPORT
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
 #endif
 
 #if !__x86_64__
@@ -12,6 +12,9 @@
 #endif
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
+
+/* This isn't standard in C as [[nodiscard]] until C23 */
+#define NO_DISCARD __attribute__((warn_unused_result))
 
 #if UNIT_TESTING
 #define EXTERNAL_API __attribute__((visibility("default")))
