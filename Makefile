@@ -103,7 +103,7 @@ UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 ## don't want this as theres no guarantee the IsoAlloc
 ## destructor will be called last and other destructors
 ## that call free will segfault
-#ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=1
+ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs

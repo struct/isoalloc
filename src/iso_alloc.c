@@ -536,7 +536,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
         big_zone = big;
     }
 
-#ifdef ISO_DTOR_CLEANUP
+#if ISO_DTOR_CLEANUP
     munmap(_root->guard_below, _root->system_page_size);
     munmap(_root->guard_above, _root->system_page_size);
     munmap(_root, sizeof(iso_alloc_root));
