@@ -1293,10 +1293,12 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
 #endif
 
     /* If this isn't a permanent free then all we need
-     * to do is sanitize the mapping and mark it free */
+     * to do is sanitize the mapping and mark it free.
+     * The pages backing the big zone can be reused. */
     if(permanent == false) {
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
+        madvise(big_zone->user_pages_start, big_zone->size, MADV_DONTNEED);
     } else {
         iso_alloc_big_zone *big = _root->big_zone_head;
 
@@ -1329,6 +1331,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         }
 
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
+        madvise(big_zone->user_pages_start, big_zone->size, MADV_DONTNEED);
         memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone));
 
         /* Big zone meta data is at a random offset from its base page */
