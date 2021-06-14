@@ -208,7 +208,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
         LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
     }
 
-#if DEBUG || UNIT_TESTING
+#if VERIFY_BIT_SLOT_CACHE
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
      * order. So we can't search the cache with something like
@@ -219,9 +219,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
      * order to detect any corruption of the cache that attempts
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks. The _iso_alloc() path also does
-     * a check on the bitmap itself before handing out any chunks.
-     * This is mainly used for testing that new features don't
-     * introduce bugs. Its too aggressive for release builds */
+     * a check on the bitmap itself before handing out any chunks */
     int32_t max_cache_slots = sizeof(zone->free_bit_slot_cache) >> 3;
 
     for(int32_t i = zone->free_bit_slot_cache_usable; i < max_cache_slots; i++) {

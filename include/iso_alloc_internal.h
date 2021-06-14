@@ -275,7 +275,7 @@
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
 /* The size of our bit slot freelist */
-#define BIT_SLOT_CACHE_SZ 128
+#define BIT_SLOT_CACHE_SZ 255
 
 /* The size of the thread cache */
 #define THREAD_ZONE_CACHE_SZ 8
