@@ -355,8 +355,8 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     /* This call to mlock may fail if memory limits
      * are set too low. This will not affect us
      * at runtime. It just means some of the default
-     * zone meta data may get swapped to disk */
-    mlock(&default_zones, sizeof(default_zones));
+     * root meta data may get swapped to disk */
+    mlock(&_root, sizeof(iso_alloc_root));
 
     _root->zone_handle_mask = rand_uint64();
     _root->big_zone_next_mask = rand_uint64();
