@@ -347,7 +347,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones = (void *) (p + g_page_size);
 
     for(int64_t i = 0; i < _default_zone_count; i++) {
-        if(!(_iso_new_zone(default_zones[i], true))) {
+        if((_iso_new_zone(default_zones[i], true)) == NULL) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
