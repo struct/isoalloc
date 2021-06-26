@@ -376,19 +376,6 @@ static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 typedef uint64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
 
-/* The API allows for consumers of the library to
- * create their own zones for unique data/object
- * types. This structure allows the caller to define
- * which security mitigations should be applied to
- * all allocations within the zone */
-typedef struct {
-    bool random_allocation_pattern;
-    bool adjacent_canary_verification_on_alloc;
-    bool adjacent_canary_verification_on_free;
-    bool clear_chunk_on_free;
-    bool double_free_detection;
-} iso_alloc_zone_configuration;
-
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
     void *bitmap_start;         /* Start of the bitmap */
