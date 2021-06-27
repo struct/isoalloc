@@ -7,7 +7,7 @@
 #define _GNU_SOURCE 1
 #endif
 
-#if !__x86_64__
+#if !__aarch64__ && !__x86_64__
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
@@ -58,6 +58,11 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #endif
+
+#if __linux__ || __ANDROID__
+#include <sys/prctl.h>
+#endif
+
 
 #if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
 #include <sched.h>
@@ -128,6 +133,16 @@
 
 #define OK 0
 #define ERR -1
+
+#ifdef __ANDROID__
+#ifndef PR_SET_VMA
+#define PR_SET_VMA 0x53564d41
+#endif
+
+#ifndef PR_SET_VMA_ANON_NAME
+#define PR_SET_VMA_ANON_NAME 0
+#endif
+#endif
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -507,7 +522,7 @@ INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *create_guard_page(void *p);
-INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate);
+INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
@@ -525,6 +540,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
+INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 INTERNAL_HIDDEN void _initialize_profiler(void);

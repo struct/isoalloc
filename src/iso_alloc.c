@@ -254,7 +254,7 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
     if(p == NULL) {
-        p = mmap_rw_pages(g_page_size, false);
+        p = mmap_rw_pages(g_page_size, false, "guard page");
 
         if(p == NULL) {
             LOG_AND_ABORT("Could not allocate guard page");
@@ -268,7 +268,7 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
     return p;
 }
 
-INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
+INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name) {
     size = ROUND_UP_PAGE(size);
     void *p = NULL;
 
@@ -288,6 +288,10 @@ INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate) {
         return NULL;
     }
 
+    if(name != NULL) {
+        name_mapping(p, size, name);
+    }
+
     return p;
 }
 
@@ -305,7 +309,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
 
     size_t _root_size = sizeof(iso_alloc_root) + (g_page_size << 1);
 
-    p = (void *) mmap_rw_pages(_root_size, true);
+    p = (void *) mmap_rw_pages(_root_size, true, "isoalloc root");
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for root");
@@ -340,11 +344,12 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
 
     /* Allocate memory with guard pages to hold zone data */
-    void *p = mmap_rw_pages(_root->zones_size, false);
+    void *p = mmap_rw_pages(_root->zones_size, false, NULL);
     create_guard_page(p);
     create_guard_page((void *) (uintptr_t)(p + _root->zones_size) - g_page_size);
 
     _root->zones = (void *) (p + g_page_size);
+    name_mapping(p, _root->zones_size, "isoalloc zone metadata");
 
     for(int64_t i = 0; i < _default_zone_count; i++) {
         if((_iso_new_zone(default_zones[i], true)) == NULL) {
@@ -543,6 +548,13 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
+#if NAMED_MAPPINGS && __ANDROID__
+    return prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, sz, name);
+#endif
+    return 0;
+}
+
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     LOCK_ROOT();
     iso_alloc_zone *zone = _iso_new_zone(size, internal);
@@ -583,7 +595,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* All of the following fields are immutable
      * and should not change once they are set */
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true);
+    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true, "isoalloc zone bitmap");
 
     void *bitmap_pages_guard_below = p;
     new_zone->bitmap_start = (p + _root->system_page_size);
@@ -597,10 +609,18 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_SEQUENTIAL);
 
+    char *name;
+
+    if(internal == true) {
+        name = "internal isoalloc user zone";
+    } else {
+        name = "custom isoalloc user zone";
+    }
+
     /* All user pages use MAP_POPULATE. This might seem like we are asking
      * the kernel to commit a lot of memory for us that we may never use
      * but when we call create_canary_chunks() that will happen anyway */
-    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), true);
+    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), true, name);
 
     void *user_pages_guard_below = p;
     new_zone->user_pages_start = (p + _root->system_page_size);
@@ -853,14 +873,14 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     if(big == NULL) {
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false);
+        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, "isoalloc big zone user data");
 
         if(user_pages == NULL) {
             UNLOCK_BIG_ZONE();
             return NULL;
         }
 
-        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false);
+        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, "isoalloc big zone metadata");
 
         /* The first page before meta data is a guard page */
         create_guard_page(p);

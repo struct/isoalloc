@@ -119,6 +119,10 @@ EXPERIMENTAL = -DEXPERIMENTAL=0
 ## In a release build you probably want them all to be 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
+## On Android we use prctl to name mappings so they are
+## visible in /proc/pid/maps
+NAMED_MAPPINGS = -DNAMED_MAPPINGS=1
+
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
@@ -135,7 +139,7 @@ COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(START
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
-	$(VERIFY_BIT_SLOT_CACHE)
+	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
