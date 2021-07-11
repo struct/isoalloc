@@ -70,9 +70,15 @@ EXTERNAL_API void *memalign(size_t alignment, size_t s) {
     return iso_alloc(s);
 }
 
+#if __ANDROID__
+EXTERNAL_API size_t malloc_usable_size(const void *ptr) {
+    return iso_chunksz((void *)ptr);
+}
+#else
 EXTERNAL_API size_t malloc_usable_size(void *ptr) {
     return iso_chunksz(ptr);
 }
+#endif
 
 static void *libc_malloc(size_t s, const void *caller) {
     return iso_alloc(s);

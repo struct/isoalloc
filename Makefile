@@ -120,8 +120,9 @@ EXPERIMENTAL = -DEXPERIMENTAL=0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
 ## On Android we use prctl to name mappings so they are
-## visible in /proc/pid/maps
-NAMED_MAPPINGS = -DNAMED_MAPPINGS=1
+## visible in /proc/pid/maps - But the Android build does
+## not use this Makefile. You want to modify Android.mk
+NAMED_MAPPINGS = -DNAMED_MAPPINGS=0
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)

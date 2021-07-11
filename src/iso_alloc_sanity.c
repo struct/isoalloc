@@ -220,7 +220,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
     }
 
     sane_alloc->orig_size = size;
-    void *p = mmap_rw_pages(g_page_size * 3, false);
+    void *p = mmap_rw_pages(g_page_size * 3, false, SAMPLED_ALLOC_NAME);
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for sampled allocation");

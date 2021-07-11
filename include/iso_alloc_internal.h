@@ -185,6 +185,26 @@
 
 #define ALIGNMENT 8
 
+#if NAMED_MAPPINGS
+#define SAMPLED_ALLOC_NAME "isoalloc sampled allocation"
+#define BIG_ZONE_UD_NAME "isoalloc big zone user data"
+#define BIG_ZONE_MD_NAME "isoalloc big zone metadata"
+#define GUARD_PAGE_NAME "guard page"
+#define ROOT_NAME "isoalloc root"
+#define ZONE_BITMAP_NAME "isoalloc zone bitmap"
+#define INTERNAL_UZ_NAME "internal isoalloc user zone"
+#define CUSTOM_UZ_NAME "custom isoalloc user zone"
+#else
+#define SAMPLED_ALLOC_NAME ""
+#define BIG_ZONE_UD_NAME ""
+#define BIG_ZONE_MD_NAME ""
+#define GUARD_PAGE_NAME ""
+#define ROOT_NAME ""
+#define ZONE_BITMAP_NAME ""
+#define INTERNAL_UZ_NAME ""
+#define CUSTOM_UZ_NAME ""
+#endif
+
 #define WHICH_BIT(bit_slot) \
     (bit_slot & (BITS_PER_QWORD - 1))
 

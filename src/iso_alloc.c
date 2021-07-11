@@ -254,7 +254,7 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
 
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
     if(p == NULL) {
-        p = mmap_rw_pages(g_page_size, false, "guard page");
+        p = mmap_rw_pages(g_page_size, false, GUARD_PAGE_NAME);
 
         if(p == NULL) {
             LOG_AND_ABORT("Could not allocate guard page");
@@ -268,19 +268,28 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
     return p;
 }
 
+
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name) {
-    size = ROUND_UP_PAGE(size);
+#if !ENABLE_ASAN
+    /* Produce a random page address as a hint for mmap */
+    uint64_t hint = ROUND_DOWN_PAGE(rand_uint64());
+    hint &= 0x3FFFFFFFF000;
+    void *p = (void *) hint;
+#else
     void *p = NULL;
+#endif
+
+    size = ROUND_UP_PAGE(size);
 
     /* Only Linux supports MAP_POPULATE */
 #if __linux__ && PRE_POPULATE_PAGES
     if(populate == true) {
-        p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+        p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     } else {
-        p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     }
 #else
-    p = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
 
     if(p == MAP_FAILED) {
@@ -309,7 +318,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
 
     size_t _root_size = sizeof(iso_alloc_root) + (g_page_size << 1);
 
-    p = (void *) mmap_rw_pages(_root_size, true, "isoalloc root");
+    p = (void *) mmap_rw_pages(_root_size, true, ROOT_NAME);
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for root");
@@ -595,7 +604,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* All of the following fields are immutable
      * and should not change once they are set */
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true, "isoalloc zone bitmap");
+    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true, ZONE_BITMAP_NAME);
 
     void *bitmap_pages_guard_below = p;
     new_zone->bitmap_start = (p + _root->system_page_size);
@@ -612,9 +621,9 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     char *name;
 
     if(internal == true) {
-        name = "internal isoalloc user zone";
+        name = INTERNAL_UZ_NAME;
     } else {
-        name = "custom isoalloc user zone";
+        name = CUSTOM_UZ_NAME;
     }
 
     /* All user pages use MAP_POPULATE. This might seem like we are asking
@@ -873,14 +882,14 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     if(big == NULL) {
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, "isoalloc big zone user data");
+        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, BIG_ZONE_UD_NAME);
 
         if(user_pages == NULL) {
             UNLOCK_BIG_ZONE();
             return NULL;
         }
 
-        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, "isoalloc big zone metadata");
+        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
 
         /* The first page before meta data is a guard page */
         create_guard_page(p);
