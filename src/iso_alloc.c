@@ -268,7 +268,6 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
     return p;
 }
 
-
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name) {
 #if !ENABLE_ASAN
     /* Produce a random page address as a hint for mmap */

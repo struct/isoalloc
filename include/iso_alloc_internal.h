@@ -63,7 +63,6 @@
 #include <sys/prctl.h>
 #endif
 
-
 #if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
 #include <sched.h>
 #endif

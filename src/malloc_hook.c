@@ -72,7 +72,7 @@ EXTERNAL_API void *memalign(size_t alignment, size_t s) {
 
 #if __ANDROID__
 EXTERNAL_API size_t malloc_usable_size(const void *ptr) {
-    return iso_chunksz((void *)ptr);
+    return iso_chunksz((void *) ptr);
 }
 #else
 EXTERNAL_API size_t malloc_usable_size(void *ptr) {
