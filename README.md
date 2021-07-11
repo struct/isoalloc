@@ -109,6 +109,10 @@ The Makefile targets are very simple:
 
 `make clean` - Cleans up the root directory
 
+## Android
+
+To build Android libraries for x86_64 and ARM64 architectures just `cd` into the `android/jni` directory and run `ndk-build`
+
 ## Linking With C++
 
 If you want to use IsoAlloc with a C++ program you can use the `c_library_objects` Makefile target. This will produce .o object files you can pass to your compiler. These targets are used internally to build the library with `new` and `delete` support.
