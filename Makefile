@@ -225,9 +225,10 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
 	utils/run_tests.sh
 
-fuzz_test: clean
+fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"
-	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) -DNEVER_REUSE_ZONES=1 tests/alloc_fuzz.c -o $(BUILD_DIR)/alloc_fuzz
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) -DNEVER_REUSE_ZONES=1 tests/alloc_fuzz.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/alloc_fuzz $(LDFLAGS)
+
 	LD_LIBRARY_PATH=build/ build/alloc_fuzz
 
 ## Build a non-debug library with performance
