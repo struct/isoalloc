@@ -7,7 +7,7 @@
 #define _GNU_SOURCE
 #endif
 
-#if !__x86_64__
+#if !__aarch64__ && !__x86_64__
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
