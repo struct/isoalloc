@@ -228,7 +228,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
 
     sane_alloc->guard_below = p;
     create_guard_page(sane_alloc->guard_below);
-    sane_alloc->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + (g_page_size * 2)));
+    sane_alloc->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + (g_page_size * 2)));
     create_guard_page(sane_alloc->guard_above);
 
     p = (p + g_page_size);

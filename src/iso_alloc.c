@@ -328,7 +328,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     r->guard_below = p;
     create_guard_page(r->guard_below);
 
-    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t)(p + sizeof(iso_alloc_root) + r->system_page_size));
+    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + sizeof(iso_alloc_root) + r->system_page_size));
     create_guard_page(r->guard_above);
     return r;
 }
@@ -354,7 +354,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     /* Allocate memory with guard pages to hold zone data */
     void *p = mmap_rw_pages(_root->zones_size, false, NULL);
     create_guard_page(p);
-    create_guard_page((void *) (uintptr_t)(p + _root->zones_size) - g_page_size);
+    create_guard_page((void *) (uintptr_t) (p + _root->zones_size) - g_page_size);
 
     _root->zones = (void *) (p + g_page_size);
     name_mapping(p, _root->zones_size, "isoalloc zone metadata");
@@ -1188,6 +1188,20 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+    /* Hot Path: Check the thread cache for a zone this
+     * thread recently used for an alloc/free operation */
+    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+        UNMASK_ZONE_PTRS(thread_zone_cache[i].zone);
+        zone = thread_zone_cache[i].zone;
+        if(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p) {
+            MASK_ZONE_PTRS(zone);
+            return zone;
+        }
+        MASK_ZONE_PTRS(zone);
+    }
+#endif
+
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
@@ -1206,6 +1220,20 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
+
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+    /* Hot Path: Check the thread cache for a zone this
+     * thread recently used for an alloc/free operation */
+    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+        UNMASK_ZONE_PTRS(thread_zone_cache[i].zone);
+        zone = thread_zone_cache[i].zone;
+        if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
+            MASK_ZONE_PTRS(zone);
+            return zone;
+        }
+        MASK_ZONE_PTRS(zone);
+    }
+#endif
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
@@ -1373,7 +1401,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
-    uint64_t chunk_offset = (uint64_t)(p - zone->user_pages_start);
+    uint64_t chunk_offset = (uint64_t) (p - zone->user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
     if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
