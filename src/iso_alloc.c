@@ -1005,6 +1005,20 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
     return sz + 1;
 }
 
+INTERNAL_HIDDEN INLINE void populate_thread_zone_cache(iso_alloc_zone *zone) {
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
+        thread_zone_cache_count++;
+    } else {
+        thread_zone_cache_count = 0;
+        thread_zone_cache[thread_zone_cache_count].zone = zone;
+        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
+    }
+#endif
+}
+
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     LOCK_ROOT();
 
@@ -1134,17 +1148,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
     MASK_ZONE_PTRS(zone);
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
-    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
-        thread_zone_cache_count++;
-    } else {
-        thread_zone_cache_count = 0;
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
-    }
-#endif
+    populate_thread_zone_cache(zone);
 
     UNLOCK_ROOT();
     return p;
@@ -1481,17 +1485,7 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
 
     POISON_ZONE_CHUNK(zone, p);
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
-    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
-        thread_zone_cache_count++;
-    } else {
-        thread_zone_cache_count = 0;
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
-    }
-#endif
+    populate_thread_zone_cache(zone);
 
     return;
 }

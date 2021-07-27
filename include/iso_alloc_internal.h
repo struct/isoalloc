@@ -515,6 +515,7 @@ INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void 
 INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache(void);
+INTERNAL_HIDDEN INLINE void populate_thread_zone_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
