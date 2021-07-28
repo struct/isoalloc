@@ -1399,7 +1399,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
     UNLOCK_BIG_ZONE();
 }
 
-INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
+INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
