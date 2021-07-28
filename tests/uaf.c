@@ -19,6 +19,7 @@ int main(int argc, char *argv[]) {
 
     /* Dereference a pointer that should have been
      * detected and overwritten with UAF_PTR_PAGE */
+    LOG("Attempting to dereference test->str.\nWe should fault on %x", UAF_PTR_PAGE_ADDR);
     LOG("%s", test->str);
     iso_free(test);
 
