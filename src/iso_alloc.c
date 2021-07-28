@@ -1444,14 +1444,14 @@ INTERNAL_HIDDEN FLATTEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
         zone->is_full = false;
+#if !ENABLE_ASAN && SANITIZE_CHUNKS
+        iso_clear_user_chunk(p, zone->chunk_size);
+#endif
+    } else {
         iso_clear_user_chunk(p, zone->chunk_size);
     }
 
     bm[dwords_to_bit_slot] = b;
-
-#if !ENABLE_ASAN && SANITIZE_CHUNKS
-    iso_clear_user_chunk(p, zone->chunk_size);
-#endif
 
     /* Now that we have free'd this chunk lets validate the
      * chunks before and after it. If they were previously
