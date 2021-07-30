@@ -1208,14 +1208,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
-
         UNMASK_ZONE_PTRS(zone);
-
         if(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p) {
             MASK_ZONE_PTRS(zone);
             return zone;
         }
-
         MASK_ZONE_PTRS(zone);
     }
 
@@ -1241,14 +1238,11 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
-
         UNMASK_ZONE_PTRS(zone);
-
         if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
             MASK_ZONE_PTRS(zone);
             return zone;
         }
-
         MASK_ZONE_PTRS(zone);
     }
 
