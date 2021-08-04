@@ -67,8 +67,7 @@ When enabled the `CPU_PIN` feature will restrict allocations from a given zone t
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort
 * Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size
 * The free bit slot cache provides a chunk quarantine or delayed free mechanism
-* The free bit slot cache can be checked for duplicate entries to detect corruption
-* When custom zones are destroyed they are overwritten and marked PROT_NONE to prevent use-after-free
+* When custom zones are destroyed they are overwritten and marked `PROT_NONE` to prevent use-after-free
 * Big zone meta data lives at a random offset from its base page
 * A call to `realloc` will always return a new chunk. Use `PERM_FREE_REALLOC` to make these free's permanent
 * Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse custom zones
@@ -76,6 +75,7 @@ When enabled the `CPU_PIN` feature will restrict allocations from a given zone t
 * When `UAF_PTR_PAGE` is enabled calls to `iso_free` will be sampled to search for dangling references
 * Enable `VERIFY_BIT_SLOT_CACHE` to verify there are no duplicates in the bit slot cache upon free
 * When `ALLOC_SANITY` is enabled a percentage of allocations will be sampled to detect UAF/overflows, see above
+* Randomized hints are passed to `mmap` to ensure contiguous page ranges are not allocated
 
 ## Building
 
