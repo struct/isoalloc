@@ -22,9 +22,9 @@ Default zones for common sizes are created in the library constructor. This help
 
 By default user chunks are not sanitized upon free. While this helps mitigate uninitialized memory vulnerabilities it is a very slow operation. You can enable this feature by changing the `SANITIZE_CHUNKS` flag in the Makefile.
 
-The meta data for all default zones will be locked with `mlock`. This means this data will never be swapped to disk. We do this because iterating over these data structures is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure. Zones that are created on demand after initialization will not have their memory locked.
+The meta data for the IsoAlloc root will be locked with `mlock`. This means this data will never be swapped to disk. We do this because using this data structure is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure.
 
-If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic lock/unlock operations from the allocator, which will speed things up substantially in some programs. If you do require thread support then you may want to profile your program to determine if `THREAD_ZONE_CACHE` will benefit your performance or harm it. The assumption this cache makes is that your threads will make similarly sized allocations. If this is unlikely then you can disable it in the Makefile.
+If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic lock/unlock operations from the allocator, which will result in significant performance gains in some programs. If you do require thread support then you may want to profile your program to determine if `THREAD_ZONE_CACHE` will benefit your performance or harm it. The assumption this cache makes is that your threads will make similarly sized allocations. If this is unlikely then you can disable it in the `Makefile`.
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance.
 
@@ -34,128 +34,132 @@ I've spent a good amount of time testing IsoAlloc to ensure its reasonably fast 
 
 The `malloc_cmp_test` build target will build 2 different versions of the test/tests.c program which runs roughly 1.4 million alloc/calloc/realloc operations. We free every other allocation and then free the remaining ones once the allocation loop is complete. This helps simulate some fragmentation in the heap. On average IsoAlloc is faster than ptmalloc but the difference is so close it will likely not be noticable.
 
-```
-iso_alloc/iso_free 1441616 tests completed in 0.252341 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.308071 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.444568 seconds
+The following test was run in an Ubuntu 20.04 for ARM64 docker container with libc version 2.31-0ubuntu9.2 on a MacOS host. The kernel used was `Linux 8772e39a0c20 5.10.25-linuxkit`.
 
-malloc/free 1441616 tests completed in 0.325772 seconds
-calloc/free 1441616 tests completed in 0.408884 seconds
-realloc/free 1441616 tests completed in 0.445580 seconds
 ```
-This same test can be used with the `perf` utility to measure basic stats like page faults and CPU utilization using both heap implementations.
+Running IsoAlloc Performance Test
+
+iso_alloc/iso_free 1441616 tests completed in 0.146178 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.179017 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.249600 seconds
+
+Running glibc/ptmalloc Performance Test
+
+malloc/free 1441616 tests completed in 0.171125 seconds
+calloc/free 1441616 tests completed in 0.228953 seconds
+realloc/free 1441616 tests completed in 0.317215 seconds
+
+Running jemalloc Performance Test
+
+malloc/free 1441616 tests completed in 0.059686 seconds
+calloc/free 1441616 tests completed in 0.188510 seconds
+realloc/free 1441616 tests completed in 0.190125 seconds
+
+Running mimalloc Performance Test
+
+malloc/free 1441616 tests completed in 0.091053 seconds
+calloc/free 1441616 tests completed in 0.118271 seconds
+realloc/free 1441616 tests completed in 0.154681 seconds
+
+Running mimalloc-secure Performance Test
+
+malloc/free 1441616 tests completed in 0.136460 seconds
+calloc/free 1441616 tests completed in 0.163846 seconds
+realloc/free 1441616 tests completed in 0.193132 seconds
+
+Running tcmalloc Performance Test
+
+malloc/free 1441616 tests completed in 0.108659 seconds
+calloc/free 1441616 tests completed in 0.124787 seconds
+realloc/free 1441616 tests completed in 0.141458 seconds
+
+```
+
+The same test run on an AWS t2.xlarge Ubuntu 20.04 instance with 4 `Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz` CPUs and 16 gb of memory:
+
+```
+Running IsoAlloc Performance Test
+
+iso_alloc/iso_free 1441616 tests completed in 0.418426 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.578068 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.681393 seconds
+
+Running glibc malloc Performance Test
+
+malloc/free 1441616 tests completed in 0.352161 seconds
+calloc/free 1441616 tests completed in 0.562425 seconds
+realloc/free 1441616 tests completed in 0.590622 seconds
+
+```
+
+This same test can be used with the `perf` utility to measure basic stats like page faults and CPU utilization using both heap implementations. The output below is on the same AWS t2.xlarge instance as above.
 
 ```
 $ perf stat build/tests
-iso_alloc/iso_free 1441616 tests completed in 0.368204 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.533650 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.856406 seconds
+sudo perf stat build/tests
+iso_alloc/iso_free 1441616 tests completed in 0.416603 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.575822 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.679546 seconds
 
  Performance counter stats for 'build/tests':
 
-       1823.204720      task-clock:u (msec)       #    0.986 CPUs utilized          
-                 0      context-switches:u        #    0.000 K/sec                  
-                 0      cpu-migrations:u          #    0.000 K/sec                  
-               182      page-faults:u             #    0.100 K/sec                  
+           1709.07 msec task-clock                #    1.000 CPUs utilized
+                 7      context-switches          #    0.004 K/sec
+                 0      cpu-migrations            #    0.000 K/sec
+            145562      page-faults               #    0.085 M/sec
 
-       1.849822214 seconds time elapsed
+       1.709414837 seconds time elapsed
 
+       1.405068000 seconds user
+       0.304239000 seconds sys
 
-$ perf stat build/malloc_tests 
-malloc/free 1441616 tests completed in 0.375495 seconds
-calloc/free 1441616 tests completed in 0.765150 seconds
-realloc/free 1441616 tests completed in 0.832934 seconds
-
- Performance counter stats for 'build/malloc_tests':
-
-       2016.896435      task-clock:u (msec)       #    0.999 CPUs utilized          
-                 0      context-switches:u        #    0.000 K/sec                  
-                 0      cpu-migrations:u          #    0.000 K/sec                  
-           530,386      page-faults:u             #    0.263 M/sec                  
-
-       2.018058123 seconds time elapsed
-```
-
-The test above is on a free tier Amazon t2.micro instance with 1 CPU and 1 Gb of RAM. IsoAlloc just barely beats ptmalloc here. Below are the results from an Amazon c5n.large instance with 2 CPUs and 4Gb of memory. The IsoAlloc configuration had `PRE_POPULATE_PAGES=1` which reduces page faults.
-
-```
-$ sudo perf stat build/tests
-iso_alloc/iso_free 1441616 tests completed in 0.302376 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.448824 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.455860 seconds
-
- Performance counter stats for 'build/tests':
-
-       1249.500900      task-clock (msec)         #    0.999 CPUs utilized          
-                 2      context-switches          #    0.002 K/sec                  
-                 0      cpu-migrations            #    0.000 K/sec                  
-               191      page-faults               #    0.153 K/sec                  
-
-       1.251236091 seconds time elapsed
-
-$ sudo perf stat build/malloc_tests 
-malloc/free 1441616 tests completed in 0.327699 seconds
-calloc/free 1441616 tests completed in 0.455887 seconds
-realloc/free 1441616 tests completed in 0.503063 seconds
+ubuntu@ip-172-31-2-33:~/isoalloc$ sudo perf stat build/malloc_tests
+malloc/free 1441616 tests completed in 0.359380 seconds
+calloc/free 1441616 tests completed in 0.569044 seconds
+realloc/free 1441616 tests completed in 0.597936 seconds
 
  Performance counter stats for 'build/malloc_tests':
 
-       1319.741125      task-clock (msec)         #    0.999 CPUs utilized          
-                 3      context-switches          #    0.002 K/sec                  
-                 0      cpu-migrations            #    0.000 K/sec                  
-            416735      page-faults               #    0.316 M/sec                  
+           1528.51 msec task-clock                #    1.000 CPUs utilized
+                 5      context-switches          #    0.003 K/sec
+                 0      cpu-migrations            #    0.000 K/sec
+            433055      page-faults               #    0.283 M/sec
 
-       1.320819529 seconds time elapsed
-```
+       1.528795324 seconds time elapsed
 
-IsoAlloc seems to outperform ptmalloc in these artificial benchmarks.
-
-
-The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for most benchmarks but clearly falls behind in the Redis and cfrac benchmarks. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. Its worth noting that IsoAlloc was able to stay competitive even with performing numerous security checks not present in other allocators.
+       0.724352000 seconds user
+       0.804371000 seconds sys
 
 ```
-espresso tcmalloc 04.94 8668 4.91 0.02 0 1524
-espresso jemalloc 05.19 5040 5.18 0.01 0 678
-espresso isoalloc 06.80 91344 6.65 0.14 0 23240
-espresso ptmalloc 05.63 2328 5.62 0.01 0 460
 
-barnes tcmalloc 03.10 63672 3.07 0.02 0 16603
-barnes jemalloc 03.17 60360 3.15 0.02 0 15738
-barnes isoalloc 03.14 74804 3.09 0.05 0 19507
-barnes ptmalloc 03.09 58492 3.07 0.02 0 15605
+The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for some benchmarks but clearly falls behind in the Redis benchmark. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators.
 
-alloc-test1 tcmalloc 03.81 16212 3.79 0.01 1 3359
-alloc-test1 jemalloc 04.12 12180 4.10 0.01 0 2500
-alloc-test1 isoalloc 07.65 64460 7.46 0.19 0 15727
-alloc-test1 ptmalloc 04.74 13336 4.73 0.00 0 2932
-
-cache-thrash1 tcmalloc 01.67 7604 1.66 0.00 0 1171
-cache-thrash1 jemalloc 01.67 4116 1.67 0.00 0 288
-cache-thrash1 isoalloc 01.68 19272 1.68 0.00 0 4094
-cache-thrash1 ptmalloc 01.67 3476 1.66 0.00 0 217
-
-cache-thrashN tcmalloc 04.03 7588 28.27 0.00 0 1190
-cache-thrashN jemalloc 00.42 4928 3.34 0.00 0 420
-cache-thrashN isoalloc 02.14 19336 16.85 0.01 0 4106
-cache-thrashN ptmalloc 00.42 3876 3.31 0.00 0 241
-
-cache-scratch1 tcmalloc 01.67 7532 1.67 0.00 0 1167
-cache-scratch1 jemalloc 01.67 4236 1.67 0.00 0 287
-cache-scratch1 isoalloc 01.68 19256 1.67 0.01 0 4079
-cache-scratch1 ptmalloc 01.67 3628 1.67 0.00 0 217
-
-cache-scratchN tcmalloc 04.51 7716 30.21 0.00 0 1194
-cache-scratchN jemalloc 04.40 4504 31.06 0.00 0 391
-cache-scratchN isoalloc 02.16 19296 17.00 0.00 0 4096
-cache-scratchN ptmalloc 02.06 3784 9.59 0.00 0 241
-
-cfrac tcmalloc 06.40 8192 6.39 0.00 2 1370
-cfrac jemalloc 06.65 4708 6.65 0.00 0 476
-cfrac isoalloc 10.89 25400 10.67 0.21 0 5744
-cfrac ptmalloc 06.82 3136 6.82 0.00 0 426
-
-redis tcmalloc 4.409 37896 1.93 0.27 0 8479
-redis jemalloc 5.097 31772 2.33 0.22 0 7082
-redis isoalloc 13.020 104688 6.11 0.43 0 25329
-redis ptmalloc 4.866 30076 2.16 0.27 0 6807
 ```
+# benchmark allocator elapsed rss user sys page-faults page-reclaims
+
+barnes mimalloc 04.81 58660 4.77 0.03 0 15631
+barnes smimalloc 04.80 58880 4.78 0.01 0 15649
+barnes isoalloc 04.81 67144 4.77 0.04 0 17579
+barnes tcmalloc 04.81 63636 4.78 0.03 0 16605
+barnes jemalloc 04.85 60480 4.84 0.01 0 15741
+
+mstressN mimalloc 04.24 645672 4.42 0.37 0 161319
+mstressN smimalloc 04.28 649116 4.51 0.39 0 162183
+mstressN isoalloc 04.23 673724 6.20 0.54 0 294751
+mstressN tcmalloc 04.00 624892 4.33 0.26 0 158983
+mstressN jemalloc 11.27 624880 5.47 6.87 0 4045738
+
+espresso mimalloc 06.66 4640 6.63 0.02 0 800
+espresso smimalloc 07.18 6732 7.15 0.02 0 1319
+espresso isoalloc 10.13 48968 10.00 0.12 0 11976
+espresso tcmalloc 06.55 8720 6.51 0.03 0 1528
+espresso jemalloc 06.94 5348 6.93 0.01 0 652
+
+redis mimalloc 8.666 29940 3.61 0.73 0 6709
+redis smimalloc 9.317 31712 3.90 0.76 0 715
+redis isoalloc 19.794 99904 9.01 0.92 0 24082
+redis tcmalloc 8.661 38308 3.52 0.82 0 8502
+redis jemalloc 9.470 32176 4.04 0.70 0 7100
+```
+
+IsoAlloc isn't quite ready for performance sensitive server workloads but it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surface.
