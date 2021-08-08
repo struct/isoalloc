@@ -576,7 +576,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     }
 
     if(size > SMALL_SZ_MAX) {
-        LOG("Request for chunk of %ld bytes should be handled by big alloc path", size);
+        LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
         return NULL;
     }
 
@@ -1050,7 +1050,98 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
      * handled by the 'big allocation' path. If a zone was
      * passed in we abort because its a misuse of the API */
-    if(UNLIKELY(size > SMALL_SZ_MAX)) {
+    if(LIKELY(size < SMALL_SZ_MAX)) {
+#if FUZZ_MODE
+        _verify_all_zones();
+#endif
+
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+        if(LIKELY(zone == NULL)) {
+            /* Hot Path: Check the thread cache for a zone this
+             * thread recently used for an alloc/free operation.
+             * It's likely we are allocating a similar size chunk
+             * and this will speed up that operation */
+            for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+                if(thread_zone_cache[i].chunk_size >= size) {
+                    bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
+
+                    if(fit == true) {
+                        zone = thread_zone_cache[i].zone;
+                        break;
+                    }
+                }
+            }
+        }
+#endif
+
+        bit_slot_t free_bit_slot = BAD_BIT_SLOT;
+
+        /* Slow Path: This will iterate through all zones
+         * looking for a suitable one, this includes the
+         * zones we cached above */
+        if(zone == NULL) {
+            zone = iso_find_zone_fit(size);
+        }
+
+        if(zone != NULL) {
+            /* We only need to check if the zone is usable
+             * if it's a custom zone. If we chose this zone
+             * then its guaranteed to already be usable */
+            if(zone->internally_managed == false) {
+                zone = is_zone_usable(zone, size);
+
+                if(zone == NULL) {
+                    UNLOCK_ROOT();
+                    return NULL;
+                }
+            }
+
+            free_bit_slot = zone->next_free_bit_slot;
+        } else {
+            /* Extra Slow Path: We need a new zone in order
+             * to satisfy this allocation request */
+
+            /* The size requested is above default zone sizes
+             * but we can still create it. iso_new_zone will
+             * align the requested size for us */
+            if(size > ZONE_8192) {
+                zone = _iso_new_zone(size, true);
+            } else {
+                /* For chunks smaller than 8192 bytes we
+                 * bump the size up to the next power of 2 */
+                size = next_pow2(size);
+                zone = _iso_new_zone(size, true);
+            }
+
+            if(UNLIKELY(zone == NULL)) {
+                LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
+            }
+
+            /* This is a brand new zone, so the fast path
+             * should always work. Abort if it doesn't */
+            free_bit_slot = zone->next_free_bit_slot;
+
+            if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
+                LOG_AND_ABORT("Allocated a new zone with no free bit slots");
+            }
+        }
+
+        if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
+            UNLOCK_ROOT();
+            return NULL;
+        }
+
+        UNMASK_ZONE_PTRS(zone);
+
+        zone->next_free_bit_slot = BAD_BIT_SLOT;
+        void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
+        MASK_ZONE_PTRS(zone);
+
+        populate_thread_zone_cache(zone);
+
+        UNLOCK_ROOT();
+        return p;
+    } else {
         /* It's safe to unlock the root at this point because
          * the big zone allocation path uses a different lock */
         UNLOCK_ROOT();
@@ -1061,97 +1152,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
         return _iso_big_alloc(size);
     }
-
-#if FUZZ_MODE
-    _verify_all_zones();
-#endif
-
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
-    if(LIKELY(zone == NULL)) {
-        /* Hot Path: Check the thread cache for a zone this
-         * thread recently used for an alloc/free operation.
-         * It's likely we are allocating a similar size chunk
-         * and this will speed up that operation */
-        for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-            if(thread_zone_cache[i].chunk_size >= size) {
-                bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
-
-                if(fit == true) {
-                    zone = thread_zone_cache[i].zone;
-                    break;
-                }
-            }
-        }
-    }
-#endif
-
-    bit_slot_t free_bit_slot = BAD_BIT_SLOT;
-
-    /* Slow Path: This will iterate through all zones
-     * looking for a suitable one, this includes the
-     * zones we cached above */
-    if(LIKELY(zone == NULL)) {
-        zone = iso_find_zone_fit(size);
-    }
-
-    if(LIKELY(zone != NULL)) {
-        /* We only need to check if the zone is usable
-         * if it's a custom zone. If we chose this zone
-         * then its guaranteed to already be usable */
-        if(zone->internally_managed == false) {
-            zone = is_zone_usable(zone, size);
-
-            if(zone == NULL) {
-                UNLOCK_ROOT();
-                return NULL;
-            }
-        }
-
-        free_bit_slot = zone->next_free_bit_slot;
-    } else {
-        /* Extra Slow Path: We need a new zone in order
-         * to satisfy this allocation request */
-
-        /* The size requested is above default zone sizes
-         * but we can still create it. iso_new_zone will
-         * align the requested size for us */
-        if(size > ZONE_8192) {
-            zone = _iso_new_zone(size, true);
-        } else {
-            /* For chunks smaller than 8192 bytes we
-             * bump the size up to the next power of 2 */
-            size = next_pow2(size);
-            zone = _iso_new_zone(size, true);
-        }
-
-        if(UNLIKELY(zone == NULL)) {
-            LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
-        }
-
-        /* This is a brand new zone, so the fast path
-         * should always work. Abort if it doesn't */
-        free_bit_slot = zone->next_free_bit_slot;
-
-        if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
-            LOG_AND_ABORT("Allocated a new zone with no free bit slots");
-        }
-    }
-
-    if(free_bit_slot == BAD_BIT_SLOT) {
-        UNLOCK_ROOT();
-        return NULL;
-    }
-
-    UNMASK_ZONE_PTRS(zone);
-
-    zone->next_free_bit_slot = BAD_BIT_SLOT;
-    void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
-    MASK_ZONE_PTRS(zone);
-
-    populate_thread_zone_cache(zone);
-
-    UNLOCK_ROOT();
-    return p;
 }
 
 INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
@@ -1349,7 +1349,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
     /* If this isn't a permanent free then all we need
      * to do is sanitize the mapping and mark it free.
      * The pages backing the big zone can be reused. */
-    if(permanent == false) {
+    if(LIKELY(permanent == false)) {
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
     } else {
@@ -1505,7 +1505,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
-    if(zone != NULL) {
+    if(LIKELY(zone != NULL)) {
         UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
         MASK_ZONE_PTRS(zone);
@@ -1520,7 +1520,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
         UNLOCK_ROOT();
 
-        if(big_zone == NULL) {
+        if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
         }
 
