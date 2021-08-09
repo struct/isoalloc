@@ -39,9 +39,9 @@ The following test was run in an Ubuntu 20.04 for ARM64 docker container with li
 ```
 Running IsoAlloc Performance Test
 
-iso_alloc/iso_free 1441616 tests completed in 0.146178 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.179017 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.249600 seconds
+iso_alloc/iso_free 1441616 tests completed in 0.146020 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.174673 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.249192 seconds
 
 Running glibc/ptmalloc Performance Test
 
@@ -96,7 +96,7 @@ This same test can be used with the `perf` utility to measure basic stats like p
 
 ```
 $ perf stat build/tests
-sudo perf stat build/tests
+
 iso_alloc/iso_free 1441616 tests completed in 0.416603 seconds
 iso_calloc/iso_free 1441616 tests completed in 0.575822 seconds
 iso_realloc/iso_free 1441616 tests completed in 0.679546 seconds
@@ -113,7 +113,8 @@ iso_realloc/iso_free 1441616 tests completed in 0.679546 seconds
        1.405068000 seconds user
        0.304239000 seconds sys
 
-ubuntu@ip-172-31-2-33:~/isoalloc$ sudo perf stat build/malloc_tests
+$ perf stat build/malloc_tests
+
 malloc/free 1441616 tests completed in 0.359380 seconds
 calloc/free 1441616 tests completed in 0.569044 seconds
 realloc/free 1441616 tests completed in 0.597936 seconds
