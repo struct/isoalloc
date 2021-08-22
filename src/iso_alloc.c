@@ -885,6 +885,9 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         if(user_pages == NULL) {
             UNLOCK_BIG_ZONE();
+#if ABORT_ON_NULL
+            LOG_AND_ABORT("isoalloc configured to abort on NULL");
+#endif
             return NULL;
         }
 
@@ -1092,6 +1095,9 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
                 if(zone == NULL) {
                     UNLOCK_ROOT();
+#if ABORT_ON_NULL
+                    LOG_AND_ABORT("isoalloc configured to abort on NULL");
+#endif
                     return NULL;
                 }
             }
@@ -1128,6 +1134,9 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
         if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
             UNLOCK_ROOT();
+#if ABORT_ON_NULL
+            LOG_AND_ABORT("isoalloc configured to abort on NULL");
+#endif
             return NULL;
         }
 

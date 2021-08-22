@@ -76,6 +76,7 @@ When enabled the `CPU_PIN` feature will restrict allocations from a given zone t
 * Enable `VERIFY_BIT_SLOT_CACHE` to verify there are no duplicates in the bit slot cache upon free
 * When `ALLOC_SANITY` is enabled a percentage of allocations will be sampled to detect UAF/overflows, see above
 * Randomized hints are passed to `mmap` to ensure contiguous page ranges are not allocated
+* When `ABORT_ON_NULL` is enabled IsoAlloc will abort instead of returning NULL
 
 ## Building
 
