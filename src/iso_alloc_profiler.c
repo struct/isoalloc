@@ -1,4 +1,4 @@
-/* iso_alloc.c - A secure memory allocator
+/* iso_alloc_profiler.c - A secure memory allocator
  * Copyright 2021 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
