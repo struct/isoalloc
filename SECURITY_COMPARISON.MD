@@ -32,6 +32,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:grey_question:   |:x:               |:x:               |
 |Zone/Chunk CPU Pinning |:heavy_check_mark:|:x:               |:x:               |:x:              |:grey_question:   |:grey_question:   |:x:               |:x:               |
 |Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:grey_question:   |:grey_question:   |:grey_question:   |:grey_question:   |
+|Zero Size Allocation Special Handling|:x: |:x:               |:grey_question:   |:grey_question:  |:grey_question:   |:grey_question:   |:x:               |:heavy_check_mark:|
 
 **Sources**
 
