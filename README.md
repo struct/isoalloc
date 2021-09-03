@@ -77,6 +77,7 @@ When enabled the `CPU_PIN` feature will restrict allocations from a given zone t
 * When `ALLOC_SANITY` is enabled a percentage of allocations will be sampled to detect UAF/overflows, see above
 * Randomized hints are passed to `mmap` to ensure contiguous page ranges are not allocated
 * When `ABORT_ON_NULL` is enabled IsoAlloc will abort instead of returning NULL
+* By default `NO_ZERO_ALLOCATIONS` will return a pointer to a page marked PROT_NONE for all 0 sized allocations
 
 ## Building
 
