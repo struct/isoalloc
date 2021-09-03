@@ -269,6 +269,10 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
 }
 
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name) {
+    return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
+}
+
+INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
 #if !ENABLE_ASAN
     /* Produce a random page address as a hint for mmap */
     uint64_t hint = ROUND_DOWN_PAGE(rand_uint64());
@@ -283,12 +287,12 @@ INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name
     /* Only Linux supports MAP_POPULATE */
 #if __linux__ && PRE_POPULATE_PAGES
     if(populate == true) {
-        p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+        p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     } else {
-        p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     }
 #else
-    p = mmap(p, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
 
     if(p == MAP_FAILED) {
@@ -380,6 +384,10 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
     _initialize_profiler();
+
+#if NO_ZERO_ALLOCATIONS
+    _zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
+#endif
 
 #if ALLOC_SANITY && UNINIT_READ_SANITY
     _iso_alloc_setup_userfaultfd();
@@ -488,6 +496,10 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
         close(profiler_fd);
         profiler_fd = ERR;
     }
+#endif
+
+#if NO_ZERO_ALLOCATIONS
+    munmap(_zero_alloc_page, g_page_size);
 #endif
 
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
@@ -1030,6 +1042,13 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         iso_alloc_initialize_global_root();
     }
 
+#if NO_ZERO_ALLOCATIONS
+    if(size == 0) {
+        UNLOCK_ROOT();
+        return _zero_alloc_page;
+    }
+#endif
+
 #if ALLOC_SANITY
     /* We only sample allocations smaller than an individual
      * page. We are unlikely to find uninitialized reads on
@@ -1497,6 +1516,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     if(p == NULL) {
         return;
     }
+
+#if NO_ZERO_ALLOCATIONS
+    if(p == _zero_alloc_page) {
+        return;
+    }
+#endif
 
 #if ALLOC_SANITY
     int32_t r = _iso_alloc_free_sane_sample(p);

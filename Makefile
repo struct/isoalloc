@@ -127,6 +127,9 @@ NAMED_MAPPINGS = -DNAMED_MAPPINGS=0
 ## Abort when the allocator cannot return a valid chunk
 ABORT_ON_NULL = -DABORT_ON_NULL=0
 
+## Enable protection against misusing 0 sized allocations
+NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
+
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
@@ -143,7 +146,7 @@ COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(START
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
-	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL)
+	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
@@ -225,6 +228,7 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/wild_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/wild_free $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/zero_alloc.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/zero_alloc $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
 	utils/run_tests.sh
 

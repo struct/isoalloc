@@ -475,6 +475,10 @@ typedef struct {
     size_t zones_size;
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
+#if NO_ZERO_ALLOCATIONS
+void *_zero_alloc_page;
+#endif
+
 #if UAF_PTR_PAGE
 #define UAF_PTR_PAGE_ODDS 1000000
 #define UAF_PTR_PAGE_ADDR 0xFF41414142434445
@@ -543,6 +547,7 @@ INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void *create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name);
+INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone);
