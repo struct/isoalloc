@@ -11,28 +11,28 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 :grey_question: = Todo
 
 
-| Security Feature      | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc         | jemalloc         | musl's malloc-ng | malloc_hardened  |
+| Security Feature      | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  |
 |:---------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:grey_question:   |:grey_question:   |:x:               |:heavy_check_mark:|
-|Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|
-|Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|
-|Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|
-|Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:grey_question:   |:grey_question:   |:x:               |:grey_question:   |
-|Double Free Detection  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:grey_question:   |:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
-|Chunk Alignment Check  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:grey_question:   |:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
-|Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:grey_question:   |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
-|Permanent Frees        |:heavy_check_mark:|:x:               |:x:               |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|Freed Chunk Sanitization   |:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:grey_question:   |:heavy_plus_sign: |:x:               |:heavy_check_mark:|
-|Adjacent Chunk Verification|:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|Delayed Free           |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|
-|Dangling Pointer Detection |:heavy_plus_sign:|:x:            |:x:               |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|GWP-ASAN Like Sampling |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|Type Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:x:               |:x:               |:heavy_check_mark:|
-|Size Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:x:               |:x:               |:heavy_check_mark:|
-|ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|Zone/Chunk CPU Pinning |:heavy_check_mark:|:x:               |:x:               |:x:              |:grey_question:   |:x:               |:x:               |:x:               |
-|Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:grey_question:   |:x:               |:grey_question:   |:grey_question:   |
-|Zero Size Allocation Special Handling|:x: |:x:               |:grey_question:   |:grey_question:  |:grey_question:   |:x:               |:x:               |:heavy_check_mark:|
+|Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|
+|Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|
+|Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
+|Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
+|Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |
+|Double Free Detection  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
+|Chunk Alignment Check  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
+|Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
+|Permanent Frees        |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Freed Chunk Sanitization   |:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|
+|Adjacent Chunk Verification|:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Delayed Free           |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
+|Dangling Pointer Detection |:heavy_plus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|GWP-ASAN Like Sampling |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Type Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|
+|Size Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|
+|ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Zone/Chunk CPU Pinning |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |
+|Zero Size Allocation Special Handling|:x: |:x:               |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|
 
 **Sources**
 
@@ -55,3 +55,5 @@ https://downloads.immunityinc.com/infiltrate-archives/webkit_heap.pdf
 https://census-labs.com/media/shadow-infiltrate-2017.pdf
 
 https://blog.nsogroup.com/a-tale-of-two-mallocs-on-android-libc-allocators-part-3-exploitation/
+
+https://sourceware.org/glibc/wiki/MallocInternals
