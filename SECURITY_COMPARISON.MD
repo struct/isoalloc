@@ -34,6 +34,19 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |
 |Zero Size Allocation Special Handling|:x: |:x:               |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|
 
+**Lexicon**
+
+- *Double Free Detection*: A pointer can't be freed twice.
+- *Chunk Alignment Check*: Pointers passed to `free` must be aligned, and multiples of the zone chunk size.
+- *Out Of Band Metadata*: The chunk metadata are not stored next to/in the chunk, but out of band, making them harder to corrupt.
+- *Freed Chunk Sanitization*: Freed memory is overwritten by some value, preventing info-leaks.
+- *Adjacent Chunk Verification*: When freeing a chunk the canaries in adjacent chunks above/below are verified.
+- *Delayed Free*: Chunks aren't immediately freed, making use-after-free exploitation without a heap-spray harder.
+- *Arm Memory Tagging*: See https://community.arm.com/developer/ip-products/processors/b/processors-ip-blog/posts/enhancing-memory-safety
+- *Zone/Chunk CPU Pinning*: Allocations from a given zone are restricted to the CPU core that created that zone.
+- *Zero Size Allocation Special Handling*: Zero size allocations are treated like a dedicated size class,
+  and point to a non-readable and non-writable region, to ensure that the application can't use them in any way.
+
 **Sources**
 
 https://github.com/struct/IsoAlloc
