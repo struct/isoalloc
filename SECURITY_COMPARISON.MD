@@ -15,6 +15,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |:---------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|
 |Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|
 |Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|
+|Non-global canary      |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|
 |Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
 |Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
 |Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |
@@ -36,6 +37,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 
 **Lexicon**
 
+- Non-global canary: There isn't a single global secret where all bets are off when leaked, but a different canary per slab/arena.
 - *Double Free Detection*: A pointer can't be freed twice.
 - *Chunk Alignment Check*: Pointers passed to `free` must be aligned, and multiples of the zone chunk size.
 - *Out Of Band Metadata*: The chunk metadata are not stored next to/in the chunk, but out of band, making them harder to corrupt.
