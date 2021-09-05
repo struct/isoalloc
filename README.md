@@ -1,5 +1,7 @@
 ![](/misc/iso_alloc_logo.png?raw=true)
 
+![unit tests](https://github.com/struct/isoalloc/actions/workflows/testsuite.yml/badge.svg)
+
 # Isolation Alloc
 
 Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is partially inspired by Chrome's PartitionAlloc. A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
