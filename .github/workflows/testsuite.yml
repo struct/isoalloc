@@ -1,0 +1,10 @@
+name: testsuite
+on: [push, pull_request]
+jobs:
+  testsuite-clang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang
+      - run: make tests
+
