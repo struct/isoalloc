@@ -1,10 +1,42 @@
 name: testsuite
 on: [push, pull_request]
 jobs:
-  testsuite-clang:
+  testsuite-clang7:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt install clang
+      - run: sudo apt install clang-7
       - run: make tests
+  testsuite-clang8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-8
+      - run: make tests
+  testsuite-clang9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-9
+      - run: make tests
+  testsuite-clang10:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-10
+      - run: make tests
+  testsuite-clang11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-11
+      - run: make tests
+  testsuite-clang12:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-12
+      - run: make tests
+
+
 
