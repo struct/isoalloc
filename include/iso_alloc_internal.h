@@ -368,12 +368,12 @@ extern uint32_t _default_zone_count;
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
 #define SMALLEST_CHUNK_SZ ZONE_64
-static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
+const static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
 #else
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~80 mb */
 #define SMALLEST_CHUNK_SZ ZONE_16
-static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
-                                   ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
+const static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
+                                         ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 #endif
 
 #if SMALLEST_CHUNK_SZ < ZONE_8

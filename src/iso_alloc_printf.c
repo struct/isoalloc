@@ -15,7 +15,7 @@
  * be able to print basic log messages without invoking
  * malloc() or we run the risk of using a corrupted heap */
 static int8_t fmt_buf[64];
-static int8_t asc_hex[] = "0123456789abcdef";
+static const int8_t asc_hex[] = "0123456789abcdef";
 
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base) {
     int8_t *ptr;
