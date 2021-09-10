@@ -6,6 +6,8 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 
 :heavy_plus_sign: = Yes but requires configuration
 
+:heavy_minus_sign: = Yes but via non-standard api
+
 :x: = Not available
 
 :grey_question: = Todo
@@ -20,19 +22,20 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
 |Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |
 |Double Free Detection  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
-|Chunk Alignment Check  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
+|Chunk Alignment Check  |:heavy_plus_mark: |:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|
 |Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
-|Permanent Frees        |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
-|Freed Chunk Sanitization   |:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|
+|Permanent Frees        |:heavy_minus_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Freed Chunk Sanitization   |:heavy_plus_mark:|:heavy_check_mark:|:x:            |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|
 |Adjacent Chunk Verification|:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:x:               |:x:               |:x:               |
 |Delayed Free           |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
 |Dangling Pointer Detection |:heavy_plus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
 |GWP-ASAN Like Sampling |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
 |Size Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|
 |ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
-|Zone/Chunk CPU Pinning |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
+|Zone/Chunk CPU Pinning |:heavy_plus_mark: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
 |Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |
 |Zero Size Allocation Special Handling|:heavy_check_mark:|:x: |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|
+|Read-only global structure|:heavy_minus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|
 
 **Lexicon**
 
@@ -48,6 +51,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 - *Zone/Chunk CPU Pinning*: Allocations from a given zone are restricted to the CPU core that created that zone.
 - *Zero Size Allocation Special Handling*: Zero size allocations are treated like a dedicated size class,
   and point to a non-readable and non-writable region, to ensure that the application can't use them in any way.
+- *Read-only global structure*: The global state structure is entirely read-only after initialization.
 
 **Sources**
 
