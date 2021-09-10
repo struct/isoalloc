@@ -28,7 +28,6 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Delayed Free           |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|
 |Dangling Pointer Detection |:heavy_plus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
 |GWP-ASAN Like Sampling |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
-|Type Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|
 |Size Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|
 |ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
 |Zone/Chunk CPU Pinning |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |
@@ -44,6 +43,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 - *Freed Chunk Sanitization*: Freed memory is overwritten by some value, preventing info-leaks.
 - *Adjacent Chunk Verification*: When freeing a chunk the canaries in adjacent chunks above/below are verified.
 - *Delayed Free*: Chunks aren't immediately freed, making use-after-free exploitation without a heap-spray harder.
+- *Size Mismatch Detection*: In C++, type-confusing at free time of objects with *sufficiently different sizes* is detected.
 - *Arm Memory Tagging*: See https://community.arm.com/developer/ip-products/processors/b/processors-ip-blog/posts/enhancing-memory-safety
 - *Zone/Chunk CPU Pinning*: Allocations from a given zone are restricted to the CPU core that created that zone.
 - *Zero Size Allocation Special Handling*: Zero size allocations are treated like a dedicated size class,
