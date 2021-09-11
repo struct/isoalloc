@@ -476,7 +476,7 @@ typedef struct {
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 #if NO_ZERO_ALLOCATIONS
-void *_zero_alloc_page;
+extern void *_zero_alloc_page;
 #endif
 
 #if UAF_PTR_PAGE
