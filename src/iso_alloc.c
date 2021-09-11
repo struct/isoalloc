@@ -12,6 +12,10 @@ uint32_t g_page_size;
 uint32_t _default_zone_count;
 iso_alloc_root *_root;
 
+#if NO_ZERO_ALLOCATIONS
+void *_zero_alloc_page;
+#endif
+
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
