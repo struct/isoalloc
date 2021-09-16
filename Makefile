@@ -11,6 +11,9 @@ CXX = clang++
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
 SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0
 
+## Enable abort() when isoalloc can't gather enough entropy.
+ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
+
 ## This enables Address Sanitizer support for manually
 ## poisoning and unpoisoning zones. It adds significant
 ## performance and memory overhead
@@ -146,7 +149,7 @@ COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(START
 BUILD_ERROR_FLAGS = -Werror -pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments -Wno-format-pedantic
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
-	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS)
+	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer

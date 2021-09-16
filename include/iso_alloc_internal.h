@@ -159,7 +159,7 @@
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                                                                          \
+#define LOG_AND_ABORT(msg, ...)                                                                                                      \
     _iso_alloc_printf(STDOUT_FILENO, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
     abort();
 
