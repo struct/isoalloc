@@ -16,6 +16,7 @@
 
 INTERNAL_HIDDEN uint64_t rand_uint64(void) {
     uint64_t val = 0;
+    int ret = 0;
 
 /* In modern versions of glibc (>=2.25) we can call getrandom(),
  * but older versions of glibc are still in use as of writing this.
@@ -23,9 +24,16 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void) {
  * We give up on checking the return value. The alternative would be
  * to crash. We prefer here to keep going with degraded randomness. */
 #if __linux__
-    (void) syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK);
+    ret = syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __APPLE__
-    (void) SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
+    ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
 #endif
+
+#if ABORT_NO_ENTROPY
+    if(ret != 0) {
+        LOG_AND_ABORT("Unable to gather enough entropy");
+    }
+#endif
+
     return val;
 }
