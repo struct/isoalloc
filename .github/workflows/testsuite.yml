@@ -1,6 +1,11 @@
 name: testsuite
 on: [push, pull_request]
 jobs:
+  testsuite-osx:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: make tests
   testsuite-clang7:
     runs-on: ubuntu-latest
     steps:
