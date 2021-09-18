@@ -159,7 +159,7 @@
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                                                                          \
+#define LOG_AND_ABORT(msg, ...)                                                                                                      \
     _iso_alloc_printf(STDOUT_FILENO, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
     abort();
 
@@ -515,7 +515,6 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache(void);
@@ -565,6 +564,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);

@@ -1298,7 +1298,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     return;
 }
 
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     return OK;
 }
 #else
@@ -1346,7 +1346,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     }
 }
 
-INTERNAL_HIDDEN INLINE int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 

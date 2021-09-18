@@ -120,6 +120,6 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
         }
     }
 
-    write(fd, out, strlen(out));
+    (void) !write(fd, out, strlen(out));
     va_end(arg);
 }
