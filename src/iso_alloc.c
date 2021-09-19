@@ -1567,8 +1567,8 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         }
 
         iso_free_big_zone(big_zone, permanent);
-        return;
     }
+    p = NULL;
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
