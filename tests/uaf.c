@@ -4,6 +4,7 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
+#if defined(UAF_PTR_PAGE) && !defined(ALLOC_SANITY)
 /* This test should be run manually. You need to enable UAF_PTR_PAGE
  * and then disable the sampling logic in iso_alloc. */
 typedef struct test {
@@ -25,3 +26,8 @@ int main(int argc, char *argv[]) {
 
     return OK;
 }
+#else
+int main(int argc, char *argv[]) {
+    return 0;
+}
+#endif

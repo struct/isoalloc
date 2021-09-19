@@ -222,7 +222,7 @@ cpp_library_debug: clean c_library_objects_debug
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
 	@echo "make library_debug_unit_tests"
-	#$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/interfaces_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/thread_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
