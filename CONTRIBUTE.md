@@ -2,11 +2,9 @@
 
 If you're looking to contribute to IsoAlloc then you will want to start with this guide. It contains some steps you will want to follow before making a pull request, and a basic style guide.
 
-## The Process
+## Testing Your Changes
 
 Contributing to IsoAlloc is a pretty standard process of forking the repo, making a pull request, and optionally linking it to an existing issue. Before you make your pull request please run the following commands on both Linux and MacOS:
-
-`make format` - Run the clang formatter to ensure your changes conform to the rest of the project
 
 `make tests` - Make sure all tests still pass
 
@@ -20,9 +18,15 @@ Contributing to IsoAlloc is a pretty standard process of forking the repo, makin
 
 Compile a debug version of the library with `make cpp_library_debug` and then run a basic test using `LD_PRELOAD` and another binary.
 
+If you're making changes that are handled differently between Clang and GCC then please run the tests above but also set the `CC` and `CXX` environment variables approriately.
+
 ## Style Guide
 
-The clang-format makefile target should cleanup a lot of your commit but please ensure you conform to the following style guide:
+Before you make a PR please run the following:
+
+`make format` - Run the clang formatter to ensure your changes conform to the rest of the project style
+
+The clang-format Makefile target should cleanup a lot of your commit but please ensure you conform to the following style guide:
 
 - Open braces on same line as if/function start
 - No space between if conditional and parantheses
