@@ -123,7 +123,5 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
             LOG_AND_ABORT("Pointer to bitmap for zone[%d] found in stack @ %p", zone->index, p);
         }
     }
-
-    return;
 }
 #endif

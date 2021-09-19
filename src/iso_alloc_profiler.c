@@ -255,5 +255,4 @@ INTERNAL_HIDDEN void _initialize_profiler() {
         LOG_AND_ABORT("Cannot open file descriptor for profiler.data");
     }
 #endif
-    return;
 }

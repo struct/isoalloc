@@ -94,14 +94,12 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     LOCK_ROOT();
     _verify_all_zones();
     UNLOCK_ROOT();
-    return;
 }
 
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
     LOCK_ROOT();
     _verify_zone(zone);
     UNLOCK_ROOT();
-    return;
 }
 
 INTERNAL_HIDDEN void _verify_all_zones(void) {
@@ -157,7 +155,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     }
 
     MASK_ZONE_PTRS(zone);
-    return;
 }
 #endif
 
@@ -466,7 +463,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
         POISON_ZONE(zone);
         UNLOCK_ROOT();
-        return;
     } else {
         /* The only time we ever destroy a default non-custom zone
          * is from the destructor so its safe unmap pages */
@@ -1516,8 +1512,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     POISON_ZONE_CHUNK(zone, p);
 
     populate_thread_zone_cache(zone);
-
-    return;
 }
 
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
@@ -1567,7 +1561,6 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         }
 
         iso_free_big_zone(big_zone, permanent);
-        return;
     }
 }
 
