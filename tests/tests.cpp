@@ -44,7 +44,7 @@ int allocate(size_t array_size, size_t allocation_size) {
     void *p[array_size];
     memset(p, 0x0, array_size);
 
-    for(int i = 0; i < array_size; i++) {
+    for(size_t i = 0; i < array_size; i++) {
         if(allocation_size == 0) {
             allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
         }
@@ -65,7 +65,7 @@ int allocate(size_t array_size, size_t allocation_size) {
     }
 
     /* Free the remaining allocations */
-    for(int i = 0; i < array_size; i++) {
+    for(size_t i = 0; i < array_size; i++) {
         if(p[i] != NULL) {
             delete[](uint8_t *) p[i];
         }
@@ -79,13 +79,13 @@ int main(int argc, char *argv[]) {
     iso_free(a);
     auto d = std::make_unique<Derived>(100);
     return 0;
-    for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
-        for(int z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
+    for(size_t i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
+        for(size_t z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
             allocate(array_sizes[i], allocation_sizes[z]);
         }
     }
 
-    for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
+    for(size_t i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
         allocate(array_sizes[i], 0);
         Base *b = new Base();
         delete b;
