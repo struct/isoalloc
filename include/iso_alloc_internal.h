@@ -56,7 +56,12 @@
 
 #if THREAD_SUPPORT
 #include <pthread.h>
+#ifdef __cplusplus
+#include <atomic>
+using namespace std;
+#else
 #include <stdatomic.h>
+#endif
 #endif
 
 #if __linux__ || __ANDROID__
