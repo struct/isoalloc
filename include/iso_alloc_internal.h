@@ -445,9 +445,6 @@ typedef struct {
     size_t chunk_size;
     iso_alloc_zone *zone;
 } __attribute__((aligned(sizeof(int64_t)))) _tzc;
-
-static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
-static __thread size_t thread_zone_cache_count;
 #endif
 
 /* Meta data for big allocations are allocated near the

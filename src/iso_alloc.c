@@ -6,6 +6,10 @@
 #if THREAD_SUPPORT
 atomic_flag root_busy_flag;
 atomic_flag big_zone_busy_flag;
+#if THREAD_ZONE_CACHE
+static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
+static __thread size_t thread_zone_cache_count;
+#endif
 #endif
 
 uint32_t g_page_size;
