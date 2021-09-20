@@ -135,7 +135,7 @@ NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-OS_FLAGS = -framework Security -Wno-error=frame-address
+OS_FLAGS = -framework Security
 CPU_PIN = ""
 endif
 
