@@ -202,6 +202,33 @@ INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames) {
     return hash;
 }
 
+INTERNAL_HIDDEN void _iso_output_profile() {
+    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _allocation_count);
+    _iso_alloc_printf(profiler_fd, "sampled=%d\n", _sampled_count);
+
+    for(uint32_t i = 0; i < _root->zones_used; i++) {
+        iso_alloc_zone *zone = &_root->zones[i];
+        _zone_profiler_map[zone->chunk_size].total++;
+    }
+
+    for(uint32_t i = 0; i < HG_SIZE; i++) {
+        if(caller_hg[i] != 0) {
+            _iso_alloc_printf(profiler_fd, "backtrace_hash=0x%x,calls=%d\n", i, caller_hg[i]);
+        }
+    }
+
+    for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
+        if(_zone_profiler_map[i].count != 0) {
+            _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
+        }
+    }
+
+    if(profiler_fd != ERR) {
+        close(profiler_fd);
+        profiler_fd = ERR;
+    }
+}
+
 INTERNAL_HIDDEN void _iso_alloc_profile() {
     _allocation_count++;
 
@@ -238,10 +265,8 @@ INTERNAL_HIDDEN void _iso_alloc_profile() {
         }
     }
 }
-#endif
 
 INTERNAL_HIDDEN void _initialize_profiler() {
-#if HEAP_PROFILER
     /* We don't need thread safety for this file descriptor
      * as long as we guarantee to never use it if the root
      * is not locked */
@@ -254,5 +279,5 @@ INTERNAL_HIDDEN void _initialize_profiler() {
     if(profiler_fd == ERR) {
         LOG_AND_ABORT("Cannot open file descriptor for profiler.data");
     }
-#endif
 }
+#endif

@@ -388,7 +388,9 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
+#if HEAP_PROFILER
     _initialize_profiler();
+#endif
 
 #if NO_ZERO_ALLOCATIONS
     _zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
@@ -476,30 +478,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
 
 #if HEAP_PROFILER
-    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _allocation_count);
-    _iso_alloc_printf(profiler_fd, "sampled=%d\n", _sampled_count);
-
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
-        _zone_profiler_map[zone->chunk_size].total++;
-    }
-
-    for(uint32_t i = 0; i < HG_SIZE; i++) {
-        if(caller_hg[i] != 0) {
-            _iso_alloc_printf(profiler_fd, "backtrace_hash=0x%x,calls=%d\n", i, caller_hg[i]);
-        }
-    }
-
-    for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
-        if(_zone_profiler_map[i].count != 0) {
-            _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
-        }
-    }
-
-    if(profiler_fd != ERR) {
-        close(profiler_fd);
-        profiler_fd = ERR;
-    }
+    _iso_output_profile();
 #endif
 
 #if NO_ZERO_ALLOCATIONS

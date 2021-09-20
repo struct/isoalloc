@@ -68,6 +68,7 @@ void run_test_threads() {
 }
 
 int main(int argc, char *argv[]) {
+    run_test_threads();
     iso_alloc_detect_leaks();
     iso_verify_zones();
     return OK;
