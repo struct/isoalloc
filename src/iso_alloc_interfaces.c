@@ -14,12 +14,10 @@ EXTERNAL_API NO_DISCARD void *iso_calloc(size_t nmemb, size_t size) {
 
 EXTERNAL_API void iso_free(void *p) {
     _iso_free(p, false);
-    return;
 }
 
 EXTERNAL_API void iso_free_permanently(void *p) {
     _iso_free(p, true);
-    return;
 }
 
 EXTERNAL_API size_t iso_chunksz(void *p) {
@@ -129,7 +127,6 @@ EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
 
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
     _iso_alloc_destroy_zone(zone);
-    return;
 }
 
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
@@ -176,7 +173,6 @@ EXTERNAL_API uint64_t iso_alloc_mem_usage() {
 
 EXTERNAL_API void iso_verify_zones() {
     verify_all_zones();
-    return;
 }
 
 EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
@@ -187,7 +183,6 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     }
 
     verify_zone(zone);
-    return;
 }
 
 #if EXPERIMENTAL

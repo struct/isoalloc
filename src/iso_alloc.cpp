@@ -18,7 +18,6 @@ EXTERNAL_API void *operator new(size_t size) {
 
 EXTERNAL_API void operator delete(void *p) noexcept {
     iso_free(p);
-    return;
 }
 
 EXTERNAL_API void *operator new[](size_t size) {
@@ -27,7 +26,6 @@ EXTERNAL_API void *operator new[](size_t size) {
 
 EXTERNAL_API void operator delete[](void *p) noexcept {
     iso_free(p);
-    return;
 }
 
 EXTERNAL_API void *operator new(size_t size, const std::nothrow_t &) noexcept {
