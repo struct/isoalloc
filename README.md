@@ -116,7 +116,10 @@ The Makefile targets are very simple:
 
 ## Android
 
-To build Android libraries for x86_64 and ARM64 architectures just `cd` into the `android/jni` directory and run `ndk-build`
+To build Android libraries for x86_64 and ARM64 architectures just `cd` into the `android/jni` directory and run `ndk-build`.
+
+For those of you on an M1 based Mac you can still build IsoAlloc with the following command:
+`arch -x86_64 /bin/bash -c $ANDROID_NDK_HOME/build/ndk-build`
 
 ## Linking With C++
 
