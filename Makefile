@@ -114,6 +114,10 @@ ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 ## performance penalty
 VERIFY_BIT_SLOT_CACHE = -DVERIFY_BIT_SLOT_CACHE=0
 
+## Shuffles the free bit slot cache upon creation.
+## This leads to a 3-4x performance slow down!
+SHUFFLE_BIT_SLOT_CACHE = -DSHUFFLE_BIT_SLOT_CACHE=0
+
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
 EXPERIMENTAL = -DEXPERIMENTAL=0
@@ -154,7 +158,8 @@ BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
-	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY)
+	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY) \
+	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer

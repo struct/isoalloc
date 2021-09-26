@@ -9,6 +9,7 @@ atomic_flag big_zone_busy_flag;
 #if THREAD_ZONE_CACHE
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
+static __thread _tzcbs thread_bit_slot_cache;
 #endif
 #endif
 
@@ -50,7 +51,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
      * that collision as canary chunks only provide a
      * small security property anyway */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx)));
+        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % (max_bitmap_idx)));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -173,10 +174,10 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This may negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() & (max_bitmap_idx - 1)));
+    bitmap_index_t bm_idx = 0;
 
-    if(0 > bm_idx) {
-        bm_idx = 0;
+    if(max_bitmap_idx > ALIGNMENT) {
+        bm_idx = (rand_uint64() % (max_bitmap_idx - 1));
     }
 
     memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
@@ -205,14 +206,22 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
         }
     }
 
+#if SHUFFLE_BIT_SLOT_CACHE
+    /* Shuffle the free bit slot cache */
+    if(free_bit_slot_cache_index > 1) {
+        for(uint8_t i = free_bit_slot_cache_index - 1; i > 0; i--) {
+            uint8_t j = (uint8_t) (rand_uint64() % (i + 1));
+            bit_slot_t t = zone->free_bit_slot_cache[j];
+            zone->free_bit_slot_cache[j] = zone->free_bit_slot_cache[i];
+            zone->free_bit_slot_cache[i] = t;
+        }
+    }
+#endif
+
     zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
 }
 
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
-    if(0 > zone->free_bit_slot_cache_usable || 0 > zone->free_bit_slot_cache_index) {
-        LOG_AND_ABORT("Zone[%d] contains a corrupt cache index", zone->index);
-    }
-
 #if VERIFY_BIT_SLOT_CACHE
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
@@ -243,7 +252,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 }
 
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone) {
-    if(0 > zone->free_bit_slot_cache_usable || zone->free_bit_slot_cache_usable >= BIT_SLOT_CACHE_SZ ||
+    if(zone->free_bit_slot_cache_usable >= BIT_SLOT_CACHE_SZ ||
        zone->free_bit_slot_cache_usable > zone->free_bit_slot_cache_index) {
         return BAD_BIT_SLOT;
     }
@@ -410,6 +419,21 @@ INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
     /* The thread zone cache needs to be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
     thread_zone_cache_count = 0;
+
+    if(thread_bit_slot_cache.chunk != NULL) {
+        iso_alloc_zone *zone = iso_find_zone_range(thread_bit_slot_cache.chunk);
+
+        if(UNLIKELY(zone == NULL)) {
+            LOG_AND_ABORT("Cached thread pointer %p has been corrupted", thread_bit_slot_cache.chunk);
+        }
+
+        UNMASK_ZONE_PTRS(zone);
+        iso_free_chunk_from_zone(zone, thread_bit_slot_cache.chunk, false);
+        MASK_ZONE_PTRS(zone);
+
+        thread_bit_slot_cache.chunk = NULL;
+        thread_bit_slot_cache.chunk_size = 0;
+    }
 #endif
 }
 
@@ -476,6 +500,8 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
+
+    flush_thread_zone_cache();
 
 #if HEAP_PROFILER
     _iso_output_profile();
@@ -725,7 +751,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     /* If the cache for this zone is empty we should
      * refill it to make future allocations faster 
      * for all threads */
-    if(zone->free_bit_slot_cache_usable == zone->free_bit_slot_cache_index) {
+    if(zone->free_bit_slot_cache_usable >= zone->free_bit_slot_cache_index) {
         fill_free_bit_slot_cache(zone);
     }
 
@@ -1003,8 +1029,19 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
     return sz + 1;
 }
 
-INTERNAL_HIDDEN INLINE void populate_thread_zone_cache(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
 #if THREAD_SUPPORT && THREAD_ZONE_CACHE
+    if(thread_bit_slot_cache.chunk == NULL) {
+        bit_slot_t bit_slot = get_next_free_bit_slot(zone);
+
+        if(bit_slot != BAD_BIT_SLOT) {
+            /* We just stole the next free bit slot */
+            zone->next_free_bit_slot = BAD_BIT_SLOT;
+            thread_bit_slot_cache.chunk = _iso_alloc_bitslot_from_zone(bit_slot, zone);
+            thread_bit_slot_cache.chunk_size = zone->chunk_size;
+        }
+    }
+
     if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
@@ -1018,6 +1055,16 @@ INTERNAL_HIDDEN INLINE void populate_thread_zone_cache(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+    if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size
+            && thread_bit_slot_cache.chunk != NULL) {
+        void *p = thread_bit_slot_cache.chunk;
+        thread_bit_slot_cache.chunk = NULL;
+        thread_bit_slot_cache.chunk_size = 0;
+        return p;
+    }
+#endif
+
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
@@ -1146,10 +1193,9 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 
         zone->next_free_bit_slot = BAD_BIT_SLOT;
         void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
+
+        populate_thread_caches(zone);
         MASK_ZONE_PTRS(zone);
-
-        populate_thread_zone_cache(zone);
-
         UNLOCK_ROOT();
         return p;
     } else {
@@ -1490,7 +1536,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     POISON_ZONE_CHUNK(zone, p);
 
-    populate_thread_zone_cache(zone);
+    populate_thread_caches(zone);
 }
 
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {

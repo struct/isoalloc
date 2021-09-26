@@ -81,6 +81,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * When `ABORT_ON_NULL` is enabled IsoAlloc will abort instead of returning `NULL`.
 * By default `NO_ZERO_ALLOCATIONS` will return a pointer to a page marked `PROT_NONE` for all `0` sized allocations.
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
+* When `SHUFFLE_BIT_SLOT_CACHE` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
 
 ## Building
 
