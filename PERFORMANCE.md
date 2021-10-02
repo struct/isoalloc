@@ -138,29 +138,35 @@ The following benchmarks were collected from [mimalloc-bench](https://github.com
 ```
 # benchmark allocator elapsed rss user sys page-faults page-reclaims
 
-barnes mimalloc 04.81 58660 4.77 0.03 0 15631
-barnes smimalloc 04.80 58880 4.78 0.01 0 15649
-barnes isoalloc 04.81 67144 4.77 0.04 0 17579
-barnes tcmalloc 04.81 63636 4.78 0.03 0 16605
-barnes jemalloc 04.85 60480 4.84 0.01 0 15741
+barnes isoalloc 02.00 65476 1.97 0.02 3 18495
+barnes mimalloc 01.95 57836 1.93 0.01 0 16552
+barnes tcmalloc 01.95 62612 1.93 0.01 0 17516
+barnes jemalloc 01.94 59480 1.92 0.01 0 16649
 
-mstressN mimalloc 04.24 645672 4.42 0.37 0 161319
-mstressN smimalloc 04.28 649116 4.51 0.39 0 162183
-mstressN isoalloc 04.23 673724 6.20 0.54 0 294751
-mstressN tcmalloc 04.00 624892 4.33 0.26 0 158983
-mstressN jemalloc 11.27 624880 5.47 6.87 0 4045738
+cache-scratch1 isoalloc 01.28 10736 1.27 0.00 1 2158
+cache-scratch1 mimalloc 01.27 3180 1.27 0.00 0 200
+cache-scratch1 tcmalloc 01.27 6876 1.27 0.00 0 1129
+cache-scratch1 jemalloc 01.27 3460 1.27 0.00 0 236
 
-espresso mimalloc 06.66 4640 6.63 0.02 0 800
-espresso smimalloc 07.18 6732 7.15 0.02 0 1319
-espresso isoalloc 10.13 48968 10.00 0.12 0 11976
-espresso tcmalloc 06.55 8720 6.51 0.03 0 1528
-espresso jemalloc 06.94 5348 6.93 0.01 0 652
+cache-scratchN isoalloc 00.37 11136 1.45 0.00 0 2265
+cache-scratchN mimalloc 00.36 3468 1.44 0.00 0 230
+cache-scratchN tcmalloc 01.87 6976 7.44 0.00 0 1142
+cache-scratchN jemalloc 01.86 3748 7.41 0.00 0 283
 
-redis mimalloc 8.666 29940 3.61 0.73 0 6709
-redis smimalloc 9.317 31712 3.90 0.76 0 715
-redis isoalloc 19.794 99904 9.01 0.92 0 24082
-redis tcmalloc 8.661 38308 3.52 0.82 0 8502
-redis jemalloc 9.470 32176 4.04 0.70 0 7100
+cache-thrash1 isoalloc 01.34 10856 1.31 0.01 1 2162
+cache-thrash1 mimalloc 01.27 3380 1.27 0.00 0 206
+cache-thrash1 tcmalloc 01.27 6868 1.26 0.00 0 1127
+cache-thrash1 jemalloc 01.27 3648 1.27 0.00 0 240
+
+cache-thrashN isoalloc 01.00 10784 3.82 0.00 0 2174
+cache-thrashN mimalloc 00.36 3356 1.44 0.00 0 229
+cache-thrashN tcmalloc 01.87 6880 7.42 0.00 0 1138
+cache-thrashN jemalloc 00.37 3760 1.46 0.00 0 296
+
+redis isoalloc 9.335 71048 4.35 0.36 0 19326 ops/sec: 214227.92
+redis mimalloc 4.611 28932 2.13 0.20 4 6657 ops/sec: 433692.97
+redis tcmalloc 5.055 37088 2.37 0.19 3 8444 ops/sec: 395588.59
+redis jemalloc 5.150 30964 2.42 0.19 5 7024 ops/sec: 388279.50
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads but it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surface.
