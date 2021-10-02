@@ -1624,7 +1624,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     /* We cannot return NULL here, we abort instead */
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
-    if(zone == NULL) {
+    if(UNLIKELY(zone == NULL)) {
         UNLOCK_ROOT();
         iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
 
