@@ -57,6 +57,7 @@ unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
 if [ $failure -ne 0 ]; then
+    cat test_output.txt
     exit -1
 else
     exit 0
