@@ -1056,8 +1056,7 @@ INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #if THREAD_SUPPORT && THREAD_ZONE_CACHE
-    if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size
-            && thread_bit_slot_cache.chunk != NULL) {
+    if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size && thread_bit_slot_cache.chunk != NULL) {
         void *p = thread_bit_slot_cache.chunk;
         thread_bit_slot_cache.chunk = NULL;
         thread_bit_slot_cache.chunk_size = 0;
