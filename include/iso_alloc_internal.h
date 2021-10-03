@@ -435,7 +435,7 @@ typedef struct {
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
  * if your threads are reusing the same zones. This
@@ -522,7 +522,7 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE void flush_thread_zone_cache(void);
+INTERNAL_HIDDEN INLINE void flush_thread_cache(void);
 INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);

@@ -6,7 +6,7 @@
 #if THREAD_SUPPORT
 atomic_flag root_busy_flag;
 atomic_flag big_zone_busy_flag;
-#if THREAD_ZONE_CACHE
+#if THREAD_CACHE
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
 static __thread _tzcbs thread_bit_slot_cache;
@@ -415,7 +415,7 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 }
 
 INTERNAL_HIDDEN INLINE void flush_thread_zone_cache() {
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
     /* The thread zone cache needs to be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
     thread_zone_cache_count = 0;
@@ -1030,7 +1030,7 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
 }
 
 INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
     if(thread_bit_slot_cache.chunk == NULL) {
         bit_slot_t bit_slot = get_next_free_bit_slot(zone);
 
@@ -1055,7 +1055,7 @@ INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
     if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size && thread_bit_slot_cache.chunk != NULL) {
         void *p = thread_bit_slot_cache.chunk;
         thread_bit_slot_cache.chunk = NULL;
@@ -1106,7 +1106,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         _verify_all_zones();
 #endif
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
         if(LIKELY(zone == NULL)) {
             /* Hot Path: Check the thread cache for a zone this
              * thread recently used for an alloc/free operation.
@@ -1248,7 +1248,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
     /* Hot Path: Check the thread cache for a zone this
      * thread recently used for an alloc/free operation */
     for(int64_t i = 0; i < thread_zone_cache_count; i++) {
@@ -1278,7 +1278,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
-#if THREAD_SUPPORT && THREAD_ZONE_CACHE
+#if THREAD_SUPPORT && THREAD_CACHE
     /* Hot Path: Check the thread cache for a zone this
      * thread recently used for an alloc/free operation */
     for(int64_t i = 0; i < thread_zone_cache_count; i++) {

@@ -1,7 +1,7 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -DTHREAD_SUPPORT=1 -pthread -DTHREAD_ZONE_CACHE=c11			\
+LOCAL_CFLAGS := -DTHREAD_SUPPORT=1 -pthread -DTHREAD_CACHE=1				\
 	-DPRE_POPULATE_PAGES=0 -DSMALL_MEM_STARTUP=0 -DSANITIZE_CHUNKS=0		\
 	-DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0 -Werror			\
 	-pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments		\
