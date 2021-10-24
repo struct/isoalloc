@@ -135,6 +135,16 @@ EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     return zone;
 }
 
+EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name) {
+    if(zone == NULL) {
+        return 0;
+    } else {
+        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+    }
+
+    return name_zone(zone, name);
+}
+
 EXTERNAL_API void iso_alloc_protect_root() {
     _iso_alloc_protect_root();
 }
