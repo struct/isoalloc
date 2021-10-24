@@ -577,11 +577,20 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone *zone, char *name) {
+#if NAMED_MAPPINGS && __ANDROID__
+    return name_mapping(zone->user_pages_start, ZONE_USER_SIZE, (const char *) name);
+#else
+    return 0;
+#endif
+}
+
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
 #if NAMED_MAPPINGS && __ANDROID__
     return prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, sz, name);
-#endif
+#else
     return 0;
+#endif
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {

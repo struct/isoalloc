@@ -571,6 +571,7 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p);
+INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone *zone, char *name);
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);

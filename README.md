@@ -177,3 +177,5 @@ If all else fails please file an issue on the [github project](https://github.co
 `void iso_verify_zones()` - Verifies the state of all zones. Will abort if inconsistencies are found.
 
 `void iso_verify_zone(iso_alloc_zone_handle *zone)` - Verifies the state of specified zone. Will abort if inconsistencies are found.
+
+`int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of custom zones via prctl on Android

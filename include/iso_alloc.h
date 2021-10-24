@@ -37,6 +37,7 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone);
 EXTERNAL_API uint64_t iso_alloc_mem_usage();
 EXTERNAL_API void iso_verify_zones();
 EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone);
+EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name);
 
 #if EXPERIMENTAL
 EXTERNAL_API void iso_alloc_search_stack(void *p);
