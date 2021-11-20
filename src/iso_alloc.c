@@ -741,7 +741,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
     /* This zone may fit this chunk but if the zone was
-     * created for chunks more than N* larger than the
+     * created for chunks more than (N * larger) than the
      * requested allocation size then we would be wasting
      * a lot of memory by using it. We only do this for
      * sizes beyond ZONE_1024 bytes. In other words we can
@@ -837,9 +837,9 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
      * slower iterative approach is used. The longer a
      * program runs the more likely we will fail this
      * fast path as default zones may fill up */
-    if(size >= ZONE_512 && size <= ZONE_8192) {
+    if(size >= ZONE_512 && size <= MAX_DEFAULT_ZONE_SZ) {
         i = _default_zone_count >> 1;
-    } else if(size > ZONE_8192) {
+    } else if(size > MAX_DEFAULT_ZONE_SZ) {
         i = _default_zone_count;
     }
 #endif
@@ -1038,6 +1038,7 @@ INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
     return sz + 1;
 }
 
+/* Populates the thread cache, requires the root is locked and zone is unmasked */
 INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
 #if THREAD_SUPPORT && THREAD_CACHE
     if(thread_bit_slot_cache.chunk == NULL) {
@@ -1049,6 +1050,11 @@ INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
             thread_bit_slot_cache.chunk = _iso_alloc_bitslot_from_zone(bit_slot, zone);
             thread_bit_slot_cache.chunk_size = zone->chunk_size;
         }
+    }
+
+    /* Don't cache this zone if it was recently cached */
+    if(thread_zone_cache_count != 0 && thread_zone_cache[thread_zone_cache_count - 1].zone == zone) {
+        return;
     }
 
     if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
@@ -1065,7 +1071,8 @@ INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #if THREAD_SUPPORT && THREAD_CACHE
-    if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size && thread_bit_slot_cache.chunk != NULL) {
+    if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX && thread_bit_slot_cache.chunk_size >= size &&
+       thread_bit_slot_cache.chunk != NULL) {
         void *p = thread_bit_slot_cache.chunk;
         thread_bit_slot_cache.chunk = NULL;
         thread_bit_slot_cache.chunk_size = 0;
@@ -1143,10 +1150,10 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
             zone = iso_find_zone_fit(size);
         }
 
-        if(zone != NULL) {
-            /* We only need to check if the zone is usable
-             * if it's a custom zone. If we chose this zone
-             * then its guaranteed to already be usable */
+        /* We only need to check if the zone is usable
+         * if it's a custom zone. If we chose this zone
+         * then its guaranteed to already be usable */
+        if(LIKELY(zone != NULL)) {
             if(zone->internally_managed == false) {
                 zone = is_zone_usable(zone, size);
 
