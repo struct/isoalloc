@@ -268,8 +268,8 @@ using namespace std;
  * create. This is a completely arbitrary number but
  * it does correspond to the size of the _root.zones
  * array that lives in global memory. Currently the
- * iso_alloc_zone structure is roughly 1088 bytes so
- * this allocates 8912896 bytes (~8.5 MB) for _root */
+ * iso_alloc_zone structure is roughly 1090 bytes so
+ * this allocates 8929280 bytes (~8.9 MB) for _root */
 #define MAX_ZONES 8192
 
 /* Each user allocation zone we make is 4mb in size.
@@ -295,6 +295,8 @@ using namespace std;
 #define BIG_ZONE_META_DATA_PAGE_COUNT 3
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
+
+#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX+1) * sizeof(uint16_t))
 
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
@@ -414,6 +416,7 @@ static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 
 typedef uint64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
+typedef uint16_t zone_lookup_table_t;
 
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
@@ -430,6 +433,7 @@ typedef struct {
     bool internally_managed;                           /* Zones can be managed by iso_alloc or custom */
     bool is_full;                                      /* Indicates whether this zone is full to avoid expensive free bit slot searches */
     uint16_t index;                                    /* Zone index */
+    uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif

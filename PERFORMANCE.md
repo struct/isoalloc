@@ -80,16 +80,31 @@ The same test run on an AWS t2.xlarge Ubuntu 20.04 instance with 4 `Intel(R) Xeo
 ```
 Running IsoAlloc Performance Test
 
-iso_alloc/iso_free 1441616 tests completed in 0.418426 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.578068 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.681393 seconds
+iso_alloc/iso_free 1441616 tests completed in 0.147336 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.161482 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.244981 seconds
 
 Running glibc malloc Performance Test
 
-malloc/free 1441616 tests completed in 0.352161 seconds
-calloc/free 1441616 tests completed in 0.562425 seconds
-realloc/free 1441616 tests completed in 0.590622 seconds
+malloc/free 1441616 tests completed in 0.182437 seconds
+calloc/free 1441616 tests completed in 0.246065 seconds
+realloc/free 1441616 tests completed in 0.332292 seconds
+```
 
+Here is the same test as above on Mac OS 11.6
+
+```
+Running IsoAlloc Performance Test
+
+iso_alloc/iso_free 1441616 tests completed in 0.124150 seconds
+iso_calloc/iso_free 1441616 tests completed in 0.182955 seconds
+iso_realloc/iso_free 1441616 tests completed in 0.275084 seconds
+
+Running system malloc Performance Test
+
+malloc/free 1441616 tests completed in 0.090845 seconds
+calloc/free 1441616 tests completed in 0.200397 seconds
+realloc/free 1441616 tests completed in 0.254574 seconds
 ```
 
 This same test can be used with the `perf` utility to measure basic stats like page faults and CPU utilization using both heap implementations. The output below is on the same AWS t2.xlarge instance as above.
@@ -163,10 +178,10 @@ cache-thrashN mimalloc 00.36 3356 1.44 0.00 0 229
 cache-thrashN tcmalloc 01.87 6880 7.42 0.00 0 1138
 cache-thrashN jemalloc 00.37 3760 1.46 0.00 0 296
 
-redis isoalloc 9.335 71048 4.35 0.36 0 19326 ops/sec: 214227.92
-redis mimalloc 4.611 28932 2.13 0.20 4 6657 ops/sec: 433692.97
-redis tcmalloc 5.055 37088 2.37 0.19 3 8444 ops/sec: 395588.59
-redis jemalloc 5.150 30964 2.42 0.19 5 7024 ops/sec: 388279.50
+redis isoalloc 8.669 76240 4.07 0.30 1 21473 ops/sec: 230702.66, relative time: 8.669s
+redis mimalloc 4.555 28968 2.13 0.17 4 6655 ops/sec: 439023.69, relative time: 4.555s
+redis tcmalloc 4.715 37120 2.21 0.17 3 8446 ops/sec: 424108.56, relative time: 4.715s
+redis jemalloc 5.125 30836 2.41 0.17 0 7034 ops/sec: 390174.03, relative time: 5.125s
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads but it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surface.
