@@ -270,7 +270,7 @@ malloc_cmp_test: clean
 	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"
 	build/tests
-	echo "Running glibc malloc Performance Test"
+	echo "Running system malloc Performance Test"
 	build/malloc_tests
 
 ## C++ Support - Build a debug version of the unit test

@@ -17,6 +17,13 @@ uint32_t g_page_size;
 uint32_t _default_zone_count;
 iso_alloc_root *_root;
 
+/* Zones are linked by their next_sz_index member which
+ * tells the allocator where in the _root->zones array
+ * it can find the next zone that holds the same size
+ * chunks. The lookup table helps us find the first zone
+ * that holds a specific size in O(1) time */
+static zone_lookup_table_t *_zone_lookup_table;
+
 #if NO_ZERO_ALLOCATIONS
 void *_zero_alloc_page;
 #endif
@@ -363,6 +370,10 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
         LOG_AND_ABORT("Could not initialize global root");
     }
 
+    /* We mlock the root or every allocation would
+     * result in a soft page fault */
+    mlock(&_root, sizeof(iso_alloc_root));
+
     _default_zone_count = sizeof(default_zones) >> 3;
 
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone));
@@ -377,17 +388,16 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones = (void *) (p + g_page_size);
     name_mapping(p, _root->zones_size, "isoalloc zone metadata");
 
+    /* If we don't lock the zone lookup table we will incur a
+     * soft page fault with almost every allocation */
+    _zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
+    mlock(&_zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+
     for(int64_t i = 0; i < _default_zone_count; i++) {
         if((_iso_new_zone(default_zones[i], true)) == NULL) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
-
-    /* This call to mlock may fail if memory limits
-     * are set too low. This will not affect us
-     * at runtime. It just means some of the default
-     * root meta data may get swapped to disk */
-    mlock(&_root, sizeof(iso_alloc_root));
 
     _root->zone_handle_mask = rand_uint64();
     _root->big_zone_next_mask = rand_uint64();
@@ -574,6 +584,8 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(_root, sizeof(iso_alloc_root));
 #endif
 
+    munmap(_zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+
     UNLOCK_ROOT();
 }
 
@@ -600,9 +612,10 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
     return zone;
 }
 
+/* Requires the root is locked */
 INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     if(_root->zones_used >= MAX_ZONES) {
-        LOG_AND_ABORT("Cannot allocate additional zones");
+        LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
     }
 
     if(size > SMALL_SZ_MAX) {
@@ -690,6 +703,36 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     POISON_ZONE(new_zone);
     MASK_ZONE_PTRS(new_zone);
+
+    /* The lookup table is never used for custom zones */
+    if(internal == true) {
+        /* If no other zones of this size exist then set the
+         * index in the zone lookup table to its index */
+        if(_zone_lookup_table[size] == 0) {
+            _zone_lookup_table[size] = _root->zones_used;
+        } else {
+            /* Other zones exist that hold this size. We need to
+             * fixup the most recent ones next_sz_index member.
+             * We do this by walking the list using next_sz_index */
+            for(int32_t i = _zone_lookup_table[size]; i < _root->zones_used;) {
+                iso_alloc_zone *zt = &_root->zones[i];
+
+                if(zt->chunk_size != size) {
+                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, size);
+                }
+
+                /* Follow this zone's next_sz_index member */
+                if(zt->next_sz_index != 0) {
+                    i = zt->next_sz_index;
+                } else {
+                    /* If this zones next_sz_index is zero then set
+                     * it to the zone we just created and break */
+                    zt->next_sz_index = new_zone->index;
+                    break;
+                }
+            }
+        }
+    }
 
     _root->zones_used++;
 
@@ -831,7 +874,46 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     iso_alloc_zone *zone = NULL;
     int32_t i = 0;
 
-#if !SMALL_MEM_STARTUP
+    if(IS_ALIGNED(size) != 0) {
+        size = ALIGN_SZ_UP(size);
+    }
+
+    /* Fast path via lookup table */
+    if(_zone_lookup_table[size] != 0) {
+        i = _zone_lookup_table[size];
+
+        for(; i < _root->zones_used;) {
+            zone = &_root->zones[i];
+
+            if(zone->chunk_size != size) {
+                LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, size);
+            }
+
+            if(zone->internally_managed == false) {
+                LOG_AND_ABORT("Lookup table should never contain custom zones");
+            }
+
+            bool fits = iso_does_zone_fit(zone, size);
+
+            if(fits == true) {
+                return zone;
+            }
+
+            if(zone->next_sz_index != 0) {
+                i = zone->next_sz_index;
+            } else {
+                /* We have reached the end of our linked zones. The
+                 * lookup table failed to find us a usable zone.
+                 * Instead of creating a new one we will break out
+                 * of this loop and try iterating through all zones,
+                 * including ones we may have skipped over, to find
+                 * a suitable candidate. */
+                break;
+            }
+        }
+    }
+
+#if SMALL_MEM_STARTUP
     /* A simple optimization to find which default zone
      * should fit this allocation. If we fail then a
      * slower iterative approach is used. The longer a
