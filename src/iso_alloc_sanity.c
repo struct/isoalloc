@@ -119,7 +119,7 @@ INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p) {
     uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
 
     for(int32_t i = 0; i < (g_page_size / sizeof(uint64_t)); i++) {
-        memcpy(p, &canary, SANITY_CANARY_SIZE);
+        *(uint64_t *) p = canary;
         p += sizeof(uint64_t);
     }
 }
