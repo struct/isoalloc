@@ -705,7 +705,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     MASK_ZONE_PTRS(new_zone);
 
     /* The lookup table is never used for custom zones */
-    if(internal == true) {
+    if(LIKELY(internal == true)) {
         /* If no other zones of this size exist then set the
          * index in the zone lookup table to its index */
         if(_zone_lookup_table[size] == 0) {
@@ -1094,7 +1094,7 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 #if !ENABLE_ASAN && !DISABLE_CANARY
     if((GET_BIT(b, (which_bit + 1))) == 1) {
         check_canary(zone, p);
-        memset(p, 0x0, CANARY_SIZE);
+        *(uint64_t *) p = 0x0;
     }
 #endif
 
@@ -1447,9 +1447,9 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * unbounded string reads from leaking it */
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
-    memcpy(p, &canary, CANARY_SIZE);
+    *(uint64_t *)p = canary;
     p += (zone->chunk_size - sizeof(uint64_t));
-    memcpy(p, &canary, CANARY_SIZE);
+    *(uint64_t *)p = canary;
 }
 
 /* Verify the canary value in an allocation */
