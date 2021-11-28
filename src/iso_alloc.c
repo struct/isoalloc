@@ -1346,6 +1346,10 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
+    /* Locally store the thread zone index's to ensure
+     * we don't check them twice if the cache misses */
+    uint16_t zones_checked[THREAD_ZONE_CACHE_SZ];
+
 #if THREAD_SUPPORT && THREAD_CACHE
     /* Hot Path: Check the thread cache for a zone this
      * thread recently used for an alloc/free operation */
@@ -1356,12 +1360,18 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
             MASK_ZONE_PTRS(zone);
             return zone;
         }
+        zones_checked[i] = zone->index;
         MASK_ZONE_PTRS(zone);
     }
 #endif
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
+
+        if(i < thread_zone_cache_count && zones_checked[i] == zone->index) {
+            continue;
+        }
+
         UNMASK_ZONE_PTRS(zone);
         if(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p) {
             MASK_ZONE_PTRS(zone);
@@ -1376,22 +1386,32 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *zone = NULL;
 
+    /* Locally store the thread zone index's to ensure
+     * we don't check them twice if the cache misses */
+    uint16_t zones_checked[THREAD_ZONE_CACHE_SZ];
+
 #if THREAD_SUPPORT && THREAD_CACHE
     /* Hot Path: Check the thread cache for a zone this
      * thread recently used for an alloc/free operation */
-    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
+    for(int32_t i = 0; i < thread_zone_cache_count; i++) {
         UNMASK_ZONE_PTRS(thread_zone_cache[i].zone);
         zone = thread_zone_cache[i].zone;
         if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
             MASK_ZONE_PTRS(zone);
             return zone;
         }
+        zones_checked[i] = zone->index;
         MASK_ZONE_PTRS(zone);
     }
 #endif
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
+
+        if(i < thread_zone_cache_count && zones_checked[i] == zone->index) {
+            continue;
+        }
+
         UNMASK_ZONE_PTRS(zone);
         if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
             MASK_ZONE_PTRS(zone);
