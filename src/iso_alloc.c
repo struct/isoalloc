@@ -463,11 +463,16 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 
     if(zone->internally_managed == false) {
 #if NEVER_REUSE_ZONES || FUZZ_MODE
-        _unmap_zone(zone);
-        zone->user_pages_start = NULL;
-        zone->bitmap_start = NULL;
+        memset(zone->bitmap_start, 0x0, zone->bitmap_size);
+        memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
 
-        /* Mark the zone as full so no attempts are made to use it */
+        /* This will waste memory because we will never unmap
+         * these pages, even in the destructor */
+        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
+        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+
+        /* Make this zone unusable */
+        memset(zone, 0x0, sizeof(iso_alloc_zone));
         zone->is_full = true;
         flush_thread_zone_cache();
 #else

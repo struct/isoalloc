@@ -9,7 +9,9 @@ CXX = clang++
 ## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse custom zones
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0
+## NEVER_REUSE_ZONES - Tells IsoAlloc to unmap user and bitmap pages when destroying custom zones
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0	\
+                 -DNEVER_REUSE_ZONES=0
 
 ## Enable abort() when isoalloc can't gather enough entropy.
 ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
