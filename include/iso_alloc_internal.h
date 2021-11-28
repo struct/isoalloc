@@ -296,7 +296,7 @@ using namespace std;
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
-#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX+1) * sizeof(uint16_t))
+#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
 
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
