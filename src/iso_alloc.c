@@ -1447,9 +1447,9 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * unbounded string reads from leaking it */
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
-    *(uint64_t *)p = canary;
+    *(uint64_t *) p = canary;
     p += (zone->chunk_size - sizeof(uint64_t));
-    *(uint64_t *)p = canary;
+    *(uint64_t *) p = canary;
 }
 
 /* Verify the canary value in an allocation */
