@@ -808,9 +808,9 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     /* If the cache for this zone is empty we should
      * refill it to make future allocations faster 
      * for all threads */
-    //if(zone->free_bit_slot_cache_usable >= zone->free_bit_slot_cache_index) {
-    //    fill_free_bit_slot_cache(zone);
-    //}
+    if(zone->free_bit_slot_cache_usable >= zone->free_bit_slot_cache_index) {
+        fill_free_bit_slot_cache(zone);
+    }
 
     bit_slot_t bit_slot = get_next_free_bit_slot(zone);
 
