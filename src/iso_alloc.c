@@ -425,7 +425,7 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #endif
 }
 
-INTERNAL_HIDDEN INLINE void flush_thread_caches() {
+INTERNAL_HIDDEN void flush_thread_caches() {
 #if THREAD_SUPPORT && THREAD_CACHE
     /* The thread zone cache can be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
