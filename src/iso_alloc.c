@@ -426,6 +426,12 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 }
 
 INTERNAL_HIDDEN void flush_thread_caches() {
+    LOCK_ROOT();
+    _flush_thread_caches();
+    UNLOCK_ROOT();
+}
+
+INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
 #if THREAD_SUPPORT && THREAD_CACHE
     /* The thread zone cache can be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
@@ -467,7 +473,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     LOCK_ROOT();
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
-    flush_thread_caches();
+    _flush_thread_caches();
 
     if(zone->internally_managed == false) {
 #if NEVER_REUSE_ZONES || FUZZ_MODE
@@ -522,7 +528,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
 
-    flush_thread_caches();
+    _flush_thread_caches();
 
 #if HEAP_PROFILER
     _iso_output_profile();
@@ -812,7 +818,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
     UNMASK_ZONE_PTRS(zone);
 
     /* If the cache for this zone is empty we should
-     * refill it to make future allocations faster 
+     * refill it to make future allocations faster
      * for all threads */
     if(zone->free_bit_slot_cache_usable >= zone->free_bit_slot_cache_index) {
         fill_free_bit_slot_cache(zone);
@@ -1176,7 +1182,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #if THREAD_SUPPORT && THREAD_CACHE
     if(LIKELY(zone == NULL) && size <= SMALL_SZ_MAX) {
         for(int32_t i = 0; i < THREAD_CHUNK_CACHE_SZ; i++) {
-            if(thread_chunk_cache[i].chunk != NULL && thread_chunk_cache[i].chunk_size >= size){ //(size << WASTED_SZ_MULTIPLIER_SHIFT)) {
+            if(thread_chunk_cache[i].chunk != NULL && thread_chunk_cache[i].chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
                 void *p = thread_chunk_cache[i].chunk;
                 thread_chunk_cache[i].chunk = NULL;
                 thread_chunk_cache[i].chunk_size = 0;

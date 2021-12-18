@@ -532,6 +532,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
+INTERNAL_HIDDEN INLINE void _flush_thread_caches(void);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
