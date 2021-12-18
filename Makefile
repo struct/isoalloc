@@ -139,14 +139,17 @@ ABORT_ON_NULL = -DABORT_ON_NULL=0
 ## Enable protection against misusing 0 sized allocations
 NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
 
+LIBNAME = libisoalloc.so
+
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 CPU_PIN = ""
+LIBNAME = libisoalloc.dylib
 endif
 
 ifeq ($(UNAME), Linux)
-STRIP = strip -s $(BUILD_DIR)/libisoalloc.so
+STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 endif
 
 HOOKS = $(MALLOC_HOOK)
@@ -179,30 +182,30 @@ all: library tests
 ## Build a release version of the library
 library: clean
 	@echo "make library"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 	$(STRIP)
 
 ## Build a debug version of the library
 library_debug: clean
 	@echo "make library debug"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 
 ## Build a debug version of the library
 ## specifically for unit tests
 library_debug_unit_tests: clean
 	@echo "make library_debug_unit_tests"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(UNIT_TESTING) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(UNIT_TESTING) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 
 ## Builds a debug version of the library with scan-build
 ## Requires scan-build is in your PATH
 analyze_library_debug: clean
 	@echo "make analyze_library_debug"
-	scan-build $(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	scan-build $(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 
 ## Build a debug version of the library
 library_debug_no_output: clean
 	@echo "make library_debug_no_output"
-	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/libisoalloc.so
+	$(CC) $(CFLAGS) $(LIBRARY) $(OS_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 
 ## C++ Support - Build object files for C code
 c_library_objects:
@@ -219,12 +222,12 @@ c_library_objects_debug:
 ## C++ Support - Build the library with C++ support
 cpp_library: clean c_library_objects
 	@echo "make cpp_library"
-	$(CXX) $(CXXFLAGS) $(OPTIMIZE) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(CXX) $(CXXFLAGS) $(OPTIMIZE) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/$(LIBNAME)
 	$(STRIP)
 
 cpp_library_debug: clean c_library_objects_debug
 	@echo "make cpp_library_debug"
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/libisoalloc.so
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(LIBRARY) $(OS_FLAGS) $(CXX_SRCS) $(BUILD_DIR)/*.o -o $(BUILD_DIR)/$(LIBNAME)
 
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
@@ -279,10 +282,10 @@ malloc_cmp_test: clean
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
 	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
-	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/libisoalloc.so $(BUILD_DIR)/cxx_tests
+	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/cxx_tests
 
 install:
-	cp -pR build/libisoalloc.so /usr/lib/
+	cp -pR build/$(LIBNAME) /usr/lib/
 
 format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i

@@ -195,6 +195,10 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     verify_zone(zone);
 }
 
+EXTERNAL_API void iso_flush_caches() {
+    flush_thread_caches();
+}
+
 #if EXPERIMENTAL
 EXTERNAL_API void iso_alloc_search_stack(void *p) {
     _iso_alloc_search_stack(p);

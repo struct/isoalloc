@@ -85,6 +85,8 @@ void *allocate(void *_type) {
         }
     }
 
+    iso_flush_caches();
+
     return OK;
 }
 
