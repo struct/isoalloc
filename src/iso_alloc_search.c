@@ -67,7 +67,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
          * decides on values that are unlikely to be pointers
          * into zone user pages */
         if(*(int64_t *) current <= tps || *(int64_t *) current >= max_ptr || (*(int64_t *) current & 0xffffff) == 0) {
-            //LOG("Ignoring pointer start=%p end=%p stack_ptr=%p value=%lx", stack_start, stack_end, current, *(int64_t *)current);
+            // LOG("Ignoring pointer start=%p end=%p stack_ptr=%p value=%lx", stack_start, stack_end, current, *(int64_t *)current);
             current--;
             continue;
         }

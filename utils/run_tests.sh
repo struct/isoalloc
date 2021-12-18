@@ -10,7 +10,12 @@ succeeded=0
 $(ulimit -c 0)
 
 export LD_LIBRARY_PATH=build/
-export LD_PRELOAD=build/libisoalloc.so
+
+if [[ $OSTYPE == 'darwin'* ]]; then
+    export DYLD_INSERT_LIBRARIES=build/libisoalloc.dylib
+else
+    export LD_PRELOAD=build/libisoalloc.so
+fi
 
 for t in "${tests[@]}"; do
     echo -n "Running $t test"

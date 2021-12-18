@@ -10,7 +10,7 @@
  * iso_alloc interfaces directly. These hook points are
  * useful because they allow us to use iso_alloc even in
  * existing and closed source programs that call malloc/free
-*/
+ */
 #if MALLOC_HOOK
 
 EXTERNAL_API void *__libc_malloc(size_t s) {

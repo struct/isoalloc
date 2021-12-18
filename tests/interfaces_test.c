@@ -79,6 +79,8 @@ int main(int argc, char *argv[]) {
     iso_free(p);
     iso_free(r);
 
+    iso_flush_caches();
+
     iso_verify_zones();
 
     return 0;

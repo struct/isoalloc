@@ -320,6 +320,7 @@ using namespace std;
 
 /* The size of the thread cache */
 #define THREAD_ZONE_CACHE_SZ 8
+#define THREAD_CHUNK_CACHE_SZ 4
 
 #define MEGABYTE_SIZE 1048576
 #define KILOBYTE_SIZE 1024
@@ -450,6 +451,9 @@ typedef struct {
     iso_alloc_zone *zone;
 } __attribute__((aligned(sizeof(int64_t)))) _tzc;
 
+/* Each thread also gets a local cache of usable chunks.
+ * This cache is populated during both alloc and free
+ * operations using the same zone */
 typedef struct {
     size_t chunk_size;
     void *chunk;
@@ -526,9 +530,9 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE void flush_thread_cache(void);
 INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
+INTERNAL_HIDDEN INLINE void _flush_thread_caches(void);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
@@ -540,6 +544,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
+INTERNAL_HIDDEN void flush_thread_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
