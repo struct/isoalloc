@@ -1094,7 +1094,7 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
     }
 
     if(UNLIKELY((GET_BIT(b, which_bit)) != 0)) {
-        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %lu, bit number was %" PRIu64,
+        LOG_AND_ABORT("Zone[%d] for chunk size %d cannot return allocated chunk at 0x%p bitmap location @ 0x%p. bit slot was %lu, bit number was %lu",
                       zone->index, zone->chunk_size, p, &bm[dwords_to_bit_slot], bitslot, which_bit);
     }
 
@@ -1649,7 +1649,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     /* Double free detection */
     if(UNLIKELY((GET_BIT(b, which_bit)) == 0)) {
-        LOG_AND_ABORT("Double free of chunk 0x%p detected from zone[%d] dwords_to_bit_slot=%lu bit_slot=%" PRIu64, p, zone->index, dwords_to_bit_slot, bit_slot);
+        LOG_AND_ABORT("Double free of chunk 0x%p detected from zone[%d] dwords_to_bit_slot=%lu bit_slot=%lu", p, zone->index, dwords_to_bit_slot, bit_slot);
     }
 
     /* Set the next bit so we know this chunk was used */
