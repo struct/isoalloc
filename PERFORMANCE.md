@@ -4,15 +4,11 @@
 
 Performance is a top priority for any memory allocator. Balancing those performance priorities with security is difficult. Anytime we introduce heavy handed security checks we usually have to pay a performance penalty. But we can be deliberate about our design choices and use good tooling to find places where we can mitigate those tradeoffs. In the end correct code is better than endless security mitigations.
 
-Note: All performance testing, unless noted otherwise, was performed on Linux.
-
 ## Configuration and Optimizations
 
 IsoAlloc is only designed and tested for 64 bit, so we don't have to worry about portability hurting our performance. We can assume a large address space will always be present and we can optimize for simple things like always fetching 64 bits of memory as we iterate over an array. This remainder of this section is a basic overview of the performance optimizations in IsoAlloc.
 
 Perhaps the most important optimization in IsoAlloc is the design choice to use a simple bitmap for tracking chunk states. Combining this with zones comprised of contiguous chunks of pages results in good performance at the cost of memory. This is in contrast to typical allocator designs full of linked list code that tends to result far more complex code and slow page faults.
-
-An important optimization is the freelist cache. This cache is just a per-zone array of that threads most recently used zones. The allocation hot path searches this cache first in the hopes that one of those zones has a free chunk available that fits the allocation requests needs. Allocating chunks from this cache can be a lot faster than iterating through every zone for one that might fit. Unfortunately even the thread zone cache requires locking the root. So theres an additional caching layer that at the moment only stores a single free chunk per thread based on the zone it last made an allocation from. This provides a lockless allocation mechanism.
 
 All data fetches from a zone bitmap are 64 bits at a time which takes advantage of fast CPU pipelining. Fetching bits at a different bit width will result in slower performance by an order of magnitude in allocation intensive tests. All user chunks are 8 byte aligned no matter how big each chunk is. Accessing this memory with proper alignment will minimize CPU cache flushes.
 
@@ -27,6 +23,30 @@ The meta data for the IsoAlloc root will be locked with `mlock`. This means this
 If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic lock/unlock operations from the allocator, which will result in significant performance gains in some programs. If you do require thread support then you may want to profile your program to determine if `THREAD_CACHE` will benefit your performance or harm it. The assumption this cache makes is that your threads will make similarly sized allocations. If this is unlikely then you can disable it in the `Makefile`.
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance.
+
+## Caches and Memoization
+
+There are a few important caches and memoization techniques used in IsoAlloc. These significantly improve the performance of alloc/free hot paths and keep the design as simple as possible.
+
+### Zone Freelist Cache
+
+Each zone contains an array of bitslots that represent free chunks in that zone. The allocation hot path searches this cache first in the hopes that the zone has a free chunk available that fits the allocation request. Allocating chunks from this cache is a lot faster than iterating through a zones bitmap for a free bitslot. This cache is refilled whenever it is low.
+
+### Chunk to Zone Lookup
+
+The chunk-to-zone lookup table is a high hit rate cache for finding which zone owns a user chunk. It works by mapping the MSB of the chunk address to a zone index. Misses are gracefully handled and more common with a higher RSS and more mappings.
+
+### MRU Zone Cache
+
+It is not uncommon to write a program that uses multiple threads for different purposes. Some threads will never make an allocation request above or below a certain size. This thread local cache optimizes for this by storing a TLS array of the threads most recently used zones. These zones are checked in the `iso_find_zone_range` free path if the chunk-to-zone lookup fails.
+
+### Thread Chunk Quarantine
+
+This thread local cache speeds up the free hot path by quarantining chunks until a threshold has been met. Until that threshold is reached free's are very cheap. When the cache is emptied and the chunks free'd its still faster because we take advantage of keeping the zone meta data in a CPU cache line.
+
+### Zone Lookup Table
+
+Zones are linked by their `next_sz_index` member which tells the allocator where in the `_root->zones` array it can find the next zone that holds the same size chunks. This lookup table helps us find the first zone that holds a specific size in O(1) time. This is achieved by placing a zone's index value at that zones size index in the table, e.g. `zone_lookup_table[zone->size] = zone->index`, from there we just need to use the next zone's index member and walk it like a singly linked list to find other zones of that size.
 
 ## Tests
 
@@ -250,7 +270,6 @@ glibc-thread smimalloc   9.012 17144 15.89 0.02 0 4018
 glibc-thread tcmalloc    10.434 8508 15.99 0.00 0 1580
 glibc-thread scudo       80.979 4076 15.90 0.01 0 582
 glibc-thread isoalloc    1178.003 44192 15.83 0.05 0 10880
-
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads. However it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surfaces. These environments have threat models similar to what IsoAlloc was designed for.

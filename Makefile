@@ -252,7 +252,7 @@ tests: clean library_debug_unit_tests
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) -DNEVER_REUSE_ZONES=1 tests/alloc_fuzz.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/alloc_fuzz $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/alloc_fuzz.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/alloc_fuzz $(LDFLAGS)
 
 	LD_LIBRARY_PATH=build/ build/alloc_fuzz
 
@@ -292,4 +292,5 @@ format:
 
 clean:
 	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core* profiler.data
+	rm -rf android/libs android/obj
 	mkdir -p build/

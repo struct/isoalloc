@@ -277,7 +277,7 @@ INTERNAL_HIDDEN void _initialize_profiler() {
     }
 
     if(profiler_fd == ERR) {
-        LOG_AND_ABORT("Cannot open file descriptor for profiler.data");
+        LOG_AND_ABORT("Cannot open file descriptor for %s", PROFILER_FILE_PATH);
     }
 }
 #endif

@@ -16,8 +16,6 @@ uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
 
 uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 
-uint32_t alloc_count;
-
 /* Parameters for controlling probability of leaking a chunk.
  * This will add up very quickly with the speed of allocations.
  * This should exercise all code including new internally
@@ -25,7 +23,7 @@ uint32_t alloc_count;
 #define LEAK_K 1000
 #define LEAK_V 8
 
-iso_alloc_zone_handle *custom_zone;
+static __thread iso_alloc_zone_handle *custom_zone;
 #define NEW_ZONE_K 1000
 #define NEW_ZONE_V 1
 
@@ -51,16 +49,13 @@ int reallocate(size_t array_size, size_t allocation_size) {
         p[i] = iso_realloc(d, allocation_size);
 
         if(p[i] == NULL) {
-            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations", allocation_size, alloc_count);
+            LOG_AND_ABORT("Failed to allocate %ld bytes", allocation_size);
         }
-
-        alloc_count++;
 
         /* Free every other allocation */
         if(i % 2) {
             iso_free(p[i]);
             p[i] = NULL;
-            alloc_count--;
         }
     }
 
@@ -70,7 +65,6 @@ int reallocate(size_t array_size, size_t allocation_size) {
     for(int i = 0; i < array_size; i++) {
         if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
             iso_free(p[i]);
-            alloc_count--;
         }
     }
 
@@ -89,16 +83,13 @@ int callocate(size_t array_size, size_t allocation_size) {
         p[i] = iso_calloc(1, allocation_size);
 
         if(p[i] == NULL) {
-            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations", allocation_size, alloc_count);
+            LOG_AND_ABORT("Failed to allocate %ld bytes", allocation_size);
         }
-
-        alloc_count++;
 
         /* Free every other allocation */
         if(i % 2) {
             iso_free(p[i]);
             p[i] = NULL;
-            alloc_count--;
         }
     }
 
@@ -108,7 +99,6 @@ int callocate(size_t array_size, size_t allocation_size) {
     for(int i = 0; i < array_size; i++) {
         if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
             iso_free(p[i]);
-            alloc_count--;
         }
     }
 
@@ -139,16 +129,13 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
 
         if(p[i] == NULL) {
-            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations", allocation_size, alloc_count);
+            LOG_AND_ABORT("Failed to allocate %ld bytes", allocation_size);
         }
-
-        alloc_count++;
 
         /* Free every other allocation */
         if(i % 2) {
             iso_free(p[i]);
             p[i] = NULL;
-            alloc_count--;
         }
     }
 
@@ -158,7 +145,6 @@ int allocate(size_t array_size, size_t allocation_size) {
     for(int i = 0; i < array_size; i++) {
         if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
             iso_free(p[i]);
-            alloc_count--;
         }
     }
 
@@ -170,9 +156,8 @@ int allocate(size_t array_size, size_t allocation_size) {
     return OK;
 }
 
-int main(int argc, char *argv[]) {
-    alloc_count = 0;
-    custom_zone = NULL;
+void *start() {
+    uint64_t loop = 0;
 
     while(1) {
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
@@ -205,8 +190,27 @@ int main(int argc, char *argv[]) {
             reallocate(array_sizes[i], 0);
         }
 
-        LOG("Total leaked allocations: %d", alloc_count);
+        LOG("Thread ID (%d) looped %d times", (int32_t) pthread_self(), loop++);
     }
+}
+
+int main(int argc, char *argv[]) {
+    custom_zone = NULL;
+
+    pthread_t t;
+    pthread_t tt;
+    pthread_t ttt;
+    pthread_t tttt;
+    pthread_create(&t, NULL, start, NULL);
+    pthread_create(&tt, NULL, start, NULL);
+    pthread_create(&ttt, NULL, start, NULL);
+    pthread_create(&tttt, NULL, start, NULL);
+
+    pthread_join(t, NULL);
+    pthread_join(tt, NULL);
+    pthread_join(ttt, NULL);
+    pthread_join(tttt, NULL);
+    pthread_exit(NULL);
 
     return 0;
 }
