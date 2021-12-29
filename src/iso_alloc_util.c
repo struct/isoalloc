@@ -82,7 +82,7 @@ INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
 #endif
 }
 
-INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz) {
+INTERNAL_HIDDEN size_t next_pow2(size_t sz) {
     sz |= sz >> 1;
     sz |= sz >> 2;
     sz |= sz >> 4;

@@ -390,7 +390,7 @@ INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
         _iso_free_internal_unlocked(thread_chunk_quarantine[i], false);
     }
 
-    memset(thread_chunk_quarantine, 0x0, THREAD_CHUNK_QUARANTINE_SZ);
+    memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
     thread_chunk_quarantine_count = 0;
 #endif
 }
@@ -1645,7 +1645,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
             _iso_free_internal(thread_chunk_quarantine[i], false);
         }
 
-        memset(thread_chunk_quarantine, 0x0, THREAD_CHUNK_QUARANTINE_SZ);
+        memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
         thread_chunk_quarantine_count = 0;
 
         thread_chunk_quarantine[thread_chunk_quarantine_count] = p;
