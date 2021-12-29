@@ -297,6 +297,8 @@ using namespace std;
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
 #define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
+#define CHUNK_TO_ZONE_TABLE_SZ 65535
+#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
@@ -318,10 +320,6 @@ using namespace std;
 /* The size of our bit slot freelist */
 #define BIT_SLOT_CACHE_SZ 255
 
-/* The size of the thread cache */
-#define THREAD_ZONE_CACHE_SZ 8
-#define THREAD_CHUNK_CACHE_SZ 4
-
 #define MEGABYTE_SIZE 1048576
 #define KILOBYTE_SIZE 1024
 
@@ -336,30 +334,6 @@ using namespace std;
 /* Calculate the user pointer given a zone and a bit slot */
 #define POINTER_FROM_BITSLOT(zone, bit_slot) \
     ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
-
-#if THREAD_SUPPORT
-extern atomic_flag root_busy_flag;
-extern atomic_flag big_zone_busy_flag;
-
-#define LOCK_ROOT() \
-    do {            \
-    } while(atomic_flag_test_and_set(&root_busy_flag));
-
-#define UNLOCK_ROOT() \
-    atomic_flag_clear(&root_busy_flag);
-
-#define LOCK_BIG_ZONE() \
-    do {                \
-    } while(atomic_flag_test_and_set(&big_zone_busy_flag));
-
-#define UNLOCK_BIG_ZONE() \
-    atomic_flag_clear(&big_zone_busy_flag);
-#else
-#define LOCK_ROOT()
-#define UNLOCK_ROOT()
-#define LOCK_BIG_ZONE()
-#define UNLOCK_BIG_ZONE()
-#endif
 
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
@@ -418,6 +392,7 @@ static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 typedef uint64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
 typedef uint16_t zone_lookup_table_t;
+typedef uint16_t chunk_lookup_table_t;
 
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
@@ -440,6 +415,34 @@ typedef struct {
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
+#if THREAD_SUPPORT
+/* The size of the thread cache */
+#define THREAD_ZONE_CACHE_SZ 8
+#define THREAD_CHUNK_QUARANTINE_SZ 64
+
+extern atomic_flag root_busy_flag;
+extern atomic_flag big_zone_busy_flag;
+
+#define LOCK_ROOT() \
+    do {            \
+    } while(atomic_flag_test_and_set(&root_busy_flag));
+
+#define UNLOCK_ROOT() \
+    atomic_flag_clear(&root_busy_flag);
+
+#define LOCK_BIG_ZONE() \
+    do {                \
+    } while(atomic_flag_test_and_set(&big_zone_busy_flag));
+
+#define UNLOCK_BIG_ZONE() \
+    atomic_flag_clear(&big_zone_busy_flag);
+#else
+#define LOCK_ROOT()
+#define UNLOCK_ROOT()
+#define LOCK_BIG_ZONE()
+#define UNLOCK_BIG_ZONE()
+#endif
+
 #if THREAD_SUPPORT && THREAD_CACHE
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
@@ -450,14 +453,6 @@ typedef struct {
     size_t chunk_size;
     iso_alloc_zone *zone;
 } __attribute__((aligned(sizeof(int64_t)))) _tzc;
-
-/* Each thread also gets a local cache of usable chunks.
- * This cache is populated during both alloc and free
- * operations using the same zone */
-typedef struct {
-    size_t chunk_size;
-    void *chunk;
-} __attribute__((aligned(sizeof(int64_t)))) _tzcbs;
 #endif
 
 /* Meta data for big allocations are allocated near the
@@ -530,9 +525,9 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE void populate_thread_caches(iso_alloc_zone *zone);
-INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
+INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void _flush_thread_caches(void);
+INTERNAL_HIDDEN INLINE size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
@@ -555,6 +550,8 @@ INTERNAL_HIDDEN void _verify_all_zones(void);
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
+INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
+INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
