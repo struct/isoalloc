@@ -182,3 +182,28 @@ If all else fails please file an issue on the [github project](https://github.co
 `int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of custom zones via prctl on Android
 
 `void iso_flush_caches()` - Flushes all thread specific caches. Intended to be used upon thread destruction
+
+### Experimental APIs
+
+These APIs are exposed via the public header `iso_alloc.h` but are subject to backward breaking changes at any time.
+
+`int32_t iso_alloc_get_traces(iso_alloc_traces_t *traces_out)` - Retrieves the current global `iso_alloc_traces_t` structure from the allocator
+
+`void iso_alloc_search_stack(void *p)` - Searches from `p` until the current stack frame in `iso_alloc_search_stack` for any pointers into IsoAlloc user pages. Any pointers found are logged to stdout. If `p` is `NULL` then the entire stack is searched.
+
+### Data Structures
+
+```
+typedef struct {
+    /* The address of the last ALLOC_BTS_DEPTH (8) callers as referenced by stack frames */
+    uint64_t callers[ALLOC_BTS_DEPTH];
+    /* The smallest allocation size requested by this call path */
+    size_t lower_bound_size;
+    /* The largest allocation size requested by this call path */
+    size_t upper_bound_size;
+    /* A 16 bit hash of the back trace */
+    uint16_t backtrace_hash;
+} iso_alloc_traces_t;
+```
+
+When `HEAP_PROFILER` is enabled this structure will contain information collected by the allocator by sampling malloc and free calls. This data structure is experimental and is subject to change.

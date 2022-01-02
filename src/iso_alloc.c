@@ -1103,7 +1103,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
 #endif
 
 #if HEAP_PROFILER
-    _iso_alloc_profile();
+    _iso_alloc_profile(size);
 #endif
 
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
@@ -1629,6 +1629,10 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     if(r == OK) {
         return;
     }
+#endif
+
+#if HEAP_PROFILER
+    _iso_free_profile();
 #endif
 
     if(permanent == true) {

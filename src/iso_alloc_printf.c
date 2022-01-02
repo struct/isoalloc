@@ -49,7 +49,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
     va_start(arg, f);
     char out[65535];
     char *p = out;
-    memset(out, 0x0, sizeof(out));
+    memset(p, 0x0, sizeof(out));
 
     for(const char *idx = f; *idx != '\0'; idx++) {
         if(p >= (char *) (out + sizeof(out))) {

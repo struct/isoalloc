@@ -1,6 +1,8 @@
 /* iso_alloc.h - A secure memory allocator
  * Copyright 2021 - chris.rohlf@gmail.com */
 
+#pragma once
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +47,23 @@ EXTERNAL_API void iso_verify_zones();
 EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name);
 EXTERNAL_API void iso_flush_caches();
+
+#if HEAP_PROFILER
+#define ALLOC_BTS_DEPTH 8
+
+typedef struct {
+    /* The address of the last 8 callers as referenced by stack frames */
+    uint64_t callers[ALLOC_BTS_DEPTH];
+    /* The smallest allocation size requested by this call path */
+    size_t lower_bound_size;
+    /* The largest allocation size requested by this call path */
+    size_t upper_bound_size;
+    /* A 16 bit hash of the back trace */
+    uint16_t backtrace_hash;
+} iso_alloc_traces_t;
+
+EXTERNAL_API int32_t iso_alloc_get_traces(iso_alloc_traces_t *traces_out);
+#endif
 
 #if EXPERIMENTAL
 EXTERNAL_API void iso_alloc_search_stack(void *p);

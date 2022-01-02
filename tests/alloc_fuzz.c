@@ -157,7 +157,7 @@ int allocate(size_t array_size, size_t allocation_size) {
 }
 
 void *start() {
-    uint64_t loop = 0;
+    uint64_t loop = 1;
 
     while(1) {
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
