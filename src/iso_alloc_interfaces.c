@@ -200,9 +200,16 @@ EXTERNAL_API void iso_flush_caches() {
 }
 
 #if HEAP_PROFILER
-EXTERNAL_API int32_t iso_alloc_get_traces(iso_alloc_traces_t *traces_out) {
-    _iso_alloc_get_traces(traces_out);
-    return 0;
+EXTERNAL_API size_t iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
+    return _iso_get_alloc_traces(traces_out);
+}
+
+EXTERNAL_API size_t iso_get_free_traces(iso_free_traces_t *traces_out) {
+    return _iso_get_free_traces(traces_out);
+}
+
+EXTERNAL_API void iso_alloc_reset_traces() {
+    _iso_alloc_reset_traces();
 }
 #endif
 
