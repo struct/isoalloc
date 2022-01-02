@@ -502,8 +502,8 @@ extern void *_zero_alloc_page;
 #define CHUNK_USAGE_THRESHOLD 75
 #define PROFILER_ENV_STR "ISO_ALLOC_PROFILER_FILE_PATH"
 #define PROFILER_FILE_PATH "iso_alloc_profiler.data"
-#define ALLOC_BTS_DEPTH 8
-#define ALLOC_BTS_SZ 128
+#define BACKTRACE_DEPTH 8
+#define BACKTRACE_DEPTH_SZ 128
 
 /* The IsoAlloc profiler is not thread local but these
  * globals should only ever be touched by internal
@@ -514,8 +514,6 @@ uint64_t _alloc_sampled_count;
 uint64_t _free_sampled_count;
 
 int32_t profiler_fd;
-uint64_t alloc_caller_hg[HG_SIZE];
-uint64_t free_caller_hg[HG_SIZE];
 
 typedef struct {
     uint64_t total;
@@ -526,8 +524,13 @@ zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
 
 /* iso_alloc_traces_t is a public structure, and
  * is defined in the public header iso_alloc.h */
-iso_alloc_traces_t _alloc_bts[ALLOC_BTS_SZ];
+iso_alloc_traces_t _alloc_bts[BACKTRACE_DEPTH_SZ];
 size_t _alloc_bts_count;
+
+/* iso_free_traces_t is a public structure, and
+ * is defined in the public header iso_alloc.h */
+iso_free_traces_t _free_bts[BACKTRACE_DEPTH_SZ];
+size_t _free_bts_count;
 #endif
 
 /* The global root */
@@ -604,7 +607,9 @@ INTERNAL_HIDDEN void _iso_output_profile(void);
 INTERNAL_HIDDEN void _initialize_profiler(void);
 INTERNAL_HIDDEN void _iso_alloc_profile(size_t size);
 INTERNAL_HIDDEN void _iso_free_profile(void);
-INTERNAL_HIDDEN int32_t _iso_alloc_get_traces(iso_alloc_traces_t *traces_out);
+INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out);
+INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out);
+INTERNAL_HIDDEN void _iso_alloc_reset_traces();
 #endif
 
 #if EXPERIMENTAL

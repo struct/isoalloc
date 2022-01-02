@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("iso_alloc failed");
     }
 
-    memset(p, 0x00, 1024);
+    memset(p, 0x0, 1024);
 
     void *r = iso_strdup(p);
 
@@ -79,8 +79,31 @@ int main(int argc, char *argv[]) {
     iso_free(p);
     iso_free(r);
 
-    iso_flush_caches();
+#if HEAP_PROFILER
+    iso_alloc_traces_t at[BACKTRACE_DEPTH_SZ];
+    size_t alloc_trace_count = iso_get_alloc_traces(at);
 
+    for(int32_t i = 0; i < alloc_trace_count; i++) {
+        iso_alloc_traces_t *abts = &at[i];
+        LOG("alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
+            i, abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size, abts->callers[0], abts->callers[1],
+            abts->callers[2], abts->callers[3], abts->callers[4], abts->callers[5], abts->callers[6], abts->callers[7]);
+    }
+
+    iso_free_traces_t ft[BACKTRACE_DEPTH_SZ];
+    size_t free_trace_count = iso_get_free_traces(ft);
+
+    for(int32_t i = 0; i < free_trace_count; i++) {
+        iso_free_traces_t *fbts = &ft[i];
+        LOG("free_backtrace=%d,backtrace_hash=0x%x,calls=%d,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
+            i, fbts->backtrace_hash, fbts->call_count, fbts->callers[0], fbts->callers[1], fbts->callers[2], fbts->callers[3],
+            fbts->callers[4], fbts->callers[5], fbts->callers[6], fbts->callers[7]);
+    }
+
+    iso_alloc_reset_traces();
+#endif
+
+    iso_flush_caches();
     iso_verify_zones();
 
     return 0;
