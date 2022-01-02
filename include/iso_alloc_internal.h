@@ -50,6 +50,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "iso_alloc.h"
+
 #if MEM_USAGE
 #include <sys/resource.h>
 #endif
@@ -500,13 +502,20 @@ extern void *_zero_alloc_page;
 #define CHUNK_USAGE_THRESHOLD 75
 #define PROFILER_ENV_STR "ISO_ALLOC_PROFILER_FILE_PATH"
 #define PROFILER_FILE_PATH "iso_alloc_profiler.data"
-#define PROFILER_STACK_DEPTH 2
+#define ALLOC_BTS_DEPTH 8
+#define ALLOC_BTS_SZ 128
 
-uint64_t _allocation_count;
-uint64_t _sampled_count;
+/* The IsoAlloc profiler is not thread local but these
+ * globals should only ever be touched by internal
+ * allocator functions when the root is locked */
+uint64_t _alloc_count;
+uint64_t _free_count;
+uint64_t _alloc_sampled_count;
+uint64_t _free_sampled_count;
 
 int32_t profiler_fd;
-uint32_t caller_hg[HG_SIZE];
+uint64_t alloc_caller_hg[HG_SIZE];
+uint64_t free_caller_hg[HG_SIZE];
 
 typedef struct {
     uint64_t total;
@@ -514,6 +523,11 @@ typedef struct {
 } zone_profiler_map_t;
 
 zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
+
+/* iso_alloc_traces_t is a public structure, and
+ * is defined in the public header iso_alloc.h */
+iso_alloc_traces_t _alloc_bts[ALLOC_BTS_SZ];
+size_t _alloc_bts_count;
 #endif
 
 /* The global root */
@@ -583,10 +597,14 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 
 #if HEAP_PROFILER
-INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames);
-INTERNAL_HIDDEN void _iso_output_profile();
+INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(void);
+INTERNAL_HIDDEN INLINE void _save_backtrace(iso_alloc_traces_t *abts);
+INTERNAL_HIDDEN INLINE uint64_t _call_count_from_hash(uint16_t hash);
+INTERNAL_HIDDEN void _iso_output_profile(void);
 INTERNAL_HIDDEN void _initialize_profiler(void);
-INTERNAL_HIDDEN void _iso_alloc_profile(void);
+INTERNAL_HIDDEN void _iso_alloc_profile(size_t size);
+INTERNAL_HIDDEN void _iso_free_profile(void);
+INTERNAL_HIDDEN int32_t _iso_alloc_get_traces(iso_alloc_traces_t *traces_out);
 #endif
 
 #if EXPERIMENTAL

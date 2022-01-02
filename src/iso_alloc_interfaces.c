@@ -199,6 +199,13 @@ EXTERNAL_API void iso_flush_caches() {
     flush_thread_caches();
 }
 
+#if HEAP_PROFILER
+EXTERNAL_API int32_t iso_alloc_get_traces(iso_alloc_traces_t *traces_out) {
+    _iso_alloc_get_traces(traces_out);
+    return 0;
+}
+#endif
+
 #if EXPERIMENTAL
 EXTERNAL_API void iso_alloc_search_stack(void *p) {
     _iso_alloc_search_stack(p);

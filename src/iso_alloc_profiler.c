@@ -178,33 +178,63 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
 }
 
 #if HEAP_PROFILER
-INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(uint32_t frames) {
+
+/* Returns a documented data structure that can
+ * be used to interpret allocation patterns */
+INTERNAL_HIDDEN int32_t _iso_alloc_get_traces(iso_alloc_traces_t *traces_out) {
+    LOCK_ROOT();
+    memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
+    UNLOCK_ROOT();
+    return 0;
+}
+
+#define UPDATE_BT_HASH(frame, hash)                         \
+    if(__builtin_frame_address(frame)) {                    \
+        hash ^= (uint64_t) __builtin_return_address(frame); \
+    } else {                                                \
+        return hash;                                        \
+    }
+
+INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash() {
     uint64_t hash = 0;
-
-    hash ^= (uint64_t) __builtin_return_address(0);
-
-    if(frames >= 1) {
-        hash ^= (uint64_t) __builtin_return_address(1);
-    }
-
-    if(frames >= 2) {
-        hash ^= (uint64_t) __builtin_return_address(2);
-    }
-
-    if(frames >= 3) {
-        hash ^= (uint64_t) __builtin_return_address(3);
-    }
-
-    if(frames >= 4) {
-        hash ^= (uint64_t) __builtin_return_address(4);
-    }
-
+    UPDATE_BT_HASH(1, hash);
+    UPDATE_BT_HASH(2, hash);
+    UPDATE_BT_HASH(3, hash);
+    UPDATE_BT_HASH(4, hash);
+    UPDATE_BT_HASH(5, hash);
+    UPDATE_BT_HASH(6, hash);
+    UPDATE_BT_HASH(7, hash);
+    UPDATE_BT_HASH(8, hash);
     return hash;
 }
 
+#define SAVE_BACKTRACE_FRAME(frame, abts)                                          \
+    if(__builtin_frame_address(frame)) {                                           \
+        uint64_t r = (uint64_t) __builtin_return_address(frame);                   \
+        if(r != 0) {                                                               \
+            abts->callers[frame - 1] = (uint64_t) __builtin_return_address(frame); \
+        }                                                                          \
+    } else {                                                                       \
+        return;                                                                    \
+    }
+
+INTERNAL_HIDDEN INLINE void _save_backtrace(iso_alloc_traces_t *abts) {
+    SAVE_BACKTRACE_FRAME(1, abts);
+    SAVE_BACKTRACE_FRAME(2, abts);
+    SAVE_BACKTRACE_FRAME(3, abts);
+    SAVE_BACKTRACE_FRAME(4, abts);
+    SAVE_BACKTRACE_FRAME(5, abts);
+    SAVE_BACKTRACE_FRAME(6, abts);
+    SAVE_BACKTRACE_FRAME(7, abts);
+    SAVE_BACKTRACE_FRAME(8, abts);
+    return;
+}
+
 INTERNAL_HIDDEN void _iso_output_profile() {
-    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _allocation_count);
-    _iso_alloc_printf(profiler_fd, "sampled=%d\n", _sampled_count);
+    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _alloc_count);
+    _iso_alloc_printf(profiler_fd, "alloc_sampled=%d\n", _alloc_sampled_count);
+    _iso_alloc_printf(profiler_fd, "freed=%d\n", _free_count);
+    _iso_alloc_printf(profiler_fd, "free_sampled=%d\n", _free_sampled_count);
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone *zone = &_root->zones[i];
@@ -212,9 +242,22 @@ INTERNAL_HIDDEN void _iso_output_profile() {
     }
 
     for(uint32_t i = 0; i < HG_SIZE; i++) {
-        if(caller_hg[i] != 0) {
-            _iso_alloc_printf(profiler_fd, "backtrace_hash=0x%x,calls=%d\n", i, caller_hg[i]);
+        if(alloc_caller_hg[i] != 0) {
+            _iso_alloc_printf(profiler_fd, "alloc_backtrace_hash=0x%x,calls=%d\n", i, alloc_caller_hg[i]);
         }
+    }
+
+    for(uint32_t i = 0; i < HG_SIZE; i++) {
+        if(free_caller_hg[i] != 0) {
+            _iso_alloc_printf(profiler_fd, "free_backtrace_hash=0x%x,calls=%d\n", i, free_caller_hg[i]);
+        }
+    }
+
+    for(uint32_t i = 0; i < _alloc_bts_count; i++) {
+        iso_alloc_traces_t *abts = &_alloc_bts[i];
+        _iso_alloc_printf(profiler_fd, "alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
+                          i, abts->backtrace_hash, _call_count_from_hash(abts->backtrace_hash), abts->lower_bound_size, abts->upper_bound_size, abts->callers[0], abts->callers[1],
+                          abts->callers[2], abts->callers[3], abts->callers[4], abts->callers[5], abts->callers[6], abts->callers[7]);
     }
 
     for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
@@ -229,27 +272,28 @@ INTERNAL_HIDDEN void _iso_output_profile() {
     }
 }
 
-INTERNAL_HIDDEN void _iso_alloc_profile() {
-    _allocation_count++;
+INTERNAL_HIDDEN INLINE uint64_t _call_count_from_hash(uint16_t hash) {
+    return alloc_caller_hg[hash];
+}
+
+INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
+    _alloc_count++;
 
     /* Don't run the profiler on every allocation */
     if(LIKELY((rand_uint64() % PROFILER_ODDS) != 1)) {
         return;
     }
 
-    _sampled_count++;
+    _alloc_sampled_count++;
 
     /* Set the byte in the table. This will be transformed
      * into a histogram when we dump the data upon exit */
-    caller_hg[(_get_backtrace_hash(PROFILER_STACK_DEPTH) & HG_SIZE)]++;
+    uint64_t hash = (_get_backtrace_hash() & HG_SIZE);
+    alloc_caller_hg[hash]++;
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    for(uint64_t i = 0; i < _root->zones_used; i++) {
         uint32_t used = 0;
         iso_alloc_zone *zone = &_root->zones[i];
-
-        if(zone->user_pages_start == NULL) {
-            continue;
-        }
 
         /* For the purposes of the profiler we don't care about
          * the differences between canary and leaked chunks.
@@ -260,10 +304,57 @@ INTERNAL_HIDDEN void _iso_alloc_profile() {
             used = _iso_alloc_zone_leak_detector(zone, true);
         }
 
+        used = (int32_t) ((float) used / (GET_CHUNK_COUNT(zone)) * 100.0);
+
         if(used > CHUNK_USAGE_THRESHOLD) {
             _zone_profiler_map[zone->chunk_size].count++;
         }
     }
+
+    if(_alloc_bts_count < ALLOC_BTS_SZ) {
+        iso_alloc_traces_t *abts = NULL;
+
+        /* Take the backtrace hash and determine if its already been seen */
+        for(uint64_t i = 0; i < _alloc_bts_count; i++) {
+            if(_alloc_bts[i].backtrace_hash == hash) {
+                abts = &_alloc_bts[i];
+
+                if(abts->lower_bound_size == 0 || size < abts->lower_bound_size) {
+                    abts->lower_bound_size = size;
+                }
+
+                if(abts->upper_bound_size == 0 || size > abts->upper_bound_size) {
+                    abts->upper_bound_size = size;
+                }
+
+                break;
+            }
+        }
+
+        /* We haven't seen this backtrace before */
+        if(abts == NULL) {
+            abts = &_alloc_bts[_alloc_bts_count];
+            abts->backtrace_hash = hash;
+
+            _save_backtrace(abts);
+            _alloc_bts_count++;
+        }
+    }
+}
+
+INTERNAL_HIDDEN void _iso_free_profile() {
+    _free_count++;
+
+    /* Don't run the profiler on every allocation */
+    if(LIKELY((rand_uint64() % PROFILER_ODDS) != 1)) {
+        return;
+    }
+
+    _free_sampled_count++;
+
+    /* Set the byte in the table. This will be transformed
+     * into a histogram when we dump the data upon exit */
+    free_caller_hg[(_get_backtrace_hash() & HG_SIZE)]++;
 }
 
 INTERNAL_HIDDEN void _initialize_profiler() {
@@ -271,9 +362,9 @@ INTERNAL_HIDDEN void _initialize_profiler() {
      * as long as we guarantee to never use it if the root
      * is not locked */
     if(getenv(PROFILER_ENV_STR) != NULL) {
-        profiler_fd = open(getenv(PROFILER_ENV_STR), O_RDWR | O_CREAT, 0666);
+        profiler_fd = open(getenv(PROFILER_ENV_STR), O_RDWR | O_CREAT | O_SYNC, 0666);
     } else {
-        profiler_fd = open(PROFILER_FILE_PATH, O_RDWR | O_CREAT, 0666);
+        profiler_fd = open(PROFILER_FILE_PATH, O_RDWR | O_CREAT | O_SYNC, 0666);
     }
 
     if(profiler_fd == ERR) {
