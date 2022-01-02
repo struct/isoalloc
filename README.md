@@ -187,7 +187,9 @@ If all else fails please file an issue on the [github project](https://github.co
 
 These APIs are exposed via the public header `iso_alloc.h` but are subject to backward breaking changes at any time.
 
-`int32_t iso_alloc_get_traces(iso_alloc_traces_t *traces_out)` - Retrieves the current global `iso_alloc_traces_t` structure from the allocator
+`int32_t iso_get_alloc_traces(iso_alloc_traces_t *traces_out)` - Retrieves the current global `iso_alloc_traces_t` structure from the allocator
+
+`int32_t iso_get_free_traces(iso_free_traces_t *traces_out)` - Retrieves the current global `iso_free_traces_t` structure from the allocator
 
 `void iso_alloc_search_stack(void *p)` - Searches from `p` until the current stack frame in `iso_alloc_search_stack` for any pointers into IsoAlloc user pages. Any pointers found are logged to stdout. If `p` is `NULL` then the entire stack is searched.
 
@@ -204,6 +206,15 @@ typedef struct {
     /* A 16 bit hash of the back trace */
     uint16_t backtrace_hash;
 } iso_alloc_traces_t;
+
+typedef struct {
+    /* The address of the last 8 callers as referenced by stack frames */
+    uint64_t callers[BACKTRACE_DEPTH];
+    /* A 16 bit hash of the back trace */
+    uint16_t backtrace_hash;
+    /* Call count */
+    size_t call_count;
+} iso_free_traces_t;
 ```
 
-When `HEAP_PROFILER` is enabled this structure will contain information collected by the allocator by sampling malloc and free calls. This data structure is experimental and is subject to change.
+When `HEAP_PROFILER` is enabled these structure will contain information collected by the allocator by sampling `malloc` and `free` calls. This data structure is experimental and is subject to change. See `interfaces_test.c` file for an example of how to retrieve and inspect these structures.
