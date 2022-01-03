@@ -190,7 +190,7 @@ void *start() {
             reallocate(array_sizes[i], 0);
         }
 
-        LOG("Thread ID (%d) looped %d times", (int32_t) pthread_self(), loop++);
+        LOG("Thread ID (%d) looped %d times", pthread_self(), loop++);
     }
 }
 

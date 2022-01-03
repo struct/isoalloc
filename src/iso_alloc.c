@@ -4,8 +4,15 @@
 #include "iso_alloc_internal.h"
 
 #if THREAD_SUPPORT
+
+#if USE_SPINLOCK
 atomic_flag root_busy_flag;
 atomic_flag big_zone_busy_flag;
+#else
+pthread_mutex_t root_busy_mutex;
+pthread_mutex_t big_zone_busy_mutex;
+#endif
+
 #if THREAD_CACHE
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
@@ -354,6 +361,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 }
 
 __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
+#if THREAD_SUPPORT && !USE_SPINLOCK
+    pthread_mutex_init(&root_busy_mutex, NULL);
+    pthread_mutex_init(&big_zone_busy_mutex, NULL);
+#endif
+
     g_page_size = sysconf(_SC_PAGESIZE);
     iso_alloc_initialize_global_root();
 #if HEAP_PROFILER

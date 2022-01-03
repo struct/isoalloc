@@ -189,6 +189,7 @@ using namespace std;
 
 #define CANARY_COUNT_DIV 100
 
+/* All chunks are 8 byte aligned */
 #define ALIGNMENT 8
 
 #if NAMED_MAPPINGS
@@ -422,6 +423,7 @@ typedef struct {
 #define THREAD_ZONE_CACHE_SZ 8
 #define THREAD_CHUNK_QUARANTINE_SZ 64
 
+#if USE_SPINLOCK
 extern atomic_flag root_busy_flag;
 extern atomic_flag big_zone_busy_flag;
 
@@ -438,6 +440,24 @@ extern atomic_flag big_zone_busy_flag;
 
 #define UNLOCK_BIG_ZONE() \
     atomic_flag_clear(&big_zone_busy_flag);
+#else
+extern pthread_mutex_t root_busy_mutex;
+extern pthread_mutex_t big_zone_busy_mutex;
+
+#define LOCK_ROOT() \
+    pthread_mutex_lock(&root_busy_mutex);
+
+#define UNLOCK_ROOT() \
+    pthread_mutex_unlock(&root_busy_mutex);
+
+#define LOCK_BIG_ZONE() \
+    pthread_mutex_lock(&big_zone_busy_mutex);
+
+#define UNLOCK_BIG_ZONE() \
+    pthread_mutex_unlock(&big_zone_busy_mutex);
+
+#endif // USE_SPINLOCK
+
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()
