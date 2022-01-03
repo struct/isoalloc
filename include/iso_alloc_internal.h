@@ -300,7 +300,7 @@ using namespace std;
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
 #define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
-#define CHUNK_TO_ZONE_TABLE_SZ 65535
+#define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
 #define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
 /* We allocate zones at startup for common sizes.
@@ -587,7 +587,8 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent);
+INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
+INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);

@@ -79,6 +79,9 @@ int main(int argc, char *argv[]) {
     iso_free(p);
     iso_free(r);
 
+    void *sz = iso_alloc(8192);
+    iso_free_size(sz, 8192);
+
 #if HEAP_PROFILER
     iso_alloc_traces_t at[BACKTRACE_DEPTH_SZ];
     size_t alloc_trace_count = iso_get_alloc_traces(at);

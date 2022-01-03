@@ -28,6 +28,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE void *iso_alloc(size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE void *iso_calloc(size_t nmemb, size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE void *iso_realloc(void *p, size_t size);
 EXTERNAL_API void iso_free(void *p);
+EXTERNAL_API void iso_free_size(void *p, size_t size);
 EXTERNAL_API void iso_free_permanently(void *p);
 EXTERNAL_API size_t iso_chunksz(void *p);
 EXTERNAL_API NO_DISCARD char *iso_strdup(const char *str);

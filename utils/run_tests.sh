@@ -36,7 +36,7 @@ done
 
 fail_tests=("double_free" "big_double_free" "heap_overflow" "heap_underflow"
             "leaks_test" "wild_free" "unaligned_free" "incorrect_chunk_size_multiple"
-            "big_canary_test" "zero_alloc")
+            "big_canary_test" "zero_alloc" "sized_free")
 
 for t in "${fail_tests[@]}"; do
     echo -n "Running $t test"

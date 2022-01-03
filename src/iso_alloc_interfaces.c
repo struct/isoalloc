@@ -16,6 +16,10 @@ EXTERNAL_API void iso_free(void *p) {
     _iso_free(p, false);
 }
 
+EXTERNAL_API void iso_free_size(void *p, size_t size) {
+    _iso_free_size(p, size);
+}
+
 EXTERNAL_API void iso_free_permanently(void *p) {
     _iso_free(p, true);
 }
@@ -24,7 +28,7 @@ EXTERNAL_API size_t iso_chunksz(void *p) {
     return _iso_chunk_size(p);
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE void *iso_realloc(void *p, size_t size) {
+EXTERNAL_API NO_DISCARD REALLOC_SIZE void *iso_realloc(void *p, size_t size) {
     if(UNLIKELY(size == 0)) {
         iso_free(p);
         return NULL;
@@ -47,9 +51,9 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE void *iso_realloc(void *p, size
     }
 
 #if PERM_FREE_REALLOC
-    iso_free_permanently(p);
+    _iso_free(p, true);
 #else
-    iso_free(p);
+    _iso_free_size(p, chunk_size);
 #endif
 
     return r;
