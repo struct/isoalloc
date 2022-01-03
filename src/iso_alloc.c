@@ -399,7 +399,7 @@ INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
 
     /* Free all the thread quarantined chunks */
     for(int64_t i = 0; i < thread_chunk_quarantine_count; i++) {
-        _iso_free_internal_unlocked(thread_chunk_quarantine[i], false);
+        _iso_free_internal_unlocked(thread_chunk_quarantine[i], false, NULL);
     }
 
     memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
@@ -1670,18 +1670,48 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     }
 }
 
-INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
+INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
+    if(p == NULL) {
+        return;
+    }
+
+#if NO_ZERO_ALLOCATIONS
+    if(p == _zero_alloc_page && size != 0) {
+        LOG_AND_ABORT("Zero sized chunk (0x%p) with non-zero (%d) size passed to free", p, size);
+    }
+
+    if(p == _zero_alloc_page) {
+        return;
+    }
+#endif
+
     LOCK_ROOT();
-    _iso_free_internal_unlocked(p, permanent);
+
+    iso_alloc_zone *zone = iso_find_zone_range(p);
+
+    if(zone->chunk_size != size) {
+        LOG_AND_ABORT("Invalid size (expected %d, got %d) for chunk 0x%p", zone->chunk_size, size, p);
+    }
+
+    _iso_free_internal_unlocked(p, false, zone);
+
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent) {
+INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
+    LOCK_ROOT();
+    _iso_free_internal_unlocked(p, permanent, NULL);
+    UNLOCK_ROOT();
+}
+
+INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone) {
 #if FUZZ_MODE
     _verify_all_zones();
 #endif
 
-    iso_alloc_zone *zone = iso_find_zone_range(p);
+    if(LIKELY(zone == NULL)) {
+        zone = iso_find_zone_range(p);
+    }
 
     if(LIKELY(zone != NULL)) {
         UNMASK_ZONE_PTRS(zone);

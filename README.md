@@ -145,6 +145,8 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_free(void *p)` - Frees any chunk allocated and returned by any API call (e.g. `iso_alloc, iso_calloc, iso_realloc, iso_strdup, iso_strndup`).
 
+`void iso_free_size(void *p, size_t size)` - The same as `iso_free` but requires a size argument so a strict size check can be performed
+
 `void iso_free_permanently(void *p)` - Same as `iso_free` but marks the chunk in such a way that it will not be reallocated
 
 `size_t iso_chunksz(void *p)` - Returns the size of the chunk returned by `iso_alloc`
