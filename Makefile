@@ -6,10 +6,10 @@ CXX = clang++
 
 ## Security flags can affect performance
 ## SANITIZE_CHUNKS - Clear user chunks upon free
-## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse custom zones
+## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse private zones
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
-## NEVER_REUSE_ZONES - Tells IsoAlloc to unmap user and bitmap pages when destroying custom zones
+## NEVER_REUSE_ZONES - Tells IsoAlloc to unmap user and bitmap pages when destroying private zones
 SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0	\
                  -DNEVER_REUSE_ZONES=0
 
@@ -288,7 +288,7 @@ malloc_cmp_test: clean
 ## C++ Support - Build a debug version of the unit test
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/cxx_tests
 
 install:

@@ -36,12 +36,12 @@ EXTERNAL_API void *operator new[](size_t size, const std::nothrow_t &) noexcept 
     return iso_alloc(size);
 }
 
-void operator delete(void *ptr, size_t sz) noexcept {
-    return iso_free_sized(ptr, sz);
+void operator delete(void *ptr, size_t size) noexcept {
+    return iso_free_size(ptr, size);
 }
 
-void operator delete[](void *ptr, size_t sz) noexcept {
-    return iso_free_sized(ptr, sz);
+void operator delete[](void *ptr, size_t size) noexcept {
+    return iso_free_size(ptr, size);
 }
 
 EXTERNAL_API void operator delete(void *ptr, const std::nothrow_t &) noexcept {

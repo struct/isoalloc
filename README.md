@@ -69,10 +69,10 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort.
 * Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size.
 * The free bit slot cache provides a chunk quarantine or delayed free mechanism.
-* When custom zones are destroyed they are overwritten and marked `PROT_NONE` to prevent use-after-free.
+* When private zones are destroyed they are overwritten and marked `PROT_NONE` to prevent use-after-free.
 * Big zone meta data lives at a random offset from its base page.
 * A call to `realloc` will always return a new chunk. Use `PERM_FREE_REALLOC` to make these free's permanent.
-* Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse custom zones.
+* Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse private zones.
 * When `CPU_PIN` is enabled allocation from a zone will be restricted to the CPU core that created it.
 * When `UAF_PTR_PAGE` is enabled calls to `iso_free` will be sampled to search for dangling references.
 * Enable `VERIFY_BIT_SLOT_CACHE` to verify there are no duplicates in the bit slot cache upon free.
@@ -82,7 +82,8 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * By default `NO_ZERO_ALLOCATIONS` will return a pointer to a page marked `PROT_NONE` for all `0` sized allocations.
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
 * When `SHUFFLE_BIT_SLOT_CACHE` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
-* When destroying custom zones if `NEVER_REUSE_ZONES` is enabled IsoAlloc won't attempt to repurpose the zone
+* When destroying private zones if `NEVER_REUSE_ZONES` is enabled IsoAlloc won't attempt to repurpose the zone
+* Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_REPLACE * max_chunk_count_for_zone`.
 
 ## Building
 
@@ -149,6 +150,10 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_free_permanently(void *p)` - Same as `iso_free` but marks the chunk in such a way that it will not be reallocated
 
+`void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone)` - Free's a chunk from a private zone
+
+`void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone)` - Permanently free's a chunk from a zone
+
 `size_t iso_chunksz(void *p)` - Returns the size of the chunk returned by `iso_alloc`
 
 `char *iso_strdup(const char *str)` - Equivalent to `strdup`. Returned pointer must be free'd by `iso_free`.
@@ -181,7 +186,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_verify_zone(iso_alloc_zone_handle *zone)` - Verifies the state of specified zone. Will abort if inconsistencies are found.
 
-`int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of custom zones via prctl on Android
+`int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of private zones via prctl on Android
 
 `void iso_flush_caches()` - Flushes all thread specific caches. Intended to be used upon thread destruction
 

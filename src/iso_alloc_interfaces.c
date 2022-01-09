@@ -20,6 +20,16 @@ EXTERNAL_API void iso_free_size(void *p, size_t size) {
     _iso_free_size(p, size);
 }
 
+EXTERNAL_API void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone) {
+    UNMASK_ZONE_HANDLE(zone);
+    _iso_free_from_zone(p, zone, false);
+}
+
+EXTERNAL_API void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone) {
+    UNMASK_ZONE_HANDLE(zone);
+    _iso_free_from_zone(p, zone, true);
+}
+
 EXTERNAL_API void iso_free_permanently(void *p) {
     _iso_free(p, true);
 }
@@ -71,7 +81,7 @@ EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, 
     size_t size = strlen(str);
 
     if(zone != NULL) {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     char *p = (char *) _iso_alloc(zone, size);
@@ -96,7 +106,7 @@ EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone,
     size_t s_size = strlen(str);
 
     if(zone != NULL) {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     char *p = (char *) _iso_alloc(zone, n);
@@ -120,7 +130,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE iso_alloc_zone_handle *iso_a
         return NULL;
     }
 
-    zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+    UNMASK_ZONE_HANDLE(zone);
     return _iso_alloc(zone, size);
 }
 
@@ -129,13 +139,13 @@ EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
         return;
     }
 
-    zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+    UNMASK_ZONE_HANDLE(zone);
     _iso_alloc_destroy_zone(zone);
 }
 
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     iso_alloc_zone_handle *zone = (iso_alloc_zone_handle *) iso_new_zone(size, false);
-    zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+    UNMASK_ZONE_HANDLE(zone);
     return zone;
 }
 
@@ -143,7 +153,7 @@ EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name
     if(zone == NULL) {
         return 0;
     } else {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     return name_zone(zone, name);
@@ -161,7 +171,7 @@ EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     return _iso_alloc_detect_leaks_in_zone(zone);
@@ -175,7 +185,7 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     return _iso_alloc_zone_mem_usage(zone);
@@ -193,7 +203,7 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return;
     } else {
-        zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+        UNMASK_ZONE_HANDLE(zone);
     }
 
     verify_zone(zone);

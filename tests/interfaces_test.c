@@ -55,10 +55,10 @@ int main(int argc, char *argv[]) {
     p = iso_alloc_from_zone(zone, 256);
 
     if(p == NULL) {
-        LOG_AND_ABORT("Could not allocate from custom zone");
+        LOG_AND_ABORT("Could not allocate from private zone");
     }
 
-    iso_free(p);
+    iso_free_from_zone(p, zone);
 
     iso_alloc_destroy_zone(zone);
 

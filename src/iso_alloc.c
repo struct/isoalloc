@@ -408,22 +408,38 @@ INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
+    chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
+
     munmap(zone->bitmap_start, zone->bitmap_size);
+    madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
     munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
+    madvise(zone->bitmap_start - _root->system_page_size, _root->system_page_size, MADV_DONTNEED);
     munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
+    madvise(zone->bitmap_start + zone->bitmap_size, _root->system_page_size, MADV_DONTNEED);
+
     munmap(zone->user_pages_start, ZONE_USER_SIZE);
+    madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
     munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
+    madvise(zone->user_pages_start - _root->system_page_size, _root->system_page_size, MADV_DONTNEED);
     munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
+    madvise(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size, MADV_DONTNEED);
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
     LOCK_ROOT();
-    _flush_thread_caches();
+    _iso_alloc_destroy_zone_unlocked(zone, true, false);
+    UNLOCK_ROOT();
+}
+
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool flush_caches, bool replace) {
+    if(flush_caches == true) {
+        _flush_thread_caches();
+    }
 
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
 
-    if(zone->internally_managed == false) {
+    if(zone->internal == false) {
         /* This zone can be used again, we just need to wipe
          * any sensitive data from it and prime it for use */
         memset(zone->bitmap_start, 0x0, zone->bitmap_size);
@@ -440,10 +456,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         zone->is_full = true;
 #else
         /* Take over the zone to be used internally */
-        zone->internally_managed = true;
+        zone->internal = true;
         zone->is_full = false;
 
-        /* Reusing custom zones has the potential for introducing
+        /* Reusing private zones has the potential for introducing
          * zone-use-after-free patterns. So we bootstrap the zone
          * from scratch here */
         create_canary_chunks(zone);
@@ -462,12 +478,24 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
         POISON_ZONE(zone);
     } else {
-        /* The only time we ever destroy a default non-custom zone
-         * is from the destructor so its safe unmap pages */
-        _unmap_zone(zone);
-    }
+        if(replace == true) {
+            /* The only time we ever destroy a default non-private zone
+             * is from the destructor so its safe unmap pages */
+            int16_t zones_used = _root->zones_used;
+            size_t size = zone->chunk_size;
 
-    UNLOCK_ROOT();
+            /* _iso_new_zone() will use _root->zones_used to place
+             * the new zone at the correct index in _root->zones.
+             * We will restore this value after the new zone has
+             * been created */
+            _root->zones_used = zone->index;
+            _unmap_zone(zone);
+            _iso_new_zone(size, true);
+            _root->zones_used = zones_used;
+        } else {
+            _unmap_zone(zone);
+        }
+    }
 }
 
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
@@ -547,7 +575,6 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
     munmap(chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 #endif
-
     UNLOCK_ROOT();
 }
 
@@ -581,7 +608,9 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
 
-    new_zone->internally_managed = internal;
+    memset(new_zone, 0x0, sizeof(iso_alloc_zone));
+
+    new_zone->internal = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
@@ -611,7 +640,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     if(internal == true) {
         name = INTERNAL_UZ_NAME;
     } else {
-        name = CUSTOM_UZ_NAME;
+        name = PRIVATE_UZ_NAME;
     }
 
     /* All user pages use MAP_POPULATE. This might seem like we are asking
@@ -649,7 +678,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     POISON_ZONE(new_zone);
 
-    /* The lookup table is never used for custom zones */
+    /* The lookup table is never used for private zones */
     if(LIKELY(internal == true)) {
         chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
 
@@ -732,6 +761,11 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
+    /* If the zone is full it is not usable */
+    if(zone->is_full == true) {
+        return NULL;
+    }
+
     /* This zone may fit this chunk but if the zone was
      * created for chunks more than (N * larger) than the
      * requested allocation size then we would be wasting
@@ -739,7 +773,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
      * sizes beyond ZONE_1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
-    if(zone->internally_managed == true && size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
+    if(zone->internal == true && size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
     }
 
@@ -804,7 +838,7 @@ INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
         return false;
     }
 
-    if(zone->chunk_size < size || zone->internally_managed == false || zone->is_full == true) {
+    if(zone->chunk_size < size || zone->internal == false || zone->is_full == true) {
         return false;
     }
 
@@ -838,8 +872,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
                 LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, size);
             }
 
-            if(zone->internally_managed == false) {
-                LOG_AND_ABORT("Lookup table should never contain custom zones");
+            if(zone->internal == false) {
+                LOG_AND_ABORT("Lookup table should never contain private zones");
             }
 
             bool fits = iso_does_zone_fit(zone, size);
@@ -1056,13 +1090,15 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
      * as a canary chunk. This bit is set again upon free */
     UNSET_BIT(b, (which_bit + 1));
     bm[dwords_to_bit_slot] = b;
+    zone->af_count++;
+    zone->alloc_count++;
     return p;
 }
 
 /* Populates the thread cache, requires the root is locked and zone is unmasked */
 INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone) {
 #if THREAD_SUPPORT && THREAD_CACHE
-    if(UNLIKELY(zone->internally_managed == false)) {
+    if(UNLIKELY(zone->internal == false)) {
         return;
     }
 
@@ -1155,10 +1191,10 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         }
 
         /* We only need to check if the zone is usable
-         * if it's a custom zone. If we chose this zone
+         * if it's a private zone. If we chose this zone
          * then its guaranteed to already be usable */
         if(LIKELY(zone != NULL)) {
-            if(zone->internally_managed == false) {
+            if(zone->internal == false) {
                 zone = is_zone_usable(zone, size);
 
                 if(zone == NULL) {
@@ -1223,7 +1259,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         UNLOCK_ROOT();
 
         if(UNLIKELY(zone != NULL)) {
-            LOG_AND_ABORT("Allocations of >= %d cannot use custom zones", SMALL_SZ_MAX);
+            LOG_AND_ABORT("Allocations of >= %d cannot use private zones", SMALL_SZ_MAX);
         }
 
         return _iso_big_alloc(size);
@@ -1589,6 +1625,8 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     bm[dwords_to_bit_slot] = b;
 
+    zone->af_count--;
+
     /* Now that we have free'd this chunk lets validate the
      * chunks before and after it. If they were previously
      * used and currently free they should have canaries
@@ -1622,6 +1660,16 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     POISON_ZONE_CHUNK(zone, p);
 
     populate_thread_cache(zone);
+}
+
+INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone *zone, bool permanent) {
+    if(p == NULL) {
+        return;
+    }
+
+    LOCK_ROOT();
+    _iso_free_internal_unlocked(p, permanent, zone);
+    UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
@@ -1685,11 +1733,22 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 #endif
 
+#if ALLOC_SANITY
+    int32_t r = _iso_alloc_free_sane_sample(p);
+
+    if(r == OK) {
+        return;
+    }
+#endif
+
     LOCK_ROOT();
 
     iso_alloc_zone *zone = iso_find_zone_range(p);
 
-    if(zone->chunk_size != size) {
+    /* We can't check for an exact size match because
+     * its possible we chose a larger zone to hold this
+     * chunk when we allocated it */
+    if(zone->chunk_size < size) {
         LOG_AND_ABORT("Invalid size (expected %d, got %d) for chunk 0x%p", zone->chunk_size, size, p);
     }
 
@@ -1717,6 +1776,16 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
         UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
         MASK_ZONE_PTRS(zone);
+
+        /* If the zone has no active allocations, holds smaller chunks,
+         * and has allocated and freed more than ZONE_ALLOC_REPLACE
+         * chunks in its lifetime then we destroy and replace it with
+         * a new zone */
+        if(UNLIKELY(zone->af_count == 0) && UNLIKELY(zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
+            if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
+                _iso_alloc_destroy_zone_unlocked(zone, false, true);
+            }
+        }
 
 #if UAF_PTR_PAGE
         if(UNLIKELY((rand_uint64() % UAF_PTR_PAGE_ODDS) == 1)) {
