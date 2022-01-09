@@ -6,47 +6,55 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang7:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-7
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang8:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-8
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang9:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-9
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang10:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-10
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang11:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-11
       - run: make tests
+      - run: make cpp_tests
   testsuite-clang12:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install clang-12
       - run: make tests
+      - run: make cpp_tests
   testsuite-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run: make tests CC=gcc CXX=g++
+      - run: make cpp_tests CC=gcc CXX=g++
 
 
 

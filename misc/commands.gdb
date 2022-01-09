@@ -5,4 +5,3 @@ x/i $pc
 thread apply all bt
 thread apply all info locals
 p *_root
-p _zone_lookup_table

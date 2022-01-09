@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
     char *a = (char *) iso_alloc(100);
     iso_free(a);
     auto d = std::make_unique<Derived>(100);
-    return 0;
+
     for(size_t i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
         for(size_t z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
             allocate(array_sizes[i], allocation_sizes[z]);

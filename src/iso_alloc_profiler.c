@@ -137,7 +137,8 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
-    LOG("Zone[%d] holds %d byte chunks. Total bytes (%lu), megabytes (%lu)", zone->index, zone->chunk_size, mem_usage, (mem_usage / MEGABYTE_SIZE));
+    LOG("Zone[%d] holds %d byte chunks. Total bytes (%lu), megabytes (%lu)", zone->index, zone->chunk_size,
+        mem_usage, (mem_usage / MEGABYTE_SIZE));
     return (mem_usage / MEGABYTE_SIZE);
 }
 
@@ -148,7 +149,8 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
         iso_alloc_zone *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d", zone->index, zone->chunk_size, (ZONE_USER_SIZE / MEGABYTE_SIZE), zone->next_sz_index);
+        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d", zone->index, zone->chunk_size,
+            (ZONE_USER_SIZE / MEGABYTE_SIZE), zone->next_sz_index, zone->alloc_count);
     }
 
     return (mem_usage / MEGABYTE_SIZE);

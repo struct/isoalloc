@@ -23,7 +23,7 @@ uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 #define LEAK_K 1000
 #define LEAK_V 8
 
-static __thread iso_alloc_zone_handle *custom_zone;
+static __thread iso_alloc_zone_handle *private_zone;
 #define NEW_ZONE_K 1000
 #define NEW_ZONE_V 1
 
@@ -110,11 +110,11 @@ int allocate(size_t array_size, size_t allocation_size) {
     memset(p, 0x0, array_size);
 
     if(rand() % 100 == 1) {
-        if(custom_zone != NULL) {
-            iso_alloc_destroy_zone(custom_zone);
+        if(private_zone != NULL) {
+            iso_alloc_destroy_zone(private_zone);
         }
 
-        custom_zone = iso_alloc_new_zone(allocation_size);
+        private_zone = iso_alloc_new_zone(allocation_size);
     }
 
     for(int i = 0; i < array_size; i++) {
@@ -122,8 +122,8 @@ int allocate(size_t array_size, size_t allocation_size) {
             allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
         }
 
-        if(rand() % 100 == 1 && custom_zone != NULL && allocation_size < SMALL_SZ_MAX) {
-            p[i] = iso_alloc_from_zone(custom_zone, allocation_size);
+        if(rand() % 100 == 1 && private_zone != NULL && allocation_size < SMALL_SZ_MAX) {
+            p[i] = iso_alloc_from_zone(private_zone, allocation_size);
         } else {
             p[i] = iso_alloc(allocation_size);
         }
@@ -149,8 +149,8 @@ int allocate(size_t array_size, size_t allocation_size) {
     }
 
     if(rand() % 10 == 1) {
-        iso_alloc_destroy_zone(custom_zone);
-        custom_zone = NULL;
+        iso_alloc_destroy_zone(private_zone);
+        private_zone = NULL;
     }
 
     return OK;
@@ -195,7 +195,7 @@ void *start() {
 }
 
 int main(int argc, char *argv[]) {
-    custom_zone = NULL;
+    private_zone = NULL;
 
     pthread_t t;
     pthread_t tt;

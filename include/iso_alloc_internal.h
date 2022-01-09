@@ -200,7 +200,7 @@ using namespace std;
 #define ROOT_NAME "isoalloc root"
 #define ZONE_BITMAP_NAME "isoalloc zone bitmap"
 #define INTERNAL_UZ_NAME "internal isoalloc user zone"
-#define CUSTOM_UZ_NAME "custom isoalloc user zone"
+#define PRIVAET_UZ_NAME "private isoalloc user zone"
 #else
 #define SAMPLED_ALLOC_NAME ""
 #define BIG_ZONE_UD_NAME ""
@@ -209,7 +209,7 @@ using namespace std;
 #define ROOT_NAME ""
 #define ZONE_BITMAP_NAME ""
 #define INTERNAL_UZ_NAME ""
-#define CUSTOM_UZ_NAME ""
+#define PRIVATE_UZ_NAME ""
 #endif
 
 #define WHICH_BIT(bit_slot) \
@@ -271,8 +271,8 @@ using namespace std;
  * create. This is a completely arbitrary number but
  * it does correspond to the size of the _root.zones
  * array that lives in global memory. Currently the
- * iso_alloc_zone structure is roughly 1090 bytes so
- * this allocates 8929280 bytes (~8.9 MB) for _root */
+ * iso_alloc_zone structure is roughly 2112 bytes so
+ * this results in 17301504 bytes (~17 MB) for zone */
 #define MAX_ZONES 8192
 
 /* Each user allocation zone we make is 4mb in size.
@@ -317,6 +317,13 @@ using namespace std;
 #define ZONE_2048 2048
 #define ZONE_4096 4096
 #define ZONE_8192 8192
+
+/* Zones can be retired after a certain number of
+ * allocations. This is computed as the total count
+ * of chunks the zone can handle multiplied by this
+ * value. The zone is replaced at that point if all
+ * of its current chunks are free */
+#define ZONE_ALLOC_REPLACE 32
 
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
@@ -409,10 +416,12 @@ typedef struct {
     uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
     uint32_t chunk_size;                               /* Size of chunks managed by this zone */
     uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
-    bool internally_managed;                           /* Zones can be managed by iso_alloc or custom */
-    bool is_full;                                      /* Indicates whether this zone is full to avoid expensive free bit slot searches */
+    bool internal;                                     /* Zones can be managed by iso_alloc or private */
+    bool is_full;                                      /* Flags whether this zone is full to avoid bit slot searches */
     uint16_t index;                                    /* Zone index */
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
+    uint32_t alloc_count;                              /* Total number of lifetime allocations */
+    uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
@@ -580,6 +589,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool flush_caches, bool replace);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void _verify_all_zones(void);
@@ -589,6 +599,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone);
+INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone *zone, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
