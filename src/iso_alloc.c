@@ -364,6 +364,9 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #if THREAD_SUPPORT && !USE_SPINLOCK
     pthread_mutex_init(&root_busy_mutex, NULL);
     pthread_mutex_init(&big_zone_busy_mutex, NULL);
+#if ALLOC_SANITY
+    pthread_mutex_init(&sane_cache_mutex, NULL);
+#endif
 #endif
 
     g_page_size = sysconf(_SC_PAGESIZE);

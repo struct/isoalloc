@@ -4,7 +4,15 @@
 #include "iso_alloc_internal.h"
 
 #if ALLOC_SANITY
+
+#if THREAD_SUPPORT
+#if USE_SPINLOCK
 atomic_flag sane_cache_flag;
+#else
+pthread_mutex_t sane_cache_mutex;
+#endif
+#endif
+
 uint64_t _sanity_canary;
 int32_t _sane_sampled;
 uint8_t _sane_cache[SANE_CACHE_SIZE];

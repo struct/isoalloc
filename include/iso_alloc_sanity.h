@@ -27,14 +27,22 @@
 #define SANITY_CANARY_SIZE 8
 
 #if THREAD_SUPPORT
+#if USE_SPINLOCK
 extern atomic_flag sane_cache_flag;
-
 #define LOCK_SANITY_CACHE() \
     do {                    \
     } while(atomic_flag_test_and_set(&sane_cache_flag));
 
 #define UNLOCK_SANITY_CACHE() \
     atomic_flag_clear(&sane_cache_flag);
+#else // USE_SPINLOCK
+extern pthread_mutex_t sane_cache_mutex;
+#define LOCK_SANITY_CACHE() \
+    pthread_mutex_lock(&sane_cache_mutex);
+
+#define UNLOCK_SANITY_CACHE() \
+    pthread_mutex_unlock(&sane_cache_mutex);
+#endif
 #else
 #define LOCK_SANITY_CACHE()
 #define UNLOCK_SANITY_CACHE()
