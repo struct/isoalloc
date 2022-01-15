@@ -1228,7 +1228,14 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         } else {
             /* Extra Slow Path: We need a new zone in order
              * to satisfy this allocation request */
-            zone = _iso_new_zone(size, true);
+            if(size > MAX_DEFAULT_ZONE_SZ) {
+                zone = _iso_new_zone(size, true);
+            } else {
+                /* For chunks smaller than MAX_DEFAULT_ZONE_SZ bytes
+                 * we bump the size up to the next power of 2 */
+                size = next_pow2(size);
+                zone = _iso_new_zone(size, true);
+            }
 
             if(UNLIKELY(zone == NULL)) {
                 LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
