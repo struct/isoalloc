@@ -200,7 +200,7 @@ using namespace std;
 #define ROOT_NAME "isoalloc root"
 #define ZONE_BITMAP_NAME "isoalloc zone bitmap"
 #define INTERNAL_UZ_NAME "internal isoalloc user zone"
-#define PRIVAET_UZ_NAME "private isoalloc user zone"
+#define PRIVATE_UZ_NAME "private isoalloc user zone"
 #else
 #define SAMPLED_ALLOC_NAME ""
 #define BIG_ZONE_UD_NAME ""
@@ -399,7 +399,7 @@ static uint64_t default_zones[] = {ZONE_256, ZONE_256, ZONE_512, ZONE_512};
 static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 #endif
 
-typedef uint64_t bit_slot_t;
+typedef int64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
 typedef uint16_t zone_lookup_table_t;
 typedef uint16_t chunk_lookup_table_t;
@@ -584,6 +584,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
+INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void flush_thread_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);

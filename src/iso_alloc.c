@@ -163,6 +163,13 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     bit_slot_t bit_slot;
     int64_t bit;
 
+    if(zone->next_sz_index != 0) {
+        iso_alloc_zone *zt = &_root->zones[zone->next_sz_index];
+        if(zone->chunk_size != zt->chunk_size) {
+            LOG_AND_ABORT("Inconsistent chunk sizes for zones %d,%d with chunk sizes %d,%d", zone->index, zt->index, zone->chunk_size, zt->chunk_size);
+        }
+    }
+
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             bit = GET_BIT(bm[i], j);
@@ -1221,18 +1228,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         } else {
             /* Extra Slow Path: We need a new zone in order
              * to satisfy this allocation request */
-
-            /* The size requested is above default zone sizes
-             * but we can still create it. iso_new_zone will
-             * align the requested size for us */
-            if(size > MAX_DEFAULT_ZONE_SZ) {
-                zone = _iso_new_zone(size, true);
-            } else {
-                /* For chunks smaller than MAX_DEFAULT_ZONE_SZ bytes
-                 * we bump the size up to the next power of 2 */
-                size = next_pow2(size);
-                zone = _iso_new_zone(size, true);
-            }
+            zone = _iso_new_zone(size, true);
 
             if(UNLIKELY(zone == NULL)) {
                 LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
@@ -1590,7 +1586,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
-    if(UNLIKELY((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size))) {
+    if(UNLIKELY(dwords_to_bit_slot > (zone->bitmap_size >> 3))) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
@@ -1766,6 +1762,20 @@ INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone *zone) {
+    /* If the zone has no active allocations, holds smaller chunks,
+     * and has allocated and freed more than ZONE_ALLOC_REPLACE
+     * chunks in its lifetime then we destroy and replace it with
+     * a new zone */
+    if(UNLIKELY(zone->af_count == 0) && UNLIKELY(zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
+        if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone) {
 #if FUZZ_MODE
     _verify_all_zones();
@@ -1784,10 +1794,8 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
          * and has allocated and freed more than ZONE_ALLOC_REPLACE
          * chunks in its lifetime then we destroy and replace it with
          * a new zone */
-        if(UNLIKELY(zone->af_count == 0) && UNLIKELY(zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
-            if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
-                _iso_alloc_destroy_zone_unlocked(zone, false, true);
-            }
+        if(UNLIKELY(_is_zone_retired(zone))) {
+            _iso_alloc_destroy_zone_unlocked(zone, false, true);
         }
 
 #if UAF_PTR_PAGE

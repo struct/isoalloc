@@ -270,9 +270,9 @@ perf_tests: clean
 	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
 	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
-	gprof -b $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
+	gprof -bl $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof
-	gprof -b $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
+	gprof -bl $(BUILD_DIR)/big_tests_gprof gmon.out > big_tests_perf_analysis.txt
 
 ## Runs a single test that prints CPU time
 ## compared to the same malloc/free operations
