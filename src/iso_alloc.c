@@ -163,6 +163,14 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     bit_slot_t bit_slot;
     int64_t bit;
 
+    if(zone->af_count > GET_CHUNK_COUNT(zone)) {
+        LOG_AND_ABORT("Inconsistent allocation count for zone[%d]. Current allocations %d > total %d", zone->index, zone->af_count, GET_CHUNK_COUNT(zone));
+    }
+
+    if(zone->next_sz_index > _root->zones_used) {
+        LOG_AND_ABORT("Detected corruption in zone[%d] next_sz_index=%d", zone->index, zone->next_sz_index);
+    }
+
     if(zone->next_sz_index != 0) {
         iso_alloc_zone *zt = &_root->zones[zone->next_sz_index];
         if(zone->chunk_size != zt->chunk_size) {
@@ -754,13 +762,10 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot = BAD_BIT_SLOT;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
-    int64_t bit;
 
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            bit = GET_BIT(bm[i], j);
-
-            if(bit == 0) {
+            if((GET_BIT(bm[i], j)) == 0) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 return bit_slot;
             }
