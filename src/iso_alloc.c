@@ -1296,7 +1296,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
             return big_zone;
         }
 
-        if(UNLIKELY(p > big_zone->user_pages_start) && UNLIKELY(p < (big_zone->user_pages_start + big_zone->size))) {
+        if(UNLIKELY(p > big_zone->user_pages_start && p < (big_zone->user_pages_start + big_zone->size))) {
             LOG_AND_ABORT("Invalid free of big zone allocation at 0x%p in mapping 0x%p", p, big_zone->user_pages_start);
         }
 
@@ -1330,7 +1330,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     zone = &_root->zones[zone_index];
     UNMASK_ZONE_PTRS(zone);
 
-    if(LIKELY(zone->bitmap_start <= p) && LIKELY((zone->bitmap_start + zone->bitmap_size) > p)) {
+    if(LIKELY(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p)) {
         MASK_ZONE_PTRS(zone);
         return zone;
     }
@@ -1389,7 +1389,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     zone = &_root->zones[zone_index];
     UNMASK_ZONE_PTRS(zone);
 
-    if(LIKELY(zone->user_pages_start <= p) && LIKELY((zone->user_pages_start + ZONE_USER_SIZE) > p)) {
+    if(LIKELY(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p)) {
         MASK_ZONE_PTRS(zone);
         return zone;
     }
@@ -1779,7 +1779,7 @@ INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone *zone) {
      * and has allocated and freed more than ZONE_ALLOC_REPLACE
      * chunks in its lifetime then we destroy and replace it with
      * a new zone */
-    if(UNLIKELY(zone->af_count == 0) && UNLIKELY(zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
         if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
             return true;
         }
