@@ -161,7 +161,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
     bit_slot_t bit_slot;
-    int64_t bit;
 
     if(zone->af_count > GET_CHUNK_COUNT(zone)) {
         LOG_AND_ABORT("Inconsistent allocation count for zone[%d]. Current allocations %d > total %d", zone->index, zone->af_count, GET_CHUNK_COUNT(zone));
@@ -180,12 +179,10 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
 
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            bit = GET_BIT(bm[i], j);
-
             /* If this bit is set it is either a free chunk or
              * a canary chunk. Either way it should have a set
              * of canaries we can verify */
-            if(bit == 1) {
+            if(bm[i] != 0 && (GET_BIT(bm[i], j)) == 1) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
@@ -236,7 +233,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
                 return;
             }
 
-            if((GET_BIT(bm[bm_idx], j)) == 0) {
+            if(bm[bm_idx] != -1 && (GET_BIT(bm[bm_idx], j)) == 0) {
                 bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 zone->free_bit_slot_cache[free_bit_slot_cache_index] = bit_slot;
                 free_bit_slot_cache_index++;
@@ -765,7 +762,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
 
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if((GET_BIT(bm[i], j)) == 0) {
+            if(bm[i] != -1 && (GET_BIT(bm[i], j)) == 0) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 return bit_slot;
             }

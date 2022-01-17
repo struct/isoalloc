@@ -83,6 +83,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
 
     for(int64_t i = 0; i < zone->bitmap_size / sizeof(bitmap_index_t); i++) {
         for(size_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+
+            if(bm[i] == 0) {
+                continue;
+            }
+
             int64_t bit = GET_BIT(bm[i], j);
             int64_t bit_two = GET_BIT(bm[i], (j + 1));
 
