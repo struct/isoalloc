@@ -648,7 +648,6 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* Bitmap pages are accessed often and usually in sequential order */
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
-    madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_SEQUENTIAL);
 
     char *name;
 
@@ -672,7 +671,6 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
     /* User pages will be accessed in an unpredictable order */
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
-    madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_RANDOM);
 
     new_zone->index = _root->zones_used;
     new_zone->canary_secret = rand_uint64();
@@ -1031,7 +1029,6 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         /* Tell the kernel we want to access this big zone allocation */
         user_pages += _root->system_page_size;
         madvise(user_pages, size, MADV_WILLNEED);
-        madvise(user_pages, size, MADV_RANDOM);
 
         /* The last page beyond user data is a guard page */
         void *last_gp = (user_pages + size);
