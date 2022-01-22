@@ -13,17 +13,24 @@ pthread_mutex_t root_busy_mutex;
 pthread_mutex_t big_zone_busy_mutex;
 #endif
 
-static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
-static __thread size_t thread_zone_cache_count;
+/* We cannot initialize these on thread creation so
+ * we can't mmap them somewhere with guard pages but
+ * they are thread local storage so their location
+ * won't be as predictable as .bss */
+static __thread _tzc zone_cache[ZONE_CACHE_SZ];
+static __thread size_t zone_cache_count;
 
-static __thread void *thread_chunk_quarantine[THREAD_CHUNK_QUARANTINE_SZ];
-static __thread size_t thread_chunk_quarantine_count;
+static __thread uintptr_t chunk_quarantine[CHUNK_QUARANTINE_SZ];
+static __thread size_t chunk_quarantine_count;
 #else
-static _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
-static size_t thread_zone_cache_count;
+/* When not using thread local storage we can mmap
+ * these pages somewhere safer than global memory
+ * and surrounded by guard pages */
+static _tzc *zone_cache;
+static size_t zone_cache_count;
 
-static void *thread_chunk_quarantine[THREAD_CHUNK_QUARANTINE_SZ];
-static size_t thread_chunk_quarantine_count;
+static uintptr_t *chunk_quarantine;
+static size_t chunk_quarantine_count;
 #endif
 
 uint32_t g_page_size;
@@ -39,7 +46,7 @@ static zone_lookup_table_t *zone_lookup_table;
 
 /* The chunk to zone lookup table provides a high hit
  * rate cache for finding which zone owns a user chunk.
- * It works by mapping the MSB of the chunk address
+ * It works by mapping the MSB of the chunk addressq
  * to a zone index. Misses are gracefully handled and
  * more common with a higher RSS and more mappings. */
 static chunk_lookup_table_t *chunk_lookup_table;
@@ -357,6 +364,22 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones = (void *) (p + g_page_size);
     name_mapping(p, _root->zones_size, "isoalloc zone metadata");
 
+#if !THREAD_SUPPORT
+    size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ);
+    chunk_quarantine = mmap_rw_pages(c + (g_page_size * 2), true, NULL);
+    create_guard_page(chunk_quarantine);
+    chunk_quarantine = chunk_quarantine + (g_page_size / sizeof(uintptr_t));
+    create_guard_page((void *) chunk_quarantine + c);
+    mlock(chunk_quarantine, c);
+
+    size_t z = ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc));
+    zone_cache = mmap_rw_pages(z + (g_page_size + 2), true, NULL);
+    create_guard_page(zone_cache);
+    zone_cache = ((void *) zone_cache) + g_page_size;
+    create_guard_page((void *) zone_cache + z);
+    mlock(zone_cache, z);
+#endif
+
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
     zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
@@ -412,16 +435,16 @@ INTERNAL_HIDDEN void flush_thread_caches() {
 
 INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
     /* The thread zone cache can be invalidated */
-    memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
-    thread_zone_cache_count = 0;
+    memset(zone_cache, 0x0, ZONE_CACHE_SZ * sizeof(_tzc));
+    zone_cache_count = 0;
 
     /* Free all the thread quarantined chunks */
-    for(int64_t i = 0; i < thread_chunk_quarantine_count; i++) {
-        _iso_free_internal_unlocked(thread_chunk_quarantine[i], false, NULL);
+    for(int64_t i = 0; i < chunk_quarantine_count; i++) {
+        _iso_free_internal_unlocked((void *) chunk_quarantine[i], false, NULL);
     }
 
-    memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
-    thread_chunk_quarantine_count = 0;
+    memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ);
+    chunk_quarantine_count = 0;
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
@@ -549,7 +572,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
         iso_alloc_zone *zone = &_root->zones[i];
         _verify_zone(zone);
 #if ISO_DTOR_CLEANUP
-        _iso_alloc_destroy_zone(zone);
+        _iso_alloc_destroy_zone_unlocked(zone, false, false);
 #endif
     }
 
@@ -591,6 +614,12 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(_root, sizeof(iso_alloc_root));
     munmap(zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
     munmap(chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+
+#if !THREAD_SUPPORT
+    munmap(chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ) + (g_page_size * 2));
+    munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
+#endif
+
 #endif
     UNLOCK_ROOT();
 }
@@ -1113,18 +1142,18 @@ INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone) {
     }
 
     /* Don't cache this zone if it was recently cached */
-    if(thread_zone_cache_count != 0 && thread_zone_cache[thread_zone_cache_count - 1].zone == zone) {
+    if(zone_cache_count != 0 && zone_cache[zone_cache_count - 1].zone == zone) {
         return;
     }
 
-    if(thread_zone_cache_count < THREAD_ZONE_CACHE_SZ) {
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
-        thread_zone_cache_count++;
+    if(zone_cache_count < ZONE_CACHE_SZ) {
+        zone_cache[zone_cache_count].zone = zone;
+        zone_cache[zone_cache_count].chunk_size = zone->chunk_size;
+        zone_cache_count++;
     } else {
-        thread_zone_cache_count = 0;
-        thread_zone_cache[thread_zone_cache_count].zone = zone;
-        thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
+        zone_cache_count = 0;
+        zone_cache[zone_cache_count].zone = zone;
+        zone_cache[zone_cache_count].chunk_size = zone->chunk_size;
     }
 }
 
@@ -1176,12 +1205,12 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
              * thread recently used for an alloc/free operation.
              * It's likely we are allocating a similar size chunk
              * and this will speed up that operation */
-            for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-                if(thread_zone_cache[i].chunk_size >= size) {
-                    bool fit = iso_does_zone_fit(thread_zone_cache[i].zone, size);
+            for(int64_t i = 0; i < zone_cache_count; i++) {
+                if(zone_cache[i].chunk_size >= size) {
+                    bool fit = iso_does_zone_fit(zone_cache[i].zone, size);
 
                     if(fit == true) {
-                        zone = thread_zone_cache[i].zone;
+                        zone = zone_cache[i].zone;
                         break;
                     }
                 }
@@ -1332,8 +1361,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     iso_alloc_zone *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-        tmp_zone = thread_zone_cache[i].zone;
+    for(int64_t i = 0; i < zone_cache_count; i++) {
+        tmp_zone = zone_cache[i].zone;
         UNMASK_ZONE_PTRS(tmp_zone);
 
         if(tmp_zone->bitmap_start <= p && (tmp_zone->bitmap_start + zone->bitmap_size) > p) {
@@ -1391,8 +1420,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
     iso_alloc_zone *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < thread_zone_cache_count; i++) {
-        tmp_zone = thread_zone_cache[i].zone;
+    for(int64_t i = 0; i < zone_cache_count; i++) {
+        tmp_zone = zone_cache[i].zone;
         UNMASK_ZONE_PTRS(tmp_zone);
 
         if(tmp_zone->user_pages_start <= p && (tmp_zone->user_pages_start + ZONE_USER_SIZE) > p) {
@@ -1703,20 +1732,19 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
-    if(thread_chunk_quarantine_count < THREAD_CHUNK_QUARANTINE_SZ) {
-        thread_chunk_quarantine[thread_chunk_quarantine_count] = p;
-        thread_chunk_quarantine_count++;
+    if(chunk_quarantine_count < ZONE_CACHE_SZ) {
+        chunk_quarantine[chunk_quarantine_count] = (uintptr_t) p;
+        chunk_quarantine_count++;
         return;
     } else {
-        for(int64_t i = 0; i < thread_chunk_quarantine_count; i++) {
-            _iso_free_internal(thread_chunk_quarantine[i], false);
+        for(int64_t i = 0; i < chunk_quarantine_count; i++) {
+            _iso_free_internal((void *) chunk_quarantine[i], false);
         }
 
-        memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
-        thread_chunk_quarantine_count = 0;
-
-        thread_chunk_quarantine[thread_chunk_quarantine_count] = p;
-        thread_chunk_quarantine_count++;
+        memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ);
+        chunk_quarantine_count = 0;
+        chunk_quarantine[chunk_quarantine_count] = (uintptr_t) p;
+        chunk_quarantine_count++;
         return;
     }
 }

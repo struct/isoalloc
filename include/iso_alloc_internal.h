@@ -428,8 +428,8 @@ typedef struct {
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
 /* The size of the thread cache */
-#define THREAD_ZONE_CACHE_SZ 8
-#define THREAD_CHUNK_QUARANTINE_SZ 64
+#define ZONE_CACHE_SZ 8
+#define CHUNK_QUARANTINE_SZ 64 * sizeof(uintptr_t)
 
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
@@ -513,6 +513,13 @@ typedef struct {
     iso_alloc_zone *zones;
     size_t zones_size;
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
+
+typedef struct {
+    void *user_pages_start;
+    void *bitmap_start;
+    uint32_t bitmap_size;
+    uint8_t ttl;
+} __attribute__((aligned(sizeof(int64_t)))) zone_quarantine_t;
 
 #if NO_ZERO_ALLOCATIONS
 extern void *_zero_alloc_page;
