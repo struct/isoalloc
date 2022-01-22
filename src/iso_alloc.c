@@ -12,13 +12,19 @@ atomic_flag big_zone_busy_flag;
 pthread_mutex_t root_busy_mutex;
 pthread_mutex_t big_zone_busy_mutex;
 #endif
-#endif
 
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
 
 static __thread void *thread_chunk_quarantine[THREAD_CHUNK_QUARANTINE_SZ];
 static __thread size_t thread_chunk_quarantine_count;
+#else
+static _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
+static size_t thread_zone_cache_count;
+
+static void *thread_chunk_quarantine[THREAD_CHUNK_QUARANTINE_SZ];
+static size_t thread_chunk_quarantine_count;
+#endif
 
 uint32_t g_page_size;
 uint32_t _default_zone_count;
