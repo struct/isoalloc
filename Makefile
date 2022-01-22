@@ -42,7 +42,7 @@ SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN) $(ENABLE_TSAN)
 ## program does not require concurrent access
 ## to the IsoAlloc APIs
 ## THREAD_CACHE - Enables thread zone cache
-THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread -DTHREAD_CACHE=1
+THREAD_SUPPORT = -DTHREAD_SUPPORT=1
 
 ## By default IsoAlloc uses a pthread mutex to synchronize
 ## thread safe access to the root structure. By enabling this
@@ -170,7 +170,7 @@ endif
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
 	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY) \
-	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK)
+	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) -pthread
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer

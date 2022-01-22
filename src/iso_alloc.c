@@ -12,15 +12,13 @@ atomic_flag big_zone_busy_flag;
 pthread_mutex_t root_busy_mutex;
 pthread_mutex_t big_zone_busy_mutex;
 #endif
+#endif
 
-#if THREAD_CACHE
 static __thread _tzc thread_zone_cache[THREAD_ZONE_CACHE_SZ];
 static __thread size_t thread_zone_cache_count;
 
 static __thread void *thread_chunk_quarantine[THREAD_CHUNK_QUARANTINE_SZ];
 static __thread size_t thread_chunk_quarantine_count;
-#endif
-#endif
 
 uint32_t g_page_size;
 uint32_t _default_zone_count;
@@ -407,7 +405,6 @@ INTERNAL_HIDDEN void flush_thread_caches() {
 }
 
 INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
-#if THREAD_SUPPORT && THREAD_CACHE
     /* The thread zone cache can be invalidated */
     memset(thread_zone_cache, 0x0, sizeof(thread_zone_cache));
     thread_zone_cache_count = 0;
@@ -419,7 +416,6 @@ INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
 
     memset(thread_chunk_quarantine, 0x0, sizeof(thread_chunk_quarantine));
     thread_chunk_quarantine_count = 0;
-#endif
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
@@ -1106,7 +1102,6 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 
 /* Populates the thread cache, requires the root is locked and zone is unmasked */
 INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone) {
-#if THREAD_SUPPORT && THREAD_CACHE
     if(UNLIKELY(zone->internal == false)) {
         return;
     }
@@ -1125,7 +1120,6 @@ INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone) {
         thread_zone_cache[thread_zone_cache_count].zone = zone;
         thread_zone_cache[thread_zone_cache_count].chunk_size = zone->chunk_size;
     }
-#endif
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
@@ -1171,7 +1165,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         _verify_all_zones();
 #endif
 
-#if THREAD_SUPPORT && THREAD_CACHE
         if(LIKELY(zone == NULL)) {
             /* Hot Path: Check the thread cache for a zone this
              * thread recently used for an alloc/free operation.
@@ -1188,7 +1181,6 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
                 }
             }
         }
-#endif
 
         bit_slot_t free_bit_slot = BAD_BIT_SLOT;
 

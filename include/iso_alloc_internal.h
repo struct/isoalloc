@@ -427,11 +427,21 @@ typedef struct {
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone;
 
-#if THREAD_SUPPORT
 /* The size of the thread cache */
 #define THREAD_ZONE_CACHE_SZ 8
 #define THREAD_CHUNK_QUARANTINE_SZ 64
 
+/* Each thread gets a local cache of the most recently
+ * used zones. This can greatly speed up allocations
+ * if your threads are reusing the same zones. This
+ * cache is first in last out, and is populated during
+ * both alloc and free operations */
+typedef struct {
+    size_t chunk_size;
+    iso_alloc_zone *zone;
+} __attribute__((aligned(sizeof(int64_t)))) _tzc;
+
+#if THREAD_SUPPORT
 #if USE_SPINLOCK
 extern atomic_flag root_busy_flag;
 extern atomic_flag big_zone_busy_flag;
@@ -472,18 +482,6 @@ extern pthread_mutex_t big_zone_busy_mutex;
 #define UNLOCK_ROOT()
 #define LOCK_BIG_ZONE()
 #define UNLOCK_BIG_ZONE()
-#endif
-
-#if THREAD_SUPPORT && THREAD_CACHE
-/* Each thread gets a local cache of the most recently
- * used zones. This can greatly speed up allocations
- * if your threads are reusing the same zones. This
- * cache is first in last out, and is populated during
- * both alloc and free operations */
-typedef struct {
-    size_t chunk_size;
-    iso_alloc_zone *zone;
-} __attribute__((aligned(sizeof(int64_t)))) _tzc;
 #endif
 
 /* Meta data for big allocations are allocated near the
