@@ -76,6 +76,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
 
     /* Roughly %1 of the chunks in this zone will become a canary */
     uint64_t canary_count = (chunk_count / CANARY_COUNT_DIV);
+    zone->canary_count = 0;
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -91,12 +92,18 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
             bm_idx = 0;
         }
 
+        /* We may have already chosen this index */
+        if(GET_BIT(bm[bm_idx], 0)) {
+            continue;
+        }
+
         /* Set the 1st and 2nd bits as 1 */
         SET_BIT(bm[bm_idx], 0);
         SET_BIT(bm[bm_idx], 1);
         bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT);
         void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
         write_canary(zone, p);
+        zone->canary_count++;
     }
 #endif
 }
@@ -173,8 +180,8 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
     bit_slot_t bit_slot;
 
-    if(zone->af_count > GET_CHUNK_COUNT(zone)) {
-        LOG_AND_ABORT("Inconsistent allocation count for zone[%d]. Current allocations %d > total %d", zone->index, zone->af_count, GET_CHUNK_COUNT(zone));
+    if((zone->af_count + zone->canary_count) > GET_CHUNK_COUNT(zone)) {
+        LOG_AND_ABORT("Inconsistent allocation count for zone[%d] Current allocations %d > total capacity %d", zone->index, zone->af_count + zone->canary_count, GET_CHUNK_COUNT(zone));
     }
 
     if(zone->next_sz_index > _root->zones_used) {
@@ -244,7 +251,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
                 return;
             }
 
-            if(bm[bm_idx] != -1 && (GET_BIT(bm[bm_idx], j)) == 0) {
+            if(bm[bm_idx] <= ALLOCATED_BITSLOTS && (GET_BIT(bm[bm_idx], j)) == 0) {
                 bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 zone->free_bit_slot_cache[free_bit_slot_cache_index] = bit_slot;
                 free_bit_slot_cache_index++;
@@ -365,7 +372,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     name_mapping(p, _root->zones_size, "isoalloc zone metadata");
 
 #if !THREAD_SUPPORT
-    size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ);
+    size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
     chunk_quarantine = mmap_rw_pages(c + (g_page_size * 2), true, NULL);
     create_guard_page(chunk_quarantine);
     chunk_quarantine = chunk_quarantine + (g_page_size / sizeof(uintptr_t));
@@ -435,16 +442,14 @@ INTERNAL_HIDDEN void flush_thread_caches() {
 
 INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
     /* The thread zone cache can be invalidated */
-    memset(zone_cache, 0x0, ZONE_CACHE_SZ * sizeof(_tzc));
-    zone_cache_count = 0;
+    clear_zone_cache();
 
     /* Free all the thread quarantined chunks */
     for(int64_t i = 0; i < chunk_quarantine_count; i++) {
         _iso_free_internal_unlocked((void *) chunk_quarantine[i], false, NULL);
     }
 
-    memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ);
-    chunk_quarantine_count = 0;
+    clear_chunk_quarantine();
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
@@ -616,7 +621,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
 #if !THREAD_SUPPORT
-    munmap(chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ) + (g_page_size * 2));
+    munmap(chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)) + (g_page_size * 2));
     munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
 #endif
 
@@ -637,14 +642,19 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
     }
 
+    /* In order for our bitmap to be a power of 2
+     * the size we allocate also needs to be. We
+     * want our bitmap to be a power of 2 because
+     * if its not then we either waste memory
+     * or have to perform inefficient searches
+     * whenever we need more bitslots */
+    if((is_pow2(size)) != true) {
+        size = next_pow2(size);
+    }
+
     if(size > SMALL_SZ_MAX) {
         LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
         return NULL;
-    }
-
-    /* Chunk size must be aligned */
-    if(IS_ALIGNED(size) != 0) {
-        size = ALIGN_SZ_UP(size);
     }
 
     /* Minimum chunk size */
@@ -761,20 +771,31 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
     return new_zone;
 }
 
-/* Iterate through a zone bitmap a dword at a time
+/* Iterate through a zone bitmap a qword at a time
  * looking for empty holes (i.e. slot == 0) */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot = BAD_BIT_SLOT;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
-    /* Iterate the entire bitmap a dword at a time */
+    /* Iterate the entire bitmap a qword at a time */
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
             bit_slot = (i << BITS_PER_QWORD_SHIFT);
             return bit_slot;
+        }
+
+        /* Its fast to check if the entire chunk is
+         * allocated with or without canaries */
+        if(bm[i] <= ALLOCATED_BITSLOTS) {
+            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+                if((GET_BIT(bm[i], j)) == 0) {
+                    bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
+                    return bit_slot;
+                }
+            }
         }
     }
 
@@ -850,6 +871,9 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
          * but mark this zone full so future allocations can
          * take a faster path */
         if(bit_slot == BAD_BIT_SLOT) {
+            if(zone->chunk_size > MAX_DEFAULT_ZONE_SZ && (zone->af_count + zone->canary_count) > GET_CHUNK_COUNT(zone)) {
+                LOG_AND_ABORT("%d Inconsistent allocation count for zone[%d] Current allocations %d (canary count = %d) != total capacity %d", zone->chunk_size, zone->index, (zone->af_count + zone->canary_count), zone->canary_count, GET_CHUNK_COUNT(zone));
+            }
             zone->is_full = true;
             return NULL;
         } else {
@@ -948,6 +972,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
     } else if(size > MAX_DEFAULT_ZONE_SZ) {
         i = _default_zone_count;
     }
+#else
+    i = 0;
 #endif
 
     for(; i < _root->zones_used; i++) {
@@ -1254,14 +1280,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         } else {
             /* Extra Slow Path: We need a new zone in order
              * to satisfy this allocation request */
-            if(size > MAX_DEFAULT_ZONE_SZ) {
-                zone = _iso_new_zone(size, true);
-            } else {
-                /* For chunks smaller than MAX_DEFAULT_ZONE_SZ bytes
-                 * we bump the size up to the next power of 2 */
-                size = next_pow2(size);
-                zone = _iso_new_zone(size, true);
-            }
+            zone = _iso_new_zone(size, true);
 
             if(UNLIKELY(zone == NULL)) {
                 LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
@@ -1704,6 +1723,26 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone *zone, bool per
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN INLINE void clear_chunk_quarantine() {
+#if THREAD_SUPPORT
+    memset(chunk_quarantine, 0x0, sizeof(chunk_quarantine));
+#else
+    memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
+#endif
+
+    chunk_quarantine_count = 0;
+}
+
+INTERNAL_HIDDEN INLINE void clear_zone_cache() {
+#if THREAD_SUPPORT
+    memset(zone_cache, 0x0, sizeof(zone_cache));
+#else
+    memset(zone_cache, 0x0, ZONE_CACHE_SZ * sizeof(_tzc));
+#endif
+
+    zone_cache_count = 0;
+}
+
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     if(p == NULL) {
         return;
@@ -1732,7 +1771,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
-    if(chunk_quarantine_count < ZONE_CACHE_SZ) {
+    if(chunk_quarantine_count < CHUNK_QUARANTINE_SZ) {
         chunk_quarantine[chunk_quarantine_count] = (uintptr_t) p;
         chunk_quarantine_count++;
         return;
@@ -1741,8 +1780,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
             _iso_free_internal((void *) chunk_quarantine[i], false);
         }
 
-        memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ);
-        chunk_quarantine_count = 0;
+        clear_chunk_quarantine();
         chunk_quarantine[chunk_quarantine_count] = (uintptr_t) p;
         chunk_quarantine_count++;
         return;

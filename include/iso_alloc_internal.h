@@ -303,6 +303,8 @@ using namespace std;
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
 #define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
+#define ALLOCATED_BITSLOTS 0x5555555555555555
+
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is ZONE_USER_SIZE bytes
  * so ZONE_8192 holds less chunks than ZONE_128 for
@@ -422,6 +424,7 @@ typedef struct {
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
+    uint8_t canary_count;                              /* How many canaries are in this zone? */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
@@ -429,7 +432,7 @@ typedef struct {
 
 /* The size of the thread cache */
 #define ZONE_CACHE_SZ 8
-#define CHUNK_QUARANTINE_SZ 64 * sizeof(uintptr_t)
+#define CHUNK_QUARANTINE_SZ 64
 
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
@@ -578,6 +581,8 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void _flush_thread_caches(void);
+INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);
+INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal);
@@ -588,6 +593,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
+INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone);
 INTERNAL_HIDDEN void flush_thread_caches(void);
