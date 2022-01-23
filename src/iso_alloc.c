@@ -200,7 +200,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
             /* If this bit is set it is either a free chunk or
              * a canary chunk. Either way it should have a set
              * of canaries we can verify */
-            if(bm[i] != 0 && (GET_BIT(bm[i], j)) == 1) {
+            if((GET_BIT(bm[i], j)) == 1) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
@@ -251,7 +251,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
                 return;
             }
 
-            if(bm[bm_idx] <= ALLOCATED_BITSLOTS && (GET_BIT(bm[bm_idx], j)) == 0) {
+            if((GET_BIT(bm[bm_idx], j)) == 0) {
                 bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 zone->free_bit_slot_cache[free_bit_slot_cache_index] = bit_slot;
                 free_bit_slot_cache_index++;
@@ -812,7 +812,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
 
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if(bm[i] != -1 && (GET_BIT(bm[i], j)) == 0) {
+            if((GET_BIT(bm[i], j)) == 0) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 return bit_slot;
             }
