@@ -210,7 +210,7 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
 }
 
 EXTERNAL_API void iso_flush_caches() {
-    flush_thread_caches();
+    flush_zone_caches();
 }
 
 #if HEAP_PROFILER

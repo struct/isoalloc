@@ -111,7 +111,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
                     in_use++;
 
                     if(profile == false) {
-                        LOG("Leaked chunk in zone[%d] of %d bytes detected at 0x%p (bit position = %lu)", zone->index, zone->chunk_size, leak, bit_slot);
+                        LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %lu)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
                     }
                 }
             }

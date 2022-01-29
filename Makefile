@@ -41,7 +41,6 @@ SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN) $(ENABLE_TSAN)
 ## You can safely disable it here if you know your
 ## program does not require concurrent access
 ## to the IsoAlloc APIs
-## THREAD_CACHE - Enables thread zone cache
 THREAD_SUPPORT = -DTHREAD_SUPPORT=1
 
 ## By default IsoAlloc uses a pthread mutex to synchronize
@@ -150,7 +149,7 @@ LIBNAME = libisoalloc.so
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
-CPU_PIN = ""
+CPU_PIN =
 LIBNAME = libisoalloc.dylib
 endif
 
