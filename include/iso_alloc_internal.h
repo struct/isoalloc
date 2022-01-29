@@ -303,6 +303,8 @@ using namespace std;
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
 #define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
+/* A uint64_t of bitslots below this value will
+ * have at least 1 single free bit slot */
 #define ALLOCATED_BITSLOTS 0x5555555555555555
 
 /* We allocate zones at startup for common sizes.
@@ -424,7 +426,6 @@ typedef struct {
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
-    uint8_t canary_count;                              /* How many canaries are in this zone? */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
@@ -579,8 +580,8 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p);
-INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone);
-INTERNAL_HIDDEN INLINE void _flush_thread_caches(void);
+INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone *zone);
+INTERNAL_HIDDEN INLINE void _flush_zone_caches(void);
 INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size);
@@ -596,7 +597,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone);
-INTERNAL_HIDDEN void flush_thread_caches(void);
+INTERNAL_HIDDEN void flush_zone_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);

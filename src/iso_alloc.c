@@ -76,7 +76,6 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
 
     /* Roughly %1 of the chunks in this zone will become a canary */
     uint64_t canary_count = (chunk_count / CANARY_COUNT_DIV);
-    zone->canary_count = 0;
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -103,7 +102,6 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
         bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT);
         void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
         write_canary(zone, p);
-        zone->canary_count++;
     }
 #endif
 }
@@ -155,6 +153,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
         _verify_zone(zone);
     }
 
+    LOCK_BIG_ZONE();
     /* No need to lock big zone here since the
      * root should be locked by our caller */
     iso_alloc_big_zone *big = _root->big_zone_head;
@@ -172,6 +171,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
             break;
         }
     }
+    UNLOCK_BIG_ZONE();
 }
 
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
@@ -179,10 +179,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
     bit_slot_t bit_slot;
-
-    if((zone->af_count + zone->canary_count) > GET_CHUNK_COUNT(zone)) {
-        LOG_AND_ABORT("Inconsistent allocation count for zone[%d] Current allocations %d > total capacity %d", zone->index, zone->af_count + zone->canary_count, GET_CHUNK_COUNT(zone));
-    }
 
     if(zone->next_sz_index > _root->zones_used) {
         LOG_AND_ABORT("Detected corruption in zone[%d] next_sz_index=%d", zone->index, zone->next_sz_index);
@@ -434,13 +430,13 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #endif
 }
 
-INTERNAL_HIDDEN void flush_thread_caches() {
+INTERNAL_HIDDEN void flush_zone_caches() {
     LOCK_ROOT();
-    _flush_thread_caches();
+    _flush_zone_caches();
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN INLINE void _flush_thread_caches() {
+INTERNAL_HIDDEN INLINE void _flush_zone_caches() {
     /* The thread zone cache can be invalidated */
     clear_zone_cache();
 
@@ -478,7 +474,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool flush_caches, bool replace) {
     if(flush_caches == true) {
-        _flush_thread_caches();
+        _flush_zone_caches();
     }
 
     UNMASK_ZONE_PTRS(zone);
@@ -546,7 +542,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
 
-    _flush_thread_caches();
+    _flush_zone_caches();
 
 #if HEAP_PROFILER
     _iso_output_profile();
@@ -775,7 +771,6 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
  * looking for empty holes (i.e. slot == 0) */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bit_slot_t bit_slot = BAD_BIT_SLOT;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
     /* Iterate the entire bitmap a qword at a time */
@@ -783,23 +778,11 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
-            bit_slot = (i << BITS_PER_QWORD_SHIFT);
-            return bit_slot;
-        }
-
-        /* Its fast to check if the entire chunk is
-         * allocated with or without canaries */
-        if(bm[i] <= ALLOCATED_BITSLOTS) {
-            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-                if((GET_BIT(bm[i], j)) == 0) {
-                    bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
-                    return bit_slot;
-                }
-            }
+            return (i << BITS_PER_QWORD_SHIFT);
         }
     }
 
-    return bit_slot;
+    return BAD_BIT_SLOT;
 }
 
 /* This function scans an entire bitmap bit-by-bit
@@ -807,19 +790,21 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
  * used zone this function will be slow to search */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bit_slot_t bit_slot = BAD_BIT_SLOT;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
     for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if((GET_BIT(bm[i], j)) == 0) {
-                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
-                return bit_slot;
+            /* We can easily check if every bitslot represented by
+             * this qword is allocated with or without canaries */
+            if(bm[i] < ALLOCATED_BITSLOTS) {
+                if((GET_BIT(bm[i], j)) == 0) {
+                    return ((i << BITS_PER_QWORD_SHIFT) + j);
+                }
             }
         }
     }
 
-    return bit_slot;
+    return BAD_BIT_SLOT;
 }
 
 INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
@@ -871,9 +856,6 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
          * but mark this zone full so future allocations can
          * take a faster path */
         if(bit_slot == BAD_BIT_SLOT) {
-            if(zone->chunk_size > MAX_DEFAULT_ZONE_SZ && (zone->af_count + zone->canary_count) > GET_CHUNK_COUNT(zone)) {
-                LOG_AND_ABORT("%d Inconsistent allocation count for zone[%d] Current allocations %d (canary count = %d) != total capacity %d", zone->chunk_size, zone->index, (zone->af_count + zone->canary_count), zone->canary_count, GET_CHUNK_COUNT(zone));
-            }
             zone->is_full = true;
             return NULL;
         } else {
@@ -1162,7 +1144,7 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 }
 
 /* Populates the thread cache, requires the root is locked and zone is unmasked */
-INTERNAL_HIDDEN INLINE void populate_thread_cache(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone *zone) {
     if(UNLIKELY(zone->internal == false)) {
         return;
     }
@@ -1300,7 +1282,7 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
         zone->next_free_bit_slot = BAD_BIT_SLOT;
         void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
 
-        populate_thread_cache(zone);
+        populate_zone_cache(zone);
         MASK_ZONE_PTRS(zone);
         UNLOCK_ROOT();
         return p;
@@ -1710,7 +1692,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
 
     POISON_ZONE_CHUNK(zone, p);
 
-    populate_thread_cache(zone);
+    populate_zone_cache(zone);
 }
 
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone *zone, bool permanent) {
