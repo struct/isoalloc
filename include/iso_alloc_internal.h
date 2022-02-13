@@ -283,6 +283,11 @@ using namespace std;
  * the zone user memory! */
 #define ZONE_USER_SIZE 4194304
 
+/* See PERFORMANCE.md for notes on huge page sizes */
+#if __linux__ && MAP_HUGETLB && HUGE_PAGES
+#define HUGE_PAGE_SZ 2097152
+#endif
+
 /* This is the largest divisor of ZONE_USER_SIZE we can
  * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
  * above this size will need to go through the big
