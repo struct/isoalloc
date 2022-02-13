@@ -34,7 +34,6 @@ static size_t chunk_quarantine_count;
 #endif
 
 uint32_t g_page_size;
-uint32_t _default_zone_count;
 iso_alloc_root *_root;
 
 /* Zones are linked by their next_sz_index member which
@@ -283,7 +282,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks. The _iso_alloc() path also does
      * a check on the bitmap itself before handing out any chunks */
-    int32_t max_cache_slots = (BIT_SLOT_CACHE_SZ >> 3);
+    const int32_t max_cache_slots = (BIT_SLOT_CACHE_SZ >> 3);
 
     for(int32_t i = zone->free_bit_slot_cache_usable; i < max_cache_slots; i++) {
         if(zone->free_bit_slot_cache[i] == bit_slot) {
@@ -353,8 +352,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
      * result in a soft page fault */
     mlock(&_root, sizeof(iso_alloc_root));
 
-    _default_zone_count = sizeof(default_zones) >> 3;
-
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone));
     _root->zones_size += (g_page_size * 2);
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
@@ -391,7 +388,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     chunk_lookup_table = mmap_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
     mlock(&chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
-    for(int64_t i = 0; i < _default_zone_count; i++) {
+    for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
         if((_iso_new_zone(default_zones[i], true)) == NULL) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
@@ -950,9 +947,9 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
      * program runs the more likely we will fail this
      * fast path as default zones may fill up */
     if(size >= ZONE_512 && size <= MAX_DEFAULT_ZONE_SZ) {
-        i = _default_zone_count >> 1;
+        i = DEFAULT_ZONE_COUNT >> 1;
     } else if(size > MAX_DEFAULT_ZONE_SZ) {
-        i = _default_zone_count;
+        i = DEFAULT_ZONE_COUNT;
     }
 #else
     i = 0;

@@ -359,7 +359,7 @@ extern uint32_t g_page_size;
  * ZONE_1024 at which point a new zone is created for that
  * specific size request. You can create additional startup
  * profile by adjusting the next few lines below. */
-extern uint32_t _default_zone_count;
+#define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
@@ -478,9 +478,7 @@ extern pthread_mutex_t big_zone_busy_mutex;
 
 #define UNLOCK_BIG_ZONE() \
     pthread_mutex_unlock(&big_zone_busy_mutex);
-
-#endif // USE_SPINLOCK
-
+#endif
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()

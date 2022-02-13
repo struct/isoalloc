@@ -35,7 +35,7 @@ extern atomic_flag sane_cache_flag;
 
 #define UNLOCK_SANITY_CACHE() \
     atomic_flag_clear(&sane_cache_flag);
-#else // USE_SPINLOCK
+#else
 extern pthread_mutex_t sane_cache_mutex;
 #define LOCK_SANITY_CACHE() \
     pthread_mutex_lock(&sane_cache_mutex);
