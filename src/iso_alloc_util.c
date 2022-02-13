@@ -32,19 +32,27 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
 #else
     void *p = NULL;
 #endif
-
     size = ROUND_UP_PAGE(size);
 
-    /* Only Linux supports MAP_POPULATE */
-#if __linux__ && PRE_POPULATE_PAGES
+    int32_t flags = (MAP_PRIVATE | MAP_ANONYMOUS);
+
+#if __linux__
+#if PRE_POPULATE_PAGES
     if(populate == true) {
-        p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
-    } else {
-        p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        flags |= MAP_POPULATE;
     }
-#else
-    p = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
+
+#if MAP_HUGETLB && HUGE_PAGES
+    /* If we are allocating pages for a user zone
+     * then take advantage of the huge TLB */
+    if(size % HUGE_PAGE_SZ) {
+        flags |= MAP_HUGETLB;
+    }
+#endif
+#endif
+
+    p = mmap(p, size, prot, flags, -1, 0);
 
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");

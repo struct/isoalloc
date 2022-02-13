@@ -24,6 +24,16 @@ If you know your program will not require multi-threaded access to IsoAlloc you 
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance.
 
+By default on Linux IsoAlloc will attempt to use Huge Pages for any allocations that are a multiple of 2 mb in size. This is the default huge page size on most systems but it might not be on yours. You can check the value for your system by running the following command:
+
+```
+cat /proc/meminfo | grep Hugepagesize
+Hugepagesize:       2048 kB
+```
+
+If necessary you can adjust the value of `HUGE_PAGE_SZ` in iso_alloc_internal.h to reflect the size on your system.
+
+
 ## Caches and Memoization
 
 There are a few important caches and memoization techniques used in IsoAlloc. These significantly improve the performance of alloc/free hot paths and keep the design as simple as possible.

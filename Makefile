@@ -69,6 +69,10 @@ UNIT_TESTING = -DUNIT_TESTING=1
 ## Enable the malloc/free and new/delete hooks
 MALLOC_HOOK = -DMALLOC_HOOK=1
 
+## Use Huge pages for any allocation that is a multiple
+## of 2mb. Linux only, ignored on MacOS. See PERFORMANCE.md
+HUGE_PAGES = -DHUGE_PAGES=1
+
 ## Enable the built-in heap profiler. When this is enabled
 ## IsoAlloc will write a file to disk upon exit of the
 ## program. This file encodes the heap usage patterns of
