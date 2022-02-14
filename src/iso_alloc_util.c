@@ -46,7 +46,7 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
 #if MAP_HUGETLB && HUGE_PAGES
     /* If we are allocating pages for a user zone
      * then take advantage of the huge TLB */
-    if(size % HUGE_PAGE_SZ) {
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE/2)) {
         flags |= MAP_HUGETLB;
     }
 #endif
@@ -58,6 +58,12 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
         LOG_AND_ABORT("Failed to mmap rw pages");
         return NULL;
     }
+
+#if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE/2)) {
+        madvise(p, size, MADV_HUGEPAGE);
+    }
+#endif
 
     if(name != NULL) {
         name_mapping(p, size, name);
