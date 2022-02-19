@@ -10,7 +10,7 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
     uint8_t *h = NULL;
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
 
         UNMASK_ZONE_PTRS(zone);
         h = zone->user_pages_start;
@@ -73,7 +73,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
         }
 
         uint64_t *p = (uint64_t *) *(int64_t *) current;
-        iso_alloc_zone *zone = iso_find_zone_range(p);
+        iso_alloc_zone_t *zone = iso_find_zone_range(p);
         current--;
 
         if(zone != NULL) {

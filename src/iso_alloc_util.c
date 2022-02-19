@@ -80,7 +80,7 @@ INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     }
 }
 
-INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone *zone, char *name) {
+INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone_t *zone, char *name) {
 #if NAMED_MAPPINGS && __ANDROID__
     return name_mapping(zone->user_pages_start, ZONE_USER_SIZE, (const char *) name);
 #else

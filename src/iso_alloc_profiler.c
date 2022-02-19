@@ -31,7 +31,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     LOCK_ROOT();
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
         total_leaks += _iso_alloc_zone_leak_detector(zone, false);
     }
 
@@ -68,7 +68,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
  * uncleared bits. This does not search for references from
  * a root like a GC, so if you purposefully did not free a
  * chunk then expect it to show up as leaked! */
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, bool profile) {
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile) {
     uint64_t in_use = 0;
 
 #if LEAK_DETECTOR || HEAP_PROFILER
@@ -138,7 +138,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone *zone, boo
     return in_use;
 }
 
-INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
     uint64_t mem_usage = 0;
     mem_usage += zone->bitmap_size;
     mem_usage += ZONE_USER_SIZE;
@@ -151,7 +151,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
     uint64_t mem_usage = 0;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
         LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d", zone->index, zone->chunk_size,
@@ -273,7 +273,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
     _iso_alloc_printf(profiler_fd, "free_sampled=%d\n", _free_sampled_count);
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
         _zone_profiler_map[zone->chunk_size].total++;
     }
 
@@ -315,7 +315,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
 
     for(uint64_t i = 0; i < _root->zones_used; i++) {
         uint32_t used = 0;
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
 
         /* For the purposes of the profiler we don't care about
          * the differences between canary and leaked chunks.

@@ -57,7 +57,7 @@ void *_zero_alloc_page;
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
-INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
 #if ENABLE_ASAN || DISABLE_CANARY
     return;
 #else
@@ -113,7 +113,7 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     return;
 }
 
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
     return;
 }
 
@@ -121,7 +121,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     return;
 }
 
-INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     return;
 }
 #else
@@ -135,7 +135,7 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     _verify_zone(zone);
     UNLOCK_ROOT();
@@ -143,7 +143,7 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone *zone) {
 
 INTERNAL_HIDDEN void _verify_all_zones(void) {
     for(int32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
 
         if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
             break;
@@ -173,7 +173,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     UNLOCK_BIG_ZONE();
 }
 
-INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     UNMASK_ZONE_PTRS(zone);
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
@@ -184,7 +184,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
     }
 
     if(zone->next_sz_index != 0) {
-        iso_alloc_zone *zt = &_root->zones[zone->next_sz_index];
+        iso_alloc_zone_t *zt = &_root->zones[zone->next_sz_index];
         if(zone->chunk_size != zt->chunk_size) {
             LOG_AND_ABORT("Inconsistent chunk sizes for zones %d,%d with chunk sizes %d,%d", zone->index, zt->index, zone->chunk_size, zt->chunk_size);
         }
@@ -213,7 +213,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone *zone) {
  * slot cache with only chunks towards the start of the
  * user mapping. Theres no guarantee this function will
  * find any free slots. */
-INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone);
     bit_slot_t bit_slot;
@@ -269,7 +269,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone *zone) {
     zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
 }
 
-INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t bit_slot) {
+INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot) {
 #if VERIFY_BIT_SLOT_CACHE
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
@@ -299,7 +299,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone *zone, int64_t b
     zone->free_bit_slot_cache_index++;
 }
 
-INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
     if(zone->free_bit_slot_cache_usable >= BIT_SLOT_CACHE_SZ ||
        zone->free_bit_slot_cache_usable > zone->free_bit_slot_cache_index) {
         return BAD_BIT_SLOT;
@@ -352,7 +352,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
      * result in a soft page fault */
     mlock(&_root, sizeof(iso_alloc_root));
 
-    _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone));
+    _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
 
@@ -445,7 +445,7 @@ INTERNAL_HIDDEN INLINE void _flush_zone_caches() {
     clear_chunk_quarantine();
 }
 
-INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
     chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
 
     munmap(zone->bitmap_start, zone->bitmap_size);
@@ -463,13 +463,13 @@ INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone *zone) {
     madvise(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size, MADV_DONTNEED);
 }
 
-INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     _iso_alloc_destroy_zone_unlocked(zone, true, false);
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool flush_caches, bool replace) {
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace) {
     if(flush_caches == true) {
         _flush_zone_caches();
     }
@@ -490,7 +490,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone *zone, bool
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
 
         /* Make this zone unusable */
-        memset(zone, 0x0, sizeof(iso_alloc_zone));
+        memset(zone, 0x0, sizeof(iso_alloc_zone_t));
         zone->is_full = true;
 #else
         /* Take over the zone to be used internally */
@@ -553,7 +553,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     uint64_t mb = 0;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
         _iso_alloc_zone_leak_detector(zone, false);
     }
 
@@ -567,7 +567,7 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 #endif
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
-        iso_alloc_zone *zone = &_root->zones[i];
+        iso_alloc_zone_t *zone = &_root->zones[i];
         _verify_zone(zone);
 #if ISO_DTOR_CLEANUP
         _iso_alloc_destroy_zone_unlocked(zone, false, false);
@@ -622,15 +622,15 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN iso_alloc_zone *iso_new_zone(size_t size, bool internal) {
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
     LOCK_ROOT();
-    iso_alloc_zone *zone = _iso_new_zone(size, internal);
+    iso_alloc_zone_t *zone = _iso_new_zone(size, internal);
     UNLOCK_ROOT();
     return zone;
 }
 
 /* Requires the root is locked */
-INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     if(UNLIKELY(_root->zones_used >= MAX_ZONES)) {
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
     }
@@ -655,9 +655,9 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
         size = SMALLEST_CHUNK_SZ;
     }
 
-    iso_alloc_zone *new_zone = &_root->zones[_root->zones_used];
+    iso_alloc_zone_t *new_zone = &_root->zones[_root->zones_used];
 
-    memset(new_zone, 0x0, sizeof(iso_alloc_zone));
+    memset(new_zone, 0x0, sizeof(iso_alloc_zone_t));
 
     new_zone->internal = internal;
     new_zone->is_full = false;
@@ -738,7 +738,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
              * fixup the most recent ones next_sz_index member.
              * We do this by walking the list using next_sz_index */
             for(int32_t i = zone_lookup_table[size]; i < _root->zones_used;) {
-                iso_alloc_zone *zt = &_root->zones[i];
+                iso_alloc_zone_t *zt = &_root->zones[i];
 
                 if(zt->chunk_size != size) {
                     LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, size);
@@ -766,7 +766,7 @@ INTERNAL_HIDDEN iso_alloc_zone *_iso_new_zone(size_t size, bool internal) {
 
 /* Iterate through a zone bitmap a qword at a time
  * looking for empty holes (i.e. slot == 0) */
-INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
@@ -785,7 +785,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone *zone) {
 /* This function scans an entire bitmap bit-by-bit
  * and returns the first free bit position. In a heavily
  * used zone this function will be slow to search */
-INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
@@ -804,7 +804,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone *zone) {
     return BAD_BIT_SLOT;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size) {
+INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
     /* If the zone is full it is not usable */
     if(zone->is_full == true) {
         return NULL;
@@ -867,7 +867,7 @@ INTERNAL_HIDDEN iso_alloc_zone *is_zone_usable(iso_alloc_zone *zone, size_t size
 }
 
 /* Implements the check for iso_find_zone_fit */
-INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
+INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone_t *zone, size_t size) {
 #if CPU_PIN
     if(zone->cpu_core != sched_getcpu()) {
         return false;
@@ -897,8 +897,8 @@ INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone *zone, size_t size) {
 }
 
 /* Finds a zone that can fit this allocation request */
-INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_fit(size_t size) {
-    iso_alloc_zone *zone = NULL;
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
+    iso_alloc_zone_t *zone = NULL;
     int32_t i = 0;
 
     if(IS_ALIGNED(size) != 0) {
@@ -1089,7 +1089,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     }
 }
 
-INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
     bitmap_index_t dwords_to_bit_slot = (bitslot >> BITS_PER_QWORD_SHIFT);
     int64_t which_bit = WHICH_BIT(bitslot);
 
@@ -1141,7 +1141,7 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 }
 
 /* Populates the thread cache, requires the root is locked and zone is unmasked */
-INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
     if(UNLIKELY(zone->internal == false)) {
         return;
     }
@@ -1162,7 +1162,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone *zone) {
     }
 }
 
-INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone *zone, size_t size) {
+INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
@@ -1335,8 +1335,8 @@ INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
  * logically identical functions that both return a zone
  * for a pointer. The only difference is where the pointer
  * addresses, a bitmap or user pages */
-INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
-    iso_alloc_zone *zone = NULL;
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(void *p) {
+    iso_alloc_zone_t *zone = NULL;
 
     /* The chunk lookup table is the fastest way to find a
      * zone given a pointer to a chunk so we check it first */
@@ -1356,7 +1356,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
 
     MASK_ZONE_PTRS(zone);
 
-    iso_alloc_zone *tmp_zone = NULL;
+    iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
@@ -1394,8 +1394,8 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_bitmap_range(void *p) {
     return NULL;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
-    iso_alloc_zone *zone = NULL;
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p) {
+    iso_alloc_zone_t *zone = NULL;
 
     /* The chunk lookup table is the fastest way to find a
      * zone given a pointer to a chunk so we check it first */
@@ -1415,7 +1415,7 @@ INTERNAL_HIDDEN iso_alloc_zone *iso_find_zone_range(void *p) {
 
     MASK_ZONE_PTRS(zone);
 
-    iso_alloc_zone *tmp_zone = NULL;
+    iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
@@ -1461,16 +1461,16 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
     return;
 }
 
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
     return;
 }
 
 /* Verify the canary value in an allocation */
-INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, void *p) {
     return;
 }
 
-INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p) {
     return OK;
 }
 #else
@@ -1495,7 +1495,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
  * freed, or when the API requests validation. We
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
     *(uint64_t *) p = canary;
     p += (zone->chunk_size - sizeof(uint64_t));
@@ -1503,7 +1503,7 @@ INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone *zone, void *p) {
 }
 
 /* Verify the canary value in an allocation */
-INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 
@@ -1520,7 +1520,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone *zone, void *p) {
     }
 }
 
-INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone *zone, void *p) {
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p) {
     uint64_t v = *((uint64_t *) p);
     uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
 
@@ -1599,7 +1599,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
     UNLOCK_BIG_ZONE();
 }
 
-INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, bool permanent) {
+INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
@@ -1692,7 +1692,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone *zone, void *p, boo
     populate_zone_cache(zone);
 }
 
-INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone *zone, bool permanent) {
+INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent) {
     if(p == NULL) {
         return;
     }
@@ -1791,7 +1791,7 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
 
     LOCK_ROOT();
 
-    iso_alloc_zone *zone = iso_find_zone_range(p);
+    iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     /* We can't check for an exact size match because
      * its possible we chose a larger zone to hold this
@@ -1811,7 +1811,7 @@ INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone_t *zone) {
     /* If the zone has no active allocations, holds smaller chunks,
      * and has allocated and freed more than ZONE_ALLOC_REPLACE
      * chunks in its lifetime then we destroy and replace it with
@@ -1825,7 +1825,7 @@ INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone *zone) {
     return false;
 }
 
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone *zone) {
+INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone) {
 #if FUZZ_MODE
     _verify_all_zones();
 #endif
@@ -1902,7 +1902,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     LOCK_ROOT();
 
     /* We cannot return NULL here, we abort instead */
-    iso_alloc_zone *zone = iso_find_zone_range(p);
+    iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
         UNLOCK_ROOT();
@@ -1919,7 +1919,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     return zone->chunk_size;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     uint64_t leaks = _iso_alloc_zone_leak_detector(zone, false);
     UNLOCK_ROOT();
@@ -1941,7 +1941,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage() {
     return mem_usage;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone *zone) {
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     uint64_t zone_mem_usage = __iso_alloc_zone_mem_usage(zone);
     UNLOCK_ROOT();
