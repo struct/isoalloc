@@ -1,5 +1,5 @@
 /* iso_alloc big_canary_test.c
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
@@ -13,13 +13,13 @@ int main(int argc, char *argv[]) {
     }
 
     iso_alloc_root *root = _get_root();
-    void *p = ((iso_alloc_big_zone *) ((uintptr_t) root->big_zone_next_mask ^ (uintptr_t) root->big_zone_head));
+    void *p = ((iso_alloc_big_zone_t *) ((uintptr_t) root->big_zone_next_mask ^ (uintptr_t) root->big_zone_head));
 
     if(p == NULL) {
         LOG_AND_ABORT("Big zone list is empty, %p must not be a big zone!", r);
     }
 
-    memset(p, 0x41, sizeof(iso_alloc_big_zone));
+    memset(p, 0x41, sizeof(iso_alloc_big_zone_t));
 
     iso_free_permanently(r);
 

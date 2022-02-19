@@ -1,5 +1,5 @@
 ## Isolation Alloc Makefile
-## Copyright 2021 - chris.rohlf@gmail.com
+## Copyright 2022 - chris.rohlf@gmail.com
 
 CC = clang
 CXX = clang++

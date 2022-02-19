@@ -1,5 +1,5 @@
 /* iso_alloc_printf.c - A secure memory allocator
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include <stdarg.h>
 #include <stdint.h>

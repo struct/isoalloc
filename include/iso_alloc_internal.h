@@ -1,5 +1,5 @@
 /* iso_alloc_internal.h - A secure memory allocator
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #pragma once
 
@@ -262,7 +262,7 @@ using namespace std;
     UNMASK_BIG_ZONE_NEXT(bnp)
 
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
-    ((iso_alloc_big_zone *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
+    ((iso_alloc_big_zone_t *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
 
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
@@ -495,14 +495,14 @@ extern pthread_mutex_t big_zone_busy_mutex;
  * user pages themselves but separated via guard pages.
  * This meta data is stored at a random offset from the
  * beginning of the page it resides on */
-typedef struct iso_alloc_big_zone {
+typedef struct iso_alloc_big_zone_t {
     uint64_t canary_a;
     bool free;
     uint64_t size;
     void *user_pages_start;
-    struct iso_alloc_big_zone *next;
+    struct iso_alloc_big_zone_t *next;
     uint64_t canary_b;
-} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_big_zone;
+} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_big_zone_t;
 
 /* There is only one iso_alloc root per-process.
  * It contains an array of zone structures. Each
@@ -516,7 +516,7 @@ typedef struct {
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
-    iso_alloc_big_zone *big_zone_head;
+    iso_alloc_big_zone_t *big_zone_head;
     iso_alloc_zone_t *zones;
     size_t zones_size;
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
@@ -577,7 +577,7 @@ size_t _free_bts_count;
 /* The global root */
 extern iso_alloc_root *_root;
 
-INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big);
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
@@ -616,7 +616,7 @@ INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent);
-INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent);
+INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone);

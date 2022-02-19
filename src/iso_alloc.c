@@ -1,5 +1,5 @@
 /* iso_alloc.c - A secure memory allocator
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
 
@@ -155,7 +155,7 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     LOCK_BIG_ZONE();
     /* No need to lock big zone here since the
      * root should be locked by our caller */
-    iso_alloc_big_zone *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = _root->big_zone_head;
 
     if(big != NULL) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
@@ -579,8 +579,8 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap((void *) ((uintptr_t) _root->zones - g_page_size), _root->zones_size);
 #endif
 
-    iso_alloc_big_zone *big_zone = _root->big_zone_head;
-    iso_alloc_big_zone *big = NULL;
+    iso_alloc_big_zone_t *big_zone = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = NULL;
 
     if(big_zone != NULL) {
         big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
@@ -993,13 +993,13 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
     /* Let's first see if theres an existing set of
      * pages that can satisfy this allocation request */
-    iso_alloc_big_zone *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = _root->big_zone_head;
 
     if(big != NULL) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
     }
 
-    iso_alloc_big_zone *last_big = NULL;
+    iso_alloc_big_zone_t *last_big = NULL;
 
     while(big != NULL) {
         check_big_canary(big);
@@ -1039,10 +1039,10 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
-        big = (iso_alloc_big_zone *) (p + _root->system_page_size);
+        big = (iso_alloc_big_zone_t *) (p + _root->system_page_size);
         madvise(big, _root->system_page_size, MADV_WILLNEED);
         uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
-        big = (iso_alloc_big_zone *) ((p + _root->system_page_size) + (random_offset % (_root->system_page_size - sizeof(iso_alloc_big_zone))));
+        big = (iso_alloc_big_zone_t *) ((p + _root->system_page_size) + (random_offset % (_root->system_page_size - sizeof(iso_alloc_big_zone_t))));
         big->free = false;
         big->size = size;
         big->next = NULL;
@@ -1296,11 +1296,11 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
     }
 }
 
-INTERNAL_HIDDEN iso_alloc_big_zone *iso_find_big_zone(void *p) {
+INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p) {
     LOCK_BIG_ZONE();
 
     /* Its possible we are trying to unmap a big allocation */
-    iso_alloc_big_zone *big_zone = _root->big_zone_head;
+    iso_alloc_big_zone_t *big_zone = _root->big_zone_head;
 
     if(big_zone != NULL) {
         big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
@@ -1457,7 +1457,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p) {
  * provides a strong guarantee that these chunks haven't
  * been modified in some way */
 #if ENABLE_ASAN || DISABLE_CANARY
-INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
     return;
 }
 
@@ -1477,7 +1477,7 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p) {
 /* Verifies both canaries in a big zone structure. This
  * is a fast operation so we call it anytime we iterate
  * through the linked list of big zones */
-INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone *big) {
+INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
     uint64_t canary = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
 
     if(UNLIKELY(big->canary_a != canary)) {
@@ -1540,7 +1540,7 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p) {
 }
 #endif
 
-INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool permanent) {
+INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent) {
     LOCK_BIG_ZONE();
     if(UNLIKELY(big_zone->free == true)) {
         LOG_AND_ABORT("Double free of big zone 0x%p has been detected!", big_zone);
@@ -1559,7 +1559,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
     } else {
-        iso_alloc_big_zone *big = _root->big_zone_head;
+        iso_alloc_big_zone_t *big = _root->big_zone_head;
 
         if(big != NULL) {
             big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
@@ -1590,7 +1590,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone *big_zone, bool perman
         }
 
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
-        memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone));
+        memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
 
         /* Big zone meta data is at a random offset from its base page */
         mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), _root->system_page_size, PROT_NONE);
@@ -1853,7 +1853,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
         }
 #endif
     } else {
-        iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
 
         if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
@@ -1906,7 +1906,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     if(UNLIKELY(zone == NULL)) {
         UNLOCK_ROOT();
-        iso_alloc_big_zone *big_zone = iso_find_big_zone(p);
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
 
         if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);

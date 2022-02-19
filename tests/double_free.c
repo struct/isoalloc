@@ -1,5 +1,5 @@
 /* iso_alloc double_free.c
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"

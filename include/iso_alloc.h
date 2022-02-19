@@ -1,5 +1,5 @@
 /* iso_alloc.h - A secure memory allocator
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #pragma once
 

@@ -1,5 +1,5 @@
 /* iso_alloc tests.cpp
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include <memory>
 #include "iso_alloc.h"

@@ -1,5 +1,5 @@
 /* iso_alloc_profiler.c - A secure memory allocator
- * Copyright 2021 - chris.rohlf@gmail.com */
+ * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
 
@@ -38,7 +38,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
     UNLOCK_ROOT();
     LOCK_BIG_ZONE();
 
-    iso_alloc_big_zone *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = _root->big_zone_head;
 
     if(big != NULL) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
@@ -163,7 +163,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
 
 INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
     uint64_t mem_usage = 0;
-    iso_alloc_big_zone *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = _root->big_zone_head;
 
     if(big != NULL) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
