@@ -213,6 +213,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
     _sane_allocation_t *sane_alloc = NULL;
 
     LOCK_SANITY_CACHE();
+    UNLOCK_ROOT();
 
     /* Find the first free slot in our sampled storage */
     for(uint32_t i = 0; i < MAX_SANE_SAMPLES; i++) {

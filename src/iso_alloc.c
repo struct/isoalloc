@@ -427,16 +427,17 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #endif
 }
 
-INTERNAL_HIDDEN void flush_zone_caches() {
+INTERNAL_HIDDEN void flush_caches() {
+    /* The thread zone cache can be invalidated
+     * and does not require a lock */
+    clear_zone_cache();
+
     LOCK_ROOT();
-    _flush_zone_caches();
+    _flush_chunk_quarantine();
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN INLINE void _flush_zone_caches() {
-    /* The thread zone cache can be invalidated */
-    clear_zone_cache();
-
+INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine() {
     /* Free all the thread quarantined chunks */
     for(int64_t i = 0; i < chunk_quarantine_count; i++) {
         _iso_free_internal_unlocked((void *) chunk_quarantine[i], false, NULL);
@@ -471,7 +472,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace) {
     if(flush_caches == true) {
-        _flush_zone_caches();
+        /* The thread zone cache can be invalidated
+         * and does not require a lock */
+        clear_zone_cache();
+        _flush_chunk_quarantine();
     }
 
     UNMASK_ZONE_PTRS(zone);
@@ -539,7 +543,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
 __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     LOCK_ROOT();
 
-    _flush_zone_caches();
+    _flush_chunk_quarantine();
 
 #if HEAP_PROFILER
     _iso_output_profile();
@@ -1163,19 +1167,25 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 }
 
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
+#if NO_ZERO_ALLOCATIONS
+    if(UNLIKELY(size == 0 && _root != NULL)) {
+        return _zero_alloc_page;
+    }
+#endif
+
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
         g_page_size = sysconf(_SC_PAGESIZE);
         iso_alloc_initialize_global_root();
-    }
 
-#if NO_ZERO_ALLOCATIONS
-    if(size == 0) {
-        UNLOCK_ROOT();
-        return _zero_alloc_page;
+        /* In the unlikely event size is 0 but we hadn't
+         * initialized the root yet return the zero page */
+        if(UNLIKELY(size == 0)) {
+            UNLOCK_ROOT();
+            return _zero_alloc_page;
+        }
     }
-#endif
 
 #if ALLOC_SANITY
     /* We only sample allocations smaller than an individual
@@ -1184,10 +1194,11 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
     size_t sampled_size = ALIGN_SZ_UP(size);
 
     if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+        /* If we chose to sample this allocation then
+         * _iso_alloc_sample will call UNLOCK_ROOT() */
         void *ps = _iso_alloc_sample(sampled_size);
 
         if(ps != NULL) {
-            UNLOCK_ROOT();
             return ps;
         }
     }
@@ -1204,9 +1215,8 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
 #if FUZZ_MODE
         _verify_all_zones();
 #endif
-
         if(LIKELY(zone == NULL)) {
-            /* Hot Path: Check the thread cache for a zone this
+            /* Hot Path: Check the zone cache for a zone this
              * thread recently used for an alloc/free operation.
              * It's likely we are allocating a similar size chunk
              * and this will speed up that operation */
@@ -1279,9 +1289,16 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
         zone->next_free_bit_slot = BAD_BIT_SLOT;
         void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
 
-        populate_zone_cache(zone);
         MASK_ZONE_PTRS(zone);
         UNLOCK_ROOT();
+
+        /* Zones internal status cannot be converted, it's
+         * safe to access this bool after unlocking and
+         * then populating the zone cache */
+        if(zone->internal == false) {
+            populate_zone_cache(zone);
+        }
+
         return p;
     } else {
         /* It's safe to unlock the root at this point because
@@ -1688,7 +1705,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, b
 #endif
 
     POISON_ZONE_CHUNK(zone, p);
-
     populate_zone_cache(zone);
 }
 
