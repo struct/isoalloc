@@ -31,7 +31,7 @@ cat /proc/meminfo | grep Hugepagesize
 Hugepagesize:       2048 kB
 ```
 
-If necessary you can adjust the value of `HUGE_PAGE_SZ` in iso_alloc_internal.h to reflect the size on your system.
+If necessary you can adjust the value of `HUGE_PAGE_SZ` in `conf.h` to reflect the size on your system.
 
 
 ## Caches and Memoization
