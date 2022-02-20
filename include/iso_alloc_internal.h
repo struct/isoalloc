@@ -46,9 +46,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #include "iso_alloc.h"
 
@@ -492,7 +492,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN INLINE void _flush_zone_caches(void);
+INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
@@ -508,7 +508,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN void flush_zone_caches(void);
+INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
