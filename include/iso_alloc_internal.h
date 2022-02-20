@@ -52,6 +52,8 @@
 
 #include "iso_alloc.h"
 
+#include "conf.h"
+
 #if MEM_USAGE
 #include <sys/resource.h>
 #endif
@@ -187,21 +189,10 @@ using namespace std;
 
 #define CANARY_SIZE 8
 
-#define CANARY_COUNT_DIV 100
-
 /* All chunks are 8 byte aligned */
 #define ALIGNMENT 8
 
-#if NAMED_MAPPINGS
-#define SAMPLED_ALLOC_NAME "isoalloc sampled allocation"
-#define BIG_ZONE_UD_NAME "isoalloc big zone user data"
-#define BIG_ZONE_MD_NAME "isoalloc big zone metadata"
-#define GUARD_PAGE_NAME "guard page"
-#define ROOT_NAME "isoalloc root"
-#define ZONE_BITMAP_NAME "isoalloc zone bitmap"
-#define INTERNAL_UZ_NAME "internal isoalloc user zone"
-#define PRIVATE_UZ_NAME "private isoalloc user zone"
-#else
+#if !NAMED_MAPPINGS
 #define SAMPLED_ALLOC_NAME ""
 #define BIG_ZONE_UD_NAME ""
 #define BIG_ZONE_MD_NAME ""
@@ -267,14 +258,6 @@ using namespace std;
 #define GET_CHUNK_COUNT(zone) \
     (ZONE_USER_SIZE / zone->chunk_size)
 
-/* This is the maximum number of zones iso_alloc can
- * create. This is a completely arbitrary number but
- * it does correspond to the size of the _root.zones
- * array that lives in global memory. Currently the
- * iso_alloc_zone_t structure is roughly 2112 bytes so
- * this results in 17301504 bytes (~17 MB) for zone */
-#define MAX_ZONES 8192
-
 /* Each user allocation zone we make is 4mb in size.
  * With MAX_ZONES at 8192 this means we top out at
  * about 32~ gb of heap. If you adjust this then
@@ -282,11 +265,6 @@ using namespace std;
  * adjusted or you will calculate chunks outside of
  * the zone user memory! */
 #define ZONE_USER_SIZE 4194304
-
-/* See PERFORMANCE.md for notes on huge page sizes */
-#if __linux__ && MAP_HUGETLB && HUGE_PAGES
-#define HUGE_PAGE_SZ 2097152
-#endif
 
 /* This is the largest divisor of ZONE_USER_SIZE we can
  * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
@@ -312,40 +290,12 @@ using namespace std;
  * have at least 1 single free bit slot */
 #define ALLOCATED_BITSLOTS 0x5555555555555555
 
-/* We allocate zones at startup for common sizes.
- * Each of these default zones is ZONE_USER_SIZE bytes
- * so ZONE_8192 holds less chunks than ZONE_128 for
- * example. These are inexpensive for us to create */
-#define ZONE_16 16
-#define ZONE_32 32
-#define ZONE_64 64
-#define ZONE_128 128
-#define ZONE_256 256
-#define ZONE_512 512
-#define ZONE_1024 1024
-#define ZONE_2048 2048
-#define ZONE_4096 4096
-#define ZONE_8192 8192
-
-/* Zones can be retired after a certain number of
- * allocations. This is computed as the total count
- * of chunks the zone can handle multiplied by this
- * value. The zone is replaced at that point if all
- * of its current chunks are free */
-#define ZONE_ALLOC_REPLACE 32
-
-#define MAX_DEFAULT_ZONE_SZ ZONE_8192
-
-/* The size of our bit slot freelist */
-#define BIT_SLOT_CACHE_SZ 255
-
 #define MEGABYTE_SIZE 1048576
 #define KILOBYTE_SIZE 1024
 
-/* This byte value will overwrite the contents
- * of all free'd user chunks */
-#define POISON_BYTE 0xde
-
+/* We don't validate the last byte of the canary.
+ * It is always 0 to prevent an out of bounds read
+ * from exposing it's value */
 #define CANARY_VALIDATE_MASK 0xffffffffffffff00
 
 #define BAD_BIT_SLOT -1
@@ -366,46 +316,8 @@ extern uint32_t g_page_size;
  * profile by adjusting the next few lines below. */
 #define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
-#if SMALL_MEM_STARTUP
-/* ZONE_USER_SIZE * sizeof(default_zones) = ~32 mb */
-#define SMALLEST_CHUNK_SZ ZONE_64
-const static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
-#else
-/* ZONE_USER_SIZE * sizeof(default_zones) = ~80 mb */
-#define SMALLEST_CHUNK_SZ ZONE_16
-const static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
-                                         ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
-#endif
-
 #if SMALLEST_CHUNK_SZ < ZONE_8
 #error "Smallest chunk size is 8 bytes, 16 is recommended!"
-#endif
-
-/* If you have specific allocation pattern requirements
- * then you want a custom set of default zones. These
- * example are provided to get you started. Zone creation
- * is not limited to these sizes, this array just specifies
- * the default zones that will be created at startup time.
- * Each of these examples is 4 default zones which will
- * consume 32mb of memory in total */
-#if 0
-#define SMALLEST_CHUNK_SZ ZONE_16
-static uint64_t default_zones[] = {ZONE_16, ZONE_16, ZONE_16, ZONE_16};
-#endif
-
-#if 0
-#define SMALLEST_CHUNK_SZ ZONE_16
-static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128};
-#endif
-
-#if 0
-#define SMALLEST_CHUNK_SZ ZONE_256
-static uint64_t default_zones[] = {ZONE_256, ZONE_256, ZONE_512, ZONE_512};
-#endif
-
-#if 0
-#define SMALLEST_CHUNK_SZ ZONE_512
-static uint64_t default_zones[] = {ZONE_512, ZONE_512, ZONE_512, ZONE_1024};
 #endif
 
 typedef int64_t bit_slot_t;
@@ -435,10 +347,6 @@ typedef struct {
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone_t;
-
-/* The size of the thread cache */
-#define ZONE_CACHE_SZ 8
-#define CHUNK_QUARANTINE_SZ 64
 
 /* Each thread gets a local cache of the most recently
  * used zones. This can greatly speed up allocations
