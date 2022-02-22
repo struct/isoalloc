@@ -1079,7 +1079,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
 
         /* The canaries prevents a linear overwrite of the big
          * zone meta data structure from either direction */
-        big->canary_a = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
+        big->canary_a = ((uint64_t) big ^ __builtin_bswap64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
         big->canary_b = big->canary_a;
 
         UNLOCK_BIG_ZONE();
@@ -1099,6 +1099,10 @@ INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc
 
     void *p = POINTER_FROM_BITSLOT(zone, bitslot);
     UNPOISON_ZONE_CHUNK(zone, p);
+
+#if !ENABLE_ASAN && !DISABLE_CANARY
+    __builtin_prefetch(p, 1);
+#endif
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
@@ -1495,7 +1499,7 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p) {
  * is a fast operation so we call it anytime we iterate
  * through the linked list of big zones */
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
-    uint64_t canary = ((uint64_t) big ^ bswap_64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
+    uint64_t canary = ((uint64_t) big ^ __builtin_bswap64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
 
     if(UNLIKELY(big->canary_a != canary)) {
         LOG_AND_ABORT("Big zone 0x%p bottom canary has been corrupted! Value: 0x%x Expected: 0x%x", big, big->canary_a, canary);
@@ -1656,6 +1660,10 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, b
     /* Set the next bit so we know this chunk was used */
     SET_BIT(b, (which_bit + 1));
 
+#if !ENABLE_ASAN && (!DISABLE_CANARY || SANITIZE_CHUNKS)
+    __builtin_prefetch(p, 1);
+#endif
+
     /* Unset the bit and write the value into the bitmap
      * if this is not a permanent free. A permanent free
      * means this chunk will be marked as if it is a canary */
@@ -1687,7 +1695,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, b
         which_bit = WHICH_BIT(bit_slot_over);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
-            void *p_over = POINTER_FROM_BITSLOT(zone, bit_slot_over);
+            void *p_over = p + zone->chunk_size;
             check_canary(zone, p_over);
         }
     }
@@ -1698,7 +1706,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, b
         which_bit = WHICH_BIT(bit_slot_under);
 
         if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
-            void *p_under = POINTER_FROM_BITSLOT(zone, bit_slot_under);
+            void *p_under = p - zone->chunk_size;
             check_canary(zone, p_under);
         }
     }
