@@ -148,6 +148,10 @@ ABORT_ON_NULL = -DABORT_ON_NULL=0
 ## Enable protection against misusing 0 sized allocations
 NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
 
+## Enables mlock() on performance sensitive pages. For lower
+## end devices with less memory you may want to disable this
+USE_MLOCK = -DUSE_MLOCK=1
+
 LIBNAME = libisoalloc.so
 
 UNAME := $(shell uname)
@@ -173,7 +177,7 @@ endif
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
 	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY) \
-	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) -pthread $(HUGE_PAGES)
+	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) -pthread $(HUGE_PAGES) $(USE_MLOCK)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
