@@ -18,7 +18,7 @@ Default zones for common sizes are created in the library constructor. This help
 
 By default user chunks are not sanitized upon free. While this helps mitigate uninitialized memory vulnerabilities it is a very slow operation. You can enable this feature by changing the `SANITIZE_CHUNKS` flag in the Makefile.
 
-The meta data for the IsoAlloc root will be locked with `mlock`. This means this data will never be swapped to disk. We do this because using this data structure is required for both the alloc and free paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and the error will be silently ignored in the initialization of the root structure.
+When `USE_MLOCK` is enabled in the Makefile (on by default) the meta data for the IsoAlloc root and other caches will be locked with `mlock`. This means this data will never be swapped to disk. We do this because using these data structures is required for both the alloc and free hot paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and all failures will be silently ignored.
 
 If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic/mutex lock/unlock operations from the allocator, which will result in significant performance gains in some programs. If you do require thread support then you may want to profile your program to determine what default zone sizes will benefit performance.
 

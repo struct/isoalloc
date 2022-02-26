@@ -350,7 +350,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     /* We mlock the root or every allocation would
      * result in a soft page fault */
-    mlock(&_root, sizeof(iso_alloc_root));
+    MLOCK(&_root, sizeof(iso_alloc_root));
 
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
@@ -370,23 +370,23 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     create_guard_page(chunk_quarantine);
     chunk_quarantine = chunk_quarantine + (g_page_size / sizeof(uintptr_t));
     create_guard_page((void *) chunk_quarantine + c);
-    mlock(chunk_quarantine, c);
+    MLOCK(chunk_quarantine, c);
 
     size_t z = ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc));
     zone_cache = mmap_rw_pages(z + (g_page_size + 2), true, NULL);
     create_guard_page(zone_cache);
     zone_cache = ((void *) zone_cache) + g_page_size;
     create_guard_page((void *) zone_cache + z);
-    mlock(zone_cache, z);
+    MLOCK(zone_cache, z);
 #endif
 
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
     zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
-    mlock(&zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+    MLOCK(&zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
 
     chunk_lookup_table = mmap_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
-    mlock(&chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+    MLOCK(&chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
     for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
         if((_iso_new_zone(default_zones[i], true)) == NULL) {

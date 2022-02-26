@@ -139,6 +139,13 @@ using namespace std;
 #define IS_POISONED_RANGE(ptr, size) 0
 #endif
 
+#if USE_MLOCK
+#define MLOCK(p, s) \
+    mlock(p, s);
+#else
+#define MLOCK(p, s)
+#endif
+
 #define OK 0
 #define ERR -1
 
