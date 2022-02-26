@@ -1835,7 +1835,7 @@ INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN INLINE bool _is_zone_retired(iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
     /* If the zone has no active allocations, holds smaller chunks,
      * and has allocated and freed more than ZONE_ALLOC_REPLACE
      * chunks in its lifetime then we destroy and replace it with
