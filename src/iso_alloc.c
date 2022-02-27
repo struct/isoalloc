@@ -698,7 +698,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     /* All user pages use MAP_POPULATE. This might seem like we are asking
      * the kernel to commit a lot of memory for us that we may never use
      * but when we call create_canary_chunks() that will happen anyway */
-    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), true, name);
+    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), false, name);
 
     void *user_pages_guard_below = p;
     new_zone->user_pages_start = (p + _root->system_page_size);

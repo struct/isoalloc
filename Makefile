@@ -60,7 +60,7 @@ STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=0
 ## sometimes improve performance. If you're using
 ## IsoAlloc for small short lived programs you probably
 ## want to disable this. This is ignored on MacOS
-PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=0
+PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
 
 ## Enable some functionality that like IsoAlloc internals
 ## for tests that need to verify security properties
