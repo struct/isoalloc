@@ -256,6 +256,12 @@ using namespace std;
 #define MASK_USER_PTRS(zone) \
     zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask);
 
+#define UNMASK_USER_PTR(zone) \
+    (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask)
+
+#define UNMASK_BITMAP_PTR(zone) \
+    (void *) ((uintptr_t) zone->bitmap_start ^ (uintptr_t) zone->pointer_mask)
+
 #define MASK_BIG_ZONE_NEXT(bnp) \
     UNMASK_BIG_ZONE_NEXT(bnp)
 

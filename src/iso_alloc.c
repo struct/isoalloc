@@ -472,8 +472,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace) {
     if(flush_caches == true) {
-        /* The thread zone cache can be invalidated
-         * and does not require a lock */
+        /* We don't need a lock to clear the zone cache
+         * but we do it here because we don't want another
+         * thread to stick the zone we are about to delete
+         * into the cache for later */
         clear_zone_cache();
         _flush_chunk_quarantine();
     }
@@ -1368,48 +1370,33 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(void *p) {
     }
 
     zone = &_root->zones[zone_index];
-    UNMASK_ZONE_PTRS(zone);
+    void *bitmap_start = UNMASK_BITMAP_PTR(zone);
 
-    if(LIKELY(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p)) {
-        MASK_ZONE_PTRS(zone);
+    if(LIKELY(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p)) {
         return zone;
     }
-
-    MASK_ZONE_PTRS(zone);
 
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
-        UNMASK_ZONE_PTRS(tmp_zone);
+        bitmap_start = UNMASK_BITMAP_PTR(tmp_zone);
 
-        if(tmp_zone->bitmap_start <= p && (tmp_zone->bitmap_start + zone->bitmap_size) > p) {
-            MASK_ZONE_PTRS(tmp_zone);
+        if(bitmap_start <= p && (bitmap_start + tmp_zone->bitmap_size) > p) {
             return tmp_zone;
         }
-
-        MASK_ZONE_PTRS(tmp_zone);
     }
 
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        /* We still know the last MRU zone we checked
-         * and there is no sense in checking it again */
-        if(zone == tmp_zone) {
-            continue;
-        }
+        bitmap_start = UNMASK_BITMAP_PTR(zone);
 
-        UNMASK_ZONE_PTRS(zone);
-
-        if(zone->bitmap_start <= p && (zone->bitmap_start + zone->bitmap_size) > p) {
-            MASK_ZONE_PTRS(zone);
+        if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
             return zone;
         }
-
-        MASK_ZONE_PTRS(zone);
     }
 
     return NULL;
@@ -1427,48 +1414,33 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p) {
     }
 
     zone = &_root->zones[zone_index];
-    UNMASK_ZONE_PTRS(zone);
+    void *user_pages_start = UNMASK_USER_PTR(zone);
 
-    if(LIKELY(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p)) {
-        MASK_ZONE_PTRS(zone);
+    if(LIKELY(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p)) {
         return zone;
     }
-
-    MASK_ZONE_PTRS(zone);
 
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
-        UNMASK_ZONE_PTRS(tmp_zone);
+        user_pages_start = UNMASK_USER_PTR(tmp_zone);
 
-        if(tmp_zone->user_pages_start <= p && (tmp_zone->user_pages_start + ZONE_USER_SIZE) > p) {
-            MASK_ZONE_PTRS(tmp_zone);
+        if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
             return tmp_zone;
         }
-
-        MASK_ZONE_PTRS(tmp_zone);
     }
 
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        /* We still know the last MRU zone we checked
-         * and there is no sense in checking it again */
-        if(zone == tmp_zone) {
-            continue;
-        }
+        user_pages_start = UNMASK_USER_PTR(zone);
 
-        UNMASK_ZONE_PTRS(zone);
-
-        if(zone->user_pages_start <= p && (zone->user_pages_start + ZONE_USER_SIZE) > p) {
-            MASK_ZONE_PTRS(zone);
+        if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
             return zone;
         }
-
-        MASK_ZONE_PTRS(zone);
     }
 
     return NULL;
