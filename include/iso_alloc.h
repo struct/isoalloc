@@ -42,7 +42,7 @@ EXTERNAL_API NO_DISCARD char *iso_strdup(const char *str);
 EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str);
 EXTERNAL_API NO_DISCARD char *iso_strndup(const char *str, size_t n);
 EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n);
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE void *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size);
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_protect_root();

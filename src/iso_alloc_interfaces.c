@@ -125,7 +125,7 @@ EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone,
     return p;
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE iso_alloc_zone_handle *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) {
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE void *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) {
     if(zone == NULL) {
         return NULL;
     }
