@@ -359,7 +359,7 @@ typedef struct {
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
 #if MEMORY_TAGGING
-    bool tagged;                                       /* Zone supports memory tagging */
+    bool tagged; /* Zone supports memory tagging */
 #endif
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */

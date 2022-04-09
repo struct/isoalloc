@@ -1,13 +1,17 @@
-/* iso_alloc iso_alloc_tagged_ptr_test.cpp
- * Copyright 2022 - chris.rohlf@gmail.com */
+// iso_alloc iso_alloc_tagged_ptr_test.cpp
+// Copyright 2022 - chris.rohlf@gmail.com
+
+// This test should successfully run with or
+// without MEMORY_TAGGING support
 
 #include <memory>
 #include <iostream>
 #include <ostream>
+#include <string.h>
 #include "iso_alloc.h"
-#include "iso_alloc_internal.h"
 
 iso_alloc_zone_handle *_zone_handle;
+constexpr uint32_t _str_size = 32;
 
 class Base {
   public:
@@ -20,8 +24,8 @@ class Derived : Base {
     Derived(int32_t i) {
         count = i;
         type = count * count;
-        str = (char *) iso_alloc(32);
-        memcpy(str, "AAAAA", 5);
+        str = (char *) iso_alloc(_str_size);
+        memset(str, 0x41, _str_size);
     }
 
     ~Derived() {
@@ -36,18 +40,28 @@ class Derived : Base {
 
     static Derived *Create(int32_t i) {
         // Allocate a chunk of memory from a private zone
-        void *b = iso_alloc_from_zone(_zone_handle, sizeof(Derived));
+        // Only IsoAlloc private zones have memory tags associated
+        // with each chunk in the zone. Thats why we use this interface
+        // and not the standard overloaded operator new or malloc
+        void *b = iso_alloc_from_zone(_zone_handle);
+
+        if(b == nullptr) {
+            return nullptr;
+        }
 
         // Construct an object of type Derived in that chunk
-        auto d = new (b) Derived(i);
+        auto d = new(b) Derived(i);
 
-        // Return the new Derived object instance
+        // Return a pointer to the new Derived object instance
         return d;
     }
 
     uint32_t count;
 };
 
+// This is a working example of how to construct a C++
+// smart pointer that utilizes memory tagging applied
+// to each IsoAlloc private zone
 template <typename T>
 class IsoAllocPtr {
   public:
@@ -75,13 +89,20 @@ int main(int argc, char *argv[]) {
     // Create a private IsoAlloc zone
     _zone_handle = iso_alloc_new_zone(sizeof(Derived));
 
-    for(int32_t i = 0; i < 65535*32;i++) {
-        auto d = Derived::Create(256);
+    for(int32_t i = 0; i < 65535; i++) {
+        auto d = Derived::Create(i);
 
-        // Wrap the new object in an IsoAllocPtr
+        if(d == nullptr) {
+            abort();
+        }
+
+        // Wrap the new object in an IsoAllocPtr. The template
+        // needs to know about our zone handle and the object
+        // we want to manipulate through this pointer
         IsoAllocPtr<Derived> e(_zone_handle, d);
 
-        // Use the IsoAllocPtr operator ->
+        // Use the IsoAllocPtr operator -> the same way we
+        // would a raw pointer to the Derived object
         if(e->GetStr() == nullptr) {
             abort();
         }
@@ -95,11 +116,12 @@ int main(int argc, char *argv[]) {
 
         // If you need to make ASAN happy this ugly code will work
         // because it invokes the destructor manually and then calls
-        // the appropriate iso alloc free function
-        //d->~Derived();
-        //iso_free_from_zone(b, handle);
+        // the appropriate IsoAlloc free function
+        // d->~Derived();
+        // iso_free_from_zone(b, handle);
     }
 
+    // Destroy the private zone we created
     iso_alloc_destroy_zone(_zone_handle);
 
     return 0;

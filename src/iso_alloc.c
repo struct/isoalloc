@@ -1262,6 +1262,10 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
     }
 #endif
 
+    if(UNLIKELY(zone && size > zone->chunk_size)) {
+        LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d", zone->index, zone->chunk_size);
+    }
+
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {

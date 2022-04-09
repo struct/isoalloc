@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("Could not create a zone");
     }
 
-    p = iso_alloc_from_zone(zone, 256);
+    p = iso_alloc_from_zone(zone);
 
     if(p == NULL) {
         LOG_AND_ABORT("Could not allocate from private zone");

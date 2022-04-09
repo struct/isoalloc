@@ -123,7 +123,7 @@ int allocate(size_t array_size, size_t allocation_size) {
         }
 
         if(rand() % 100 == 1 && private_zone != NULL && allocation_size < SMALL_SZ_MAX) {
-            p[i] = iso_alloc_from_zone(private_zone, allocation_size);
+            p[i] = iso_alloc_from_zone(private_zone);
         } else {
             p[i] = iso_alloc(allocation_size);
         }

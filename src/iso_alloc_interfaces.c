@@ -125,13 +125,15 @@ EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone,
     return p;
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ZONE_ALLOC_SIZE void *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size) {
+EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }
 
     UNMASK_ZONE_HANDLE(zone);
-    return _iso_alloc(zone, size);
+    iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
+
+    return _iso_alloc(zone, _zone->chunk_size);
 }
 
 EXTERNAL_API NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone) {
