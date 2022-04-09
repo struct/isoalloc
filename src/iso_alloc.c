@@ -105,6 +105,25 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
 #endif
 }
 
+INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
+    void *user_pages_start = UNMASK_USER_PTR(zone);
+
+    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
+    uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+
+    /* Ensure the pointer is a multiple of chunk size */
+    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+        LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
+    }
+
+    _mtp += (chunk_offset / zone->chunk_size);
+    return *_mtp;
+#else
+    return 0;
+#endif
+}
+
 #if ENABLE_ASAN
 /* Verify the integrity of all canary chunks and the
  * canary written to all free chunks. This function
@@ -489,17 +508,27 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         memset(zone->bitmap_start, 0x0, zone->bitmap_size);
         memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
 
+#if MEMORY_TAGGING
+        /* Clear the memory tags */
+        size_t s = ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE));
+        uint8_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
+        memset(_mtp, 0x0, s);
+        mprotect_pages(_mtp, s, PROT_NONE);
+        zone->tagged = false;
+#endif
+
 #if NEVER_REUSE_ZONES || FUZZ_MODE
-        /* This will waste memory because we will never unmap
-         * these pages, even in the destructor */
+        /* This will waste memory because we will never
+         * unmap these pages, even in the destructor */
         mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+
+        mprotect_pages(_mtp, )
 
         /* Make this zone unusable */
         memset(zone, 0x0, sizeof(iso_alloc_zone_t));
         zone->is_full = true;
 #else
-        /* Take over the zone to be used internally */
         zone->internal = true;
         zone->is_full = false;
 
@@ -669,9 +698,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
+    size_t chunk_count = GET_CHUNK_COUNT(new_zone);
+
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
-    uint32_t bitmap_size = (GET_CHUNK_COUNT(new_zone) << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
+    uint32_t bitmap_size = (chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
 
     /* All of the following fields are immutable
@@ -689,27 +720,76 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     /* Bitmap pages are accessed often and usually in sequential order */
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
 
-    char *name;
+    char *name = NULL;
 
+#if NAMED_MAPPINGS && __ANDROID__
     if(internal == true) {
         name = INTERNAL_UZ_NAME;
     } else {
         name = PRIVATE_UZ_NAME;
     }
+#endif
 
+    size_t total_size = ZONE_USER_SIZE + (_root->system_page_size << 1);
+
+#if MEMORY_TAGGING
+    /* Each tag is 1 byte in size and the start address
+     * of each valid chunk is assigned a tag */
+    size_t tag_mapping_size = ROUND_UP_PAGE((GET_CHUNK_COUNT(new_zone) * MEM_TAG_SIZE));
+
+    if(internal == false) {
+        total_size += (tag_mapping_size + g_page_size);
+        new_zone->tagged = true;
+    } else {
+        tag_mapping_size = 0;
+    }
+#endif
     /* All user pages use MAP_POPULATE. This might seem like we are asking
      * the kernel to commit a lot of memory for us that we may never use
      * but when we call create_canary_chunks() that will happen anyway */
-    p = mmap_rw_pages(ZONE_USER_SIZE + (_root->system_page_size << 1), false, name);
+    p = mmap_rw_pages(total_size, false, name);
+
+#if NAMED_MAPPINGS && __ANDROID__
+    if(new_zone->tagged == false) {
+        name = MEM_TAG_NAME;
+    }
+#endif
 
     void *user_pages_guard_below = p;
-    new_zone->user_pages_start = (p + _root->system_page_size);
-    void *user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
-
     create_guard_page(user_pages_guard_below);
+
+#if MEMORY_TAGGING
+    if(new_zone->tagged == true) {
+        create_guard_page(p + _root->system_page_size + tag_mapping_size);
+        new_zone->user_pages_start = (p + _root->system_page_size + tag_mapping_size + _root->system_page_size);
+
+        uint64_t *_mtp = p + _root->system_page_size;
+
+        /* Generate random tags */
+        for(uint64_t o = 0; o < tag_mapping_size / sizeof(uint64_t); o++) {
+            _mtp[o] = rand_uint64();
+        }
+    } else {
+        new_zone->user_pages_start = (p + _root->system_page_size);
+    }
+#else
+    new_zone->user_pages_start = (p + _root->system_page_size);
+#endif
+
+    void *user_pages_guard_above;
+
+#if MEMORY_TAGGING
+    if(new_zone->tagged == false) {
+        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
+    } else {
+        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + tag_mapping_size + (ZONE_USER_SIZE + _root->system_page_size * 2));
+    }
+#else
+    user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
+#endif
+
     create_guard_page(user_pages_guard_above);
 
-    /* User pages will be accessed in an unpredictable order */
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
 
     new_zone->index = _root->zones_used;
@@ -975,14 +1055,17 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
 }
 
 INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
-    if(nmemb > (nmemb * size)) {
+    unsigned int res;
+    size_t sz = nmemb * size;
+
+    if(__builtin_umul_overflow(nmemb, size, &res)) {
         LOG_AND_ABORT("Call to calloc() will overflow nmemb=%zu size=%zu", nmemb, size);
         return NULL;
     }
 
-    void *p = _iso_alloc(NULL, nmemb * size);
+    void *p = _iso_alloc(NULL, sz);
 
-    memset(p, 0x0, nmemb * size);
+    memset(p, 0x0, sz);
     return p;
 }
 
@@ -1194,18 +1277,21 @@ INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
     }
 
 #if ALLOC_SANITY
-    /* We only sample allocations smaller than an individual
-     * page. We are unlikely to find uninitialized reads on
-     * larger size and it makes tracking them less complex */
-    size_t sampled_size = ALIGN_SZ_UP(size);
+    /* We don't sample if we are allocating from a private zone */
+    if(zone != NULL) {
+        /* We only sample allocations smaller than an individual
+         * page. We are unlikely to find uninitialized reads on
+         * larger size and it makes tracking them less complex */
+        size_t sampled_size = ALIGN_SZ_UP(size);
 
-    if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
-        /* If we chose to sample this allocation then
-         * _iso_alloc_sample will call UNLOCK_ROOT() */
-        void *ps = _iso_alloc_sample(sampled_size);
+        if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+            /* If we chose to sample this allocation then
+             * _iso_alloc_sample will call UNLOCK_ROOT() */
+            void *ps = _iso_alloc_sample(sampled_size);
 
-        if(ps != NULL) {
-            return ps;
+            if(ps != NULL) {
+                return ps;
+            }
         }
     }
 #endif
@@ -1809,15 +1895,31 @@ INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
 
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
     /* If the zone has no active allocations, holds smaller chunks,
-     * and has allocated and freed more than ZONE_ALLOC_REPLACE
+     * and has allocated and freed more than ZONE_ALLOC_RETIRE
      * chunks in its lifetime then we destroy and replace it with
      * a new zone */
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_REPLACE))) {
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_RETIRE))) {
         if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
             return true;
         }
     }
 
+    return false;
+}
+
+INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > ((GET_CHUNK_COUNT(zone) * ZONE_ALLOC_RETIRE)) / 4)) {
+        size_t s = ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE));
+        uint64_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
+
+        for(uint64_t o = 0; o > s / sizeof(uint64_t); o++) {
+            _mtp[o] = rand_uint64();
+        }
+
+        return true;
+    }
+#endif
     return false;
 }
 
@@ -1836,12 +1938,34 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
         MASK_ZONE_PTRS(zone);
 
         /* If the zone has no active allocations, holds smaller chunks,
-         * and has allocated and freed more than ZONE_ALLOC_REPLACE
+         * and has allocated and freed more than ZONE_ALLOC_RETIRE
          * chunks in its lifetime then we destroy and replace it with
          * a new zone */
         if(UNLIKELY(_is_zone_retired(zone))) {
             _iso_alloc_destroy_zone_unlocked(zone, false, true);
         }
+
+#if MEMORY_TAGGING
+        /* If there are no chunks allocated but this zone has seen
+         * %25 of ZONE_ALLOC_RETIRE in allocations we wipe the pointer
+         * tags and start fresh. If the whole zone doesn't need to
+         * be refreshed then just generate a new tag for this chunk */
+        if(zone->tagged == true) {
+            if(_refresh_zone_mem_tags(zone) == false) {
+                /* We only need to refresh this single tag */
+                if(zone->tagged == true) {
+                    void *user_pages_start = UNMASK_USER_PTR(zone);
+                    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
+                    uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+                    _mtp += (chunk_offset / zone->chunk_size);
+
+                    /* Generate and write a new tag for this chunk */
+                    uint8_t mem_tag = (uint8_t) rand_uint64();
+                    *_mtp = mem_tag;
+                }
+            }
+        }
+#endif
 
 #if UAF_PTR_PAGE
         if(UNLIKELY((rand_uint64() % UAF_PTR_PAGE_ODDS) == 1)) {

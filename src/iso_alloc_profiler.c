@@ -119,8 +119,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     }
 
     if(profile == false) {
-        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%lu) (%d percent)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
-            was_used, (int32_t) ((float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0));
+        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%lu) (%d percent) (%d)", zone->index, zone->chunk_size, GET_CHUNK_COUNT(zone),
+            was_used, (int32_t) ((float) was_used / (GET_CHUNK_COUNT(zone)) * 100.0), zone->bitmap_size);
     }
 
     MASK_ZONE_PTRS(zone);
