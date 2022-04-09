@@ -13,6 +13,11 @@ CXX = clang++
 SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0	\
                  -DNEVER_REUSE_ZONES=0
 
+## Enable memory tagging support. This will generate a random
+## 1 byte tag per addressable chunk of memory. These tags can
+## be retrieved and verified
+MEMORY_TAGGING = -DMEMORY_TAGGING=0
+
 ## Enable abort() when isoalloc can't gather enough entropy.
 ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
 
@@ -296,7 +301,9 @@ malloc_cmp_test: clean
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
 	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) tests/iso_alloc_tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/iso_alloc_tagged_ptr_test $(LDFLAGS)
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/cxx_tests
+	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/iso_alloc_tagged_ptr_test
 
 install:
 	cp -pR build/$(LIBNAME) /usr/lib/

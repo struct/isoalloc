@@ -83,7 +83,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
 * When `SHUFFLE_BIT_SLOT_CACHE` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
 * When destroying private zones if `NEVER_REUSE_ZONES` is enabled IsoAlloc won't attempt to repurpose the zone
-* Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_REPLACE * max_chunk_count_for_zone`.
+* Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`.
 
 ## Building
 
@@ -166,7 +166,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n)` - Equivalent to `iso_strndup` except string is duplicated in specified zone.
 
-`void *iso_alloc_from_zone(iso_alloc_zone_handle *zone, size_t size)` - Equivalent to `iso_alloc` except allocation is done in specified zone.
+`void *iso_alloc_from_zone(iso_alloc_zone_handle *zone)` - Equivalent to `iso_alloc` except allocation is done in specified zone.
 
 `void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone)` - Destroy a zone created with `iso_alloc_from_zone`.
 

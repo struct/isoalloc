@@ -5,7 +5,7 @@
 
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
     if(p == NULL) {
-        p = mmap_rw_pages(g_page_size, false, GUARD_PAGE_NAME);
+        p = mmap_rw_pages(g_page_size, false, NULL);
 
         if(p == NULL) {
             LOG_AND_ABORT("Could not allocate guard page");
@@ -16,6 +16,7 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
      * calling this while we setup the root */
     mprotect_pages(p, g_page_size, PROT_NONE);
     madvise(p, g_page_size, MADV_DONTNEED);
+    name_mapping(p, g_page_size, GUARD_PAGE_NAME);
     return p;
 }
 

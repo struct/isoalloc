@@ -30,6 +30,7 @@
 #define ZONE_BITMAP_NAME "isoalloc zone bitmap"
 #define INTERNAL_UZ_NAME "internal isoalloc user zone"
 #define PRIVATE_UZ_NAME "private isoalloc user zone"
+#define MEM_TAG_NAME "isoalloc zone mem tags"
 #endif
 
 /* Zones can be retired after a certain number of
@@ -37,7 +38,7 @@
  * of chunks the zone can handle multiplied by this
  * value. The zone is replaced at that point if all
  * of its current chunks are free */
-#define ZONE_ALLOC_REPLACE 32
+#define ZONE_ALLOC_RETIRE 32
 
 /* The size of our bit slot freelist */
 #define BIT_SLOT_CACHE_SZ 255

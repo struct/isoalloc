@@ -329,6 +329,8 @@ extern uint32_t g_page_size;
  * profile by adjusting the next few lines below. */
 #define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
+#define MEM_TAG_SIZE 1
+
 #if SMALLEST_CHUNK_SZ < ZONE_8
 #error "Smallest chunk size is 8 bytes, 16 is recommended!"
 #endif
@@ -356,6 +358,9 @@ typedef struct {
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
+#if MEMORY_TAGGING
+    bool tagged; /* Zone supports memory tagging */
+#endif
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
@@ -521,6 +526,7 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
@@ -560,6 +566,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage();
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
+INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
