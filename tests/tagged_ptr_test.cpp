@@ -65,23 +65,16 @@ class Derived : Base {
 template <typename T>
 class IsoAllocPtr {
   public:
-    IsoAllocPtr(iso_alloc_zone_handle *handle, T *ptr) : eptr(0), zone(handle) {
-        uint64_t tag = GetTag(ptr);
-        eptr = (tag << 48) | reinterpret_cast<uintptr_t>(ptr);
+    IsoAllocPtr(iso_alloc_zone_handle *handle, T *ptr) : eptr(nullptr), zone(handle) {
+        eptr = iso_alloc_tag_ptr((void *) ptr, zone);
     }
 
     T *operator->() {
-        T *p = reinterpret_cast<T *>(eptr & 0x0000ffffffffffff);
-        uint64_t tag = GetTag(p);
-        return reinterpret_cast<T *>((tag << 48) ^ eptr);
+        T *p = reinterpret_cast<T *>(iso_alloc_untag_ptr(eptr, zone));
+        return p;
     }
 
-    uint16_t GetTag(T *ptr) {
-        uint8_t tag = iso_alloc_get_mem_tag(ptr, zone);
-        return tag;
-    }
-
-    uintptr_t eptr;
+    void *eptr;
     iso_alloc_zone_handle *zone;
 };
 
@@ -118,7 +111,7 @@ int main(int argc, char *argv[]) {
         // because it invokes the destructor manually and then calls
         // the appropriate IsoAlloc free function
         // d->~Derived();
-        // iso_free_from_zone(b, handle);
+        // iso_free_from_zone(d, _zone_handle);
     }
 
     // Destroy the private zone we created
