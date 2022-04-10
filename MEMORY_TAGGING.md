@@ -39,3 +39,8 @@ These APIs can also be used in C, but this requires tagging and untagging pointe
 * A single 1 byte tag is generated per chunk in a private zone, this means the memory required to hold tags is larger for private zones holding smaller chunk sizes. For zones holding chunks 1024 byte or larger only a single of page of memory is required for tags as there are only 4096 possible 1024 byte chunks in zone user size of 4mb. The maximum amount of memory needed is for 16 byte chunks which requires 64 pages because there are 262144 possible chunks with a zone user size of 4mb.
 * Tags are 1 byte in size and randomly chosen, they are added to the LSB of a pointer (e.g. tag value `0xed`, tagged pointer `0xed0b8066c1a000`, untagged pointer `0xb8066c1a000`)
 * Tags are refreshed whenever the private zone has reached %25 of 'retirement age' (defined in conf.h as `ZONE_ALLOC_RETIRE`) with 0 current allocations
+
+## Examples
+
+The C API test can be found [tests/tagged_ptr_test.c](here)
+The C++ smart pointer test can be found [tests/tagged_ptr_test.cpp](here)
