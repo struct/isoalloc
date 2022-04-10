@@ -44,6 +44,9 @@ EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, 
 EXTERNAL_API NO_DISCARD char *iso_strndup(const char *str, size_t n);
 EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone(iso_alloc_zone_handle *zone);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_zone_handle *zone);
+EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone);
+EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_protect_root();

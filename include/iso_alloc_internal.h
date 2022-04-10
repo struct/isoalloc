@@ -295,6 +295,10 @@ using namespace std;
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
+#define TAGGED_PTR_MASK 0x00ffffffffffffff
+#define IS_TAGGED_PTR_MASK 0xff00000000000000
+#define UNTAGGED_BITS 56
+
 #define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
 #define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
@@ -548,6 +552,8 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);

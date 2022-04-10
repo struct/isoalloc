@@ -105,29 +105,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
 #endif
 }
 
-INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) {
-#if MEMORY_TAGGING
-    void *user_pages_start = UNMASK_USER_PTR(zone);
-
-    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
-    uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
-
-    /* Ensure the pointer is a multiple of chunk size */
-    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
-        LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
-    }
-
-    _mtp += (chunk_offset / zone->chunk_size);
-    return *_mtp;
-#else
-    return 0;
-#endif
-}
-
 #if ENABLE_ASAN
-/* Verify the integrity of all canary chunks and the
- * canary written to all free chunks. This function
- * either aborts or returns nothing */
 INTERNAL_HIDDEN void verify_all_zones(void) {
     return;
 }
@@ -522,8 +500,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
          * unmap these pages, even in the destructor */
         mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
-
-        mprotect_pages(_mtp, )
 
         /* Make this zone unusable */
         memset(zone, 0x0, sizeof(iso_alloc_zone_t));
@@ -1255,6 +1231,44 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
     }
 }
 
+INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
+    void *user_pages_start = UNMASK_USER_PTR(zone);
+
+    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
+    uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+
+    /* Ensure the pointer is a multiple of chunk size */
+    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+        LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
+    }
+
+    _mtp += (chunk_offset / zone->chunk_size);
+    return *_mtp;
+#else
+    return 0;
+#endif
+}
+
+INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone) {
+    if(UNLIKELY(p == NULL || zone == NULL)) {
+        return NULL;
+    }
+
+    uint64_t tag = _iso_alloc_get_mem_tag(p, zone);
+    return (void *) ((tag << UNTAGGED_BITS) | (uintptr_t) p);
+}
+
+INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone) {
+    if(UNLIKELY(p == NULL || zone == NULL)) {
+        return NULL;
+    }
+
+    void *untagged_p = (void *) ((uintptr_t) p & TAGGED_PTR_MASK);
+    uint64_t tag = _iso_alloc_get_mem_tag(untagged_p, zone);
+    return (void *) ((tag << UNTAGGED_BITS) ^ (uintptr_t) p);
+}
+
 INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
 #if NO_ZERO_ALLOCATIONS
     if(UNLIKELY(size == 0 && _root != NULL)) {
@@ -1782,6 +1796,15 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
     if(p == NULL) {
         return;
     }
+
+#if MEMORY_TAGGING
+    /* Its possible that we were passed a tagged pointer */
+    if(UNLIKELY(zone != NULL && zone->tagged == true && ((uintptr_t) p & IS_TAGGED_PTR_MASK) != 0)) {
+        /* If the untagging results in a bad pointer we
+         * will catch it in the free path and abort */
+        p = _untag_ptr(p, zone);
+    }
+#endif
 
     LOCK_ROOT();
     _iso_free_internal_unlocked(p, permanent, zone);
