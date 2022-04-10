@@ -43,4 +43,4 @@ These APIs can also be used in C, but this requires tagging and untagging pointe
 ## Examples
 
 * The C API test can be found [here](tests/tagged_ptr_test.c)
-* The C++ smart pointer test can be found [here](tests/tagged_ptr_test.cpp])
+* The C++ smart pointer test can be found [here](tests/tagged_ptr_test.cpp)
