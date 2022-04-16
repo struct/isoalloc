@@ -103,7 +103,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
                  * canary value. If it doesn't validate then we assume
                  * its a true leak and increment the in_use counter */
                 bit_slot_t bit_slot = (i * BITS_PER_QWORD) + j;
-                void *leak = (zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
+                const void *leak = (zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
 
                 if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
                     continue;

@@ -124,7 +124,7 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 #endif /* UNINIT_READ_SANITY */
 
 INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p) {
-    uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
+    const uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
 
     for(int32_t i = 0; i < (g_page_size / sizeof(uint64_t)); i++) {
         *(uint64_t *) p = canary;
@@ -201,7 +201,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p) {
     return ERR;
 }
 
-INTERNAL_HIDDEN void *_iso_alloc_sample(size_t size) {
+INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
 #if UNINIT_READ_SANITY
     if(_page_fault_thread == 0 || LIKELY((rand_uint64() % SANITY_SAMPLE_ODDS) != 1)) {
 #else
