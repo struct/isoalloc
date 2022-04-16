@@ -57,7 +57,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
     /* The end of our stack is the address of this local */
     uint8_t *stack_end;
     stack_end = (uint8_t *) &stack_end;
-    uint64_t tps = UINT32_MAX;
+    const uint64_t tps = UINT32_MAX;
 
     uint8_t *current = stack_start;
     uint64_t max_ptr = 0x800000000000;

@@ -508,7 +508,7 @@ size_t _free_bts_count;
 extern iso_alloc_root *_root;
 
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big);
-INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, void *p);
+INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
@@ -576,7 +576,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
-INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, void *p);
+INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone_t *zone, char *name);
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
