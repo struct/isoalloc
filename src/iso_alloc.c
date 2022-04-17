@@ -1031,7 +1031,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
     return NULL;
 }
 
-INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     unsigned int res;
     size_t sz = nmemb * size;
 
@@ -1155,7 +1155,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     }
 }
 
-INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
     const bitmap_index_t dwords_to_bit_slot = (bitslot >> BITS_PER_QWORD_SHIFT);
     const int64_t which_bit = WHICH_BIT(bitslot);
 
@@ -1270,7 +1270,7 @@ INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone) {
     return (void *) ((tag << UNTAGGED_BITS) ^ (uintptr_t) p);
 }
 
-INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
 #if NO_ZERO_ALLOCATIONS
     if(UNLIKELY(size == 0 && _root != NULL)) {
         return _zero_alloc_page;
@@ -1463,7 +1463,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p) {
  * logically identical functions that both return a zone
  * for a pointer. The only difference is where the pointer
  * addresses, a bitmap or user pages */
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(void *p) {
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restrict p) {
     iso_alloc_zone_t *zone = NULL;
 
     /* The chunk lookup table is the fastest way to find a
@@ -1507,7 +1507,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(void *p) {
     return NULL;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p) {
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     iso_alloc_zone_t *zone = NULL;
 
     /* The chunk lookup table is the fastest way to find a
@@ -1559,7 +1559,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
     return;
 }
 
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p) {
     return;
 }
 
@@ -1593,7 +1593,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
  * freed, or when the API requests validation. We
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p) {
     const uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
     *(uint64_t *) p = canary;
     p += (zone->chunk_size - sizeof(uint64_t));
@@ -1697,7 +1697,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     UNLOCK_BIG_ZONE();
 }
 
-INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent) {
+INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
     /* Ensure the pointer is properly aligned */
     if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);

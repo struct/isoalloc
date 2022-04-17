@@ -4,11 +4,11 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE void *iso_alloc(size_t size) {
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size) {
     return _iso_alloc(NULL, size);
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE void *iso_calloc(size_t nmemb, size_t size) {
+EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size) {
     return _iso_calloc(nmemb, size);
 }
 
@@ -38,7 +38,7 @@ EXTERNAL_API size_t iso_chunksz(void *p) {
     return _iso_chunk_size(p);
 }
 
-EXTERNAL_API NO_DISCARD REALLOC_SIZE void *iso_realloc(void *p, size_t size) {
+EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size) {
     if(size == 0) {
         iso_free(p);
         return NULL;
@@ -69,11 +69,11 @@ EXTERNAL_API NO_DISCARD REALLOC_SIZE void *iso_realloc(void *p, size_t size) {
     return r;
 }
 
-EXTERNAL_API NO_DISCARD char *iso_strdup(const char *str) {
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str) {
     return iso_strdup_from_zone(NULL, str);
 }
 
-EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) {
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) {
     if(str == NULL) {
         return NULL;
     }
@@ -94,11 +94,11 @@ EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, 
     return p;
 }
 
-EXTERNAL_API NO_DISCARD char *iso_strndup(const char *str, size_t n) {
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup(const char *str, size_t n) {
     return iso_strndup_from_zone(NULL, str, n);
 }
 
-EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) {
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) {
     if(str == NULL) {
         return NULL;
     }
@@ -125,7 +125,7 @@ EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone,
     return p;
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone(iso_alloc_zone_handle *zone) {
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ASSUME_ALIGNED void *iso_alloc_from_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }

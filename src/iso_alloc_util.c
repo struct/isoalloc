@@ -97,11 +97,11 @@ INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
 #endif
 }
 
-INTERNAL_HIDDEN bool is_pow2(uint64_t sz) {
+INTERNAL_HIDDEN INLINE CONST bool is_pow2(uint64_t sz) {
     return (sz & (sz - 1)) == 0;
 }
 
-INTERNAL_HIDDEN size_t next_pow2(size_t sz) {
+INTERNAL_HIDDEN INLINE CONST size_t next_pow2(size_t sz) {
     sz |= sz >> 1;
     sz |= sz >> 2;
     sz |= sz >> 4;
