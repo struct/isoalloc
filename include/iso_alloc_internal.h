@@ -548,7 +548,6 @@ INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
