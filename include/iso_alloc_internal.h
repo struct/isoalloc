@@ -464,11 +464,6 @@ typedef struct {
 extern void *_zero_alloc_page;
 #endif
 
-#if UAF_PTR_PAGE
-#define UAF_PTR_PAGE_ODDS 1000000
-#define UAF_PTR_PAGE_ADDR 0xFF41414142434445
-#endif
-
 #if HEAP_PROFILER
 #define PROFILER_ODDS 10000
 #define HG_SIZE 65535

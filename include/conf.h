@@ -33,6 +33,14 @@
 #define MEM_TAG_NAME "isoalloc zone mem tags"
 #endif
 
+/* If you're using the UAF_PTR_PAGE functionality and
+ * want to change the frequency it is triggered or the
+ * magic value that is written */
+#if UAF_PTR_PAGE
+#define UAF_PTR_PAGE_ODDS 1000000
+#define UAF_PTR_PAGE_ADDR 0xFF41414142434445
+#endif
+
 /* Zones can be retired after a certain number of
  * allocations. This is computed as the total count
  * of chunks the zone can handle multiplied by this

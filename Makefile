@@ -89,7 +89,8 @@ HUGE_PAGES = -DHUGE_PAGES=1
 ## Enable CPU pinning support on a per-zone basis. This is
 ## a minor security feature which introduces an allocation
 ## isolation property that is defined by CPU core. See the
-## README for more detailed information. (Linux only)
+## README for more detailed information. This is Linux only
+## and has negative performance implications
 CPU_PIN = -DCPU_PIN=0
 
 ## Enable the allocation sanity feature. This works a lot

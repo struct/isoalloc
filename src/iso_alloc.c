@@ -847,7 +847,9 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
 
 /* This function scans an entire bitmap bit-by-bit
  * and returns the first free bit position. In a heavily
- * used zone this function will be slow to search */
+ * used zone this function will be slow to search. We
+ * speed it up by looking for a constant ALLOCATED_BITSLOTS
+ * that indicates there is at least 1 free bit slot  */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     const bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
@@ -2029,7 +2031,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(p == _zero_alloc_page) {
+    if(UNLIKELY(p == _zero_alloc_page)) {
         return 0;
     }
 #endif

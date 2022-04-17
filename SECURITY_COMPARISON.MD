@@ -36,6 +36,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |:grey_question:   |
 |Zero Size Allocation Special Handling|:heavy_check_mark:|:x: |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |
 |Read-only global structure|:heavy_minus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |
+|SW Memory Tagging      |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:              |:x:              |:heavy_check_mark:|
 
 **Lexicon**
 
@@ -52,6 +53,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 - *Zero Size Allocation Special Handling*: Zero size allocations are treated like a dedicated size class,
   and point to a non-readable and non-writable region, to ensure that the application can't use them in any way.
 - *Read-only global structure*: The global state structure is entirely read-only after initialization.
+- *SW Memory Tagging*: The ability to tag pointers with a unique tag that is later verified before pointer dereference
 
 **Sources**
 
