@@ -18,6 +18,7 @@
 #define CALLOC_SIZE __attribute__((alloc_size(1, 2)))
 #define REALLOC_SIZE __attribute__((alloc_size(2)))
 #define ZONE_ALLOC_SIZE __attribute__((alloc_size(2)))
+#define ASSUME_ALIGNED __attribute__((assume_aligned (8)))
 
 #define UNMASK_ZONE_HANDLE(zone) \
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
@@ -29,9 +30,9 @@ extern "C" {
 #endif
 /* See https://github.com/struct/isoalloc/blob/master/README.md#api for
  * detailed information on how to use these functions */
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE void *iso_alloc(size_t size);
-EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE void *iso_calloc(size_t nmemb, size_t size);
-EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE void *iso_realloc(void *p, size_t size);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size);
 EXTERNAL_API void iso_free(void *p);
 EXTERNAL_API void iso_free_size(void *p, size_t size);
 EXTERNAL_API void iso_free_permanently(void *p);
@@ -39,11 +40,11 @@ EXTERNAL_API void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API size_t iso_chunksz(void *p);
 EXTERNAL_API NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone);
-EXTERNAL_API NO_DISCARD char *iso_strdup(const char *str);
-EXTERNAL_API NO_DISCARD char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str);
-EXTERNAL_API NO_DISCARD char *iso_strndup(const char *str, size_t n);
-EXTERNAL_API NO_DISCARD char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n);
-EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone(iso_alloc_zone_handle *zone);
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str);
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str);
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup(const char *str, size_t n);
+EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR ASSUME_ALIGNED void *iso_alloc_from_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone);

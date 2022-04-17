@@ -209,7 +209,7 @@ espresso    mimalloc    03.43 3828 3.40 0.01 1 1299
 espresso    smimalloc   03.65 5760 3.60 0.01 0 2682
 espresso    tcmalloc    03.43 8132 3.39 0.01 0 1485
 espresso    scudo       04.53 4028 4.49 0.01 0 514
-espresso    isoalloc    04.69 55060 4.60 0.06 0 13756
+espresso    isoalloc    04.59 48984 4.49 0.07 0 24276
 
 barnes      jemalloc    01.93 59412 1.91 0.01 3 16646
 barnes      mimalloc    01.91 57860 1.89 0.01 0 16539
@@ -223,28 +223,28 @@ redis       mimalloc    4.487 29204 2.07 0.20 0 6825
 redis       smimalloc   4.909 30992 2.28 0.20 0 7410
 redis       tcmalloc    4.675 37336 2.17 0.20 0 8682
 redis       scudo       6.105 36968 2.85 0.23 0 8623
-redis       isoalloc    9.143 83576 4.23 0.39 0 26815
+redis       isoalloc    8.658 62088 4.06 0.32 0 18099
 
 cache-thrash1 jemalloc    01.28 3648 1.27 0.00 1 240
 cache-thrash1 mimalloc    01.28 3408 1.28 0.00 0 197
 cache-thrash1 smimalloc   01.28 3256 1.27 0.00 0 202
 cache-thrash1 tcmalloc    01.27 7100 1.26 0.00 0 1127
 cache-thrash1 scudo       01.27 3240 1.26 0.00 0 200
-cache-thrash1 isoalloc    01.31 10716 1.29 0.00 0 2151
+cache-thrash1 isoalloc    01.27 3668 1.27 0.00 0 352
 
 cache-thrashN jemalloc    00.21 3936 1.64 0.00 0 360
 cache-thrashN mimalloc    00.21 3516 1.63 0.00 0 239
 cache-thrashN smimalloc   00.22 3584 1.68 0.01 0 249
 cache-thrashN tcmalloc    02.74 6992 20.36 0.00 0 1151
 cache-thrashN scudo       00.61 3164 2.53 0.00 0 237
-cache-thrashN isoalloc    01.09 10896 8.56 0.01 0 2201
+cache-thrashN isoalloc    01.14 3908 8.95 0.01 0 422
 
 larsonN     jemalloc    4.892 84172 39.71 0.20 1 52478
 larsonN     mimalloc    4.360 98504 39.61 0.17 0 26372
 larsonN     smimalloc   6.546 105724 39.77 0.16 3 27432
 larsonN     tcmalloc    4.450 63464 39.57 0.21 0 15299
 larsonN     scudo       44.707 33104 28.92 4.80 0 7826
-larsonN     isoalloc    375.349 70268 39.65 0.30 0 17220
+larsonN     isoalloc    249.791 63996 7.09 17.51 0 15567
 
 larsonN-sized jemalloc    4.872 84428 39.56 0.22 1 52874
 larsonN-sized mimalloc    4.335 95388 39.82 0.13 0 25625
@@ -258,28 +258,28 @@ mstressN    mimalloc    00.43 352132 1.56 0.15 0 88171
 mstressN    smimalloc   00.62 352204 1.85 0.67 0 95538      
 mstressN    tcmalloc    00.51 147680 1.80 0.25 0 37111
 mstressN    scudo       01.38 142068 3.23 1.63 0 616639
-mstressN    isoalloc    06.26 284052 33.62 1.02 0 746837
+mstressN    isoalloc    03.11 225352 4.90 5.91 0 722991
 
 xmalloc-testN jemalloc    2.307 64460 25.13 5.14 1 22975
 xmalloc-testN mimalloc    0.513 82212 36.03 1.05 0 26689
 xmalloc-testN smimalloc   0.857 73504 36.58 1.05 0 28285
 xmalloc-testN tcmalloc    6.055 40824 9.31 18.77 0 9642
 xmalloc-testN scudo       13.416 56708 10.06 14.30 0 16560
-xmalloc-testN isoalloc    36.672 17672 39.04 0.10 0 5364
+xmalloc-testN isoalloc    13.425 14660 7.06 21.01 0 3547
 
 glibc-simple jemalloc    01.96 2984 1.95 0.00 1 313
 glibc-simple mimalloc    01.50 1900 1.49 0.00 0 212
 glibc-simple smimalloc   01.77 2032 1.76 0.00 0 229
 glibc-simple tcmalloc    01.52 6880 1.52 0.00 0 1212
 glibc-simple scudo       04.58 2776 4.58 0.00 0 281
-glibc-simple isoalloc    04.45 14696 4.34 0.10 0 3530
+glibc-simple isoalloc    04.40 13948 4.30 0.09 0 3364
 
 glibc-thread jemalloc    6.772 4160 15.98 0.00 1 457
 glibc-thread mimalloc    3.759 3320 15.98 0.00 0 585
 glibc-thread smimalloc   9.012 17144 15.89 0.02 0 4018
 glibc-thread tcmalloc    10.434 8508 15.99 0.00 0 1580
 glibc-thread scudo       80.979 4076 15.90 0.01 0 582
-glibc-thread isoalloc    1178.003 44192 15.83 0.05 0 10880
+glibc-thread isoalloc    455.337 2232 2.93 6.69 0 339
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads. However it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surfaces. These environments have threat models similar to what IsoAlloc was designed for.

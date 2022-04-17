@@ -12,6 +12,8 @@
 #endif
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
+#define ASSUME_ALIGNED __attribute__((assume_aligned (8)))
+#define CONST __attribute__((const))
 
 /* This isn't standard in C as [[nodiscard]] until C23 */
 #define NO_DISCARD __attribute__((warn_unused_result))
@@ -512,7 +514,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);
@@ -521,8 +523,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal);
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(void *p);
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p);
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *p);
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone);
@@ -546,7 +548,6 @@ INTERNAL_HIDDEN void verify_all_zones(void);
 INTERNAL_HIDDEN void _iso_free(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent);
 INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
@@ -558,9 +559,9 @@ INTERNAL_HIDDEN void *create_guard_page(void *p);
 INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);
 INTERNAL_HIDDEN void *_iso_big_alloc(size_t size);
-INTERNAL_HIDDEN void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
-INTERNAL_HIDDEN void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN void *_iso_calloc(size_t nmemb, size_t size);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile);
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone);
