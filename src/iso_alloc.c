@@ -214,7 +214,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     const bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone);
-    bit_slot_t bit_slot;
 
     /* This gives us an arbitrary spot in the bitmap to
      * start searching but may mean we end up with a smaller
@@ -238,15 +237,14 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
             return;
         }
 
-        for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+        for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
                 zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
                 return;
             }
 
             if((GET_BIT(bm[bm_idx], j)) == 0) {
-                bit_slot = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
-                zone->free_bit_slot_cache[free_bit_slot_cache_index] = bit_slot;
+                zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 free_bit_slot_cache_index++;
             }
         }
@@ -1286,6 +1284,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
+        if(UNLIKELY(zone != NULL)) {
+            LOG_AND_ABORT("_root was NULL but zone %p was not", zone);
+        }
+
         g_page_size = sysconf(_SC_PAGESIZE);
         iso_alloc_initialize_global_root();
 
@@ -1705,7 +1707,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
-    uint64_t chunk_offset = (uint64_t) (p - zone->user_pages_start);
+    const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
 
     /* Ensure the pointer is a multiple of chunk size */
     if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
@@ -1715,14 +1717,14 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 
     const size_t chunk_number = (chunk_offset / zone->chunk_size);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
-    bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
+    const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
     if(UNLIKELY(dwords_to_bit_slot > (zone->bitmap_size >> 3))) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
     uint64_t which_bit = WHICH_BIT(bit_slot);
-    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
 
     /* Read out 64 bits from the bitmap. We will write
      * them back before we return. This reduces the
@@ -1769,24 +1771,20 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     write_canary(zone, p);
 
     if((chunk_number + 1) != GET_CHUNK_COUNT(zone)) {
-        bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
-        dwords_to_bit_slot = (bit_slot_over >> BITS_PER_QWORD_SHIFT);
+        const bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
         which_bit = WHICH_BIT(bit_slot_over);
 
-        if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
-            const void *p_over = p + zone->chunk_size;
-            check_canary(zone, p_over);
+        if((GET_BIT(bm[(bit_slot_over >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_over) + 1))) == 1) {
+            check_canary(zone, p + zone->chunk_size);
         }
     }
 
     if(chunk_number != 0) {
-        bit_slot_t bit_slot_under = ((chunk_number - 1) << BITS_PER_CHUNK_SHIFT);
-        dwords_to_bit_slot = (bit_slot_under >> BITS_PER_QWORD_SHIFT);
+        const bit_slot_t bit_slot_under = ((chunk_number - 1) << BITS_PER_CHUNK_SHIFT);
         which_bit = WHICH_BIT(bit_slot_under);
 
-        if((GET_BIT(bm[dwords_to_bit_slot], (which_bit + 1))) == 1) {
-            const void *p_under = p - zone->chunk_size;
-            check_canary(zone, p_under);
+        if((GET_BIT(bm[(bit_slot_under >> BITS_PER_QWORD_SHIFT)], (which_bit + 1))) == 1) {
+            check_canary(zone, p - zone->chunk_size);
         }
     }
 #endif
@@ -1963,9 +1961,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
     }
 
     if(LIKELY(zone != NULL)) {
-        UNMASK_ZONE_PTRS(zone);
         iso_free_chunk_from_zone(zone, p, permanent);
-        MASK_ZONE_PTRS(zone);
 
         /* If the zone has no active allocations, holds smaller chunks,
          * and has allocated and freed more than ZONE_ALLOC_RETIRE
