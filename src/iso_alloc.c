@@ -1772,8 +1772,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 
     if((chunk_number + 1) != GET_CHUNK_COUNT(zone)) {
         const bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
-        which_bit = WHICH_BIT(bit_slot_over);
-
         if((GET_BIT(bm[(bit_slot_over >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_over) + 1))) == 1) {
             check_canary(zone, p + zone->chunk_size);
         }
@@ -1781,9 +1779,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 
     if(chunk_number != 0) {
         const bit_slot_t bit_slot_under = ((chunk_number - 1) << BITS_PER_CHUNK_SHIFT);
-        which_bit = WHICH_BIT(bit_slot_under);
-
-        if((GET_BIT(bm[(bit_slot_under >> BITS_PER_QWORD_SHIFT)], (which_bit + 1))) == 1) {
+        if((GET_BIT(bm[(bit_slot_under >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_under) + 1))) == 1) {
             check_canary(zone, p - zone->chunk_size);
         }
     }
