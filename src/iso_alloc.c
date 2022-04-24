@@ -1291,12 +1291,14 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         g_page_size = sysconf(_SC_PAGESIZE);
         iso_alloc_initialize_global_root();
 
+#if NO_ZERO_ALLOCATIONS
         /* In the unlikely event size is 0 but we hadn't
          * initialized the root yet return the zero page */
         if(UNLIKELY(size == 0)) {
             UNLOCK_ROOT();
             return _zero_alloc_page;
         }
+#endif
     }
 
 #if ALLOC_SANITY
