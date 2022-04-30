@@ -236,7 +236,7 @@ INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash() {
 #define SAVE_BACKTRACE_FRAME(frame, bts)                                          \
     if(__builtin_frame_address(frame)) {                                          \
         uint64_t r = (uint64_t) __builtin_return_address(frame);                  \
-        if(r > 0x1000) {                                                              \
+        if(r > 0x1000) {                                                          \
             bts->callers[frame - 1] = (uint64_t) __builtin_return_address(frame); \
         }                                                                         \
     } else {                                                                      \
@@ -289,7 +289,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
             }
 
             Dl_info dl;
-            dladdr((void *)abts->callers[j], &dl);
+            dladdr((void *) abts->callers[j], &dl);
 
             if(dl.dli_sname != NULL) {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", abts->callers[j], dl.dli_sname, dl.dli_fname);
@@ -310,7 +310,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
             }
 
             Dl_info dl;
-            dladdr((void *)fbts->callers[j], &dl);
+            dladdr((void *) fbts->callers[j], &dl);
 
             if(dl.dli_sname != NULL) {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", fbts->callers[j], dl.dli_sname, dl.dli_fname);
