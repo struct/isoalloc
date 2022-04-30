@@ -12,7 +12,7 @@
 #endif
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
-#define ASSUME_ALIGNED __attribute__((assume_aligned (8)))
+#define ASSUME_ALIGNED __attribute__((assume_aligned(8)))
 #define CONST __attribute__((const))
 
 /* This isn't standard in C as [[nodiscard]] until C23 */

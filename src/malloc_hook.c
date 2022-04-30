@@ -60,7 +60,12 @@ EXTERNAL_API int posix_memalign(void **r, size_t alignment, size_t s) {
     return __posix_memalign(r, alignment, s);
 }
 
-EXTERNAL_API void *__libc_memalign(size_t align, size_t s) {
+EXTERNAL_API void *__libc_memalign(size_t alignment, size_t s) {
+    /* All iso_alloc allocations are 8 byte aligned */
+    return iso_alloc(s);
+}
+
+EXTERNAL_API void *aligned_alloc(size_t alignment, size_t s) {
     /* All iso_alloc allocations are 8 byte aligned */
     return iso_alloc(s);
 }
@@ -89,7 +94,7 @@ static void *libc_realloc(void *ptr, size_t s, const void *caller) {
 static void libc_free(void *ptr, const void *caller) {
     iso_free(ptr);
 }
-static void *libc_memalign(size_t align, size_t s, const void *caller) {
+static void *libc_memalign(size_t alignment, size_t s, const void *caller) {
     return iso_alloc(s);
 }
 

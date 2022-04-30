@@ -18,7 +18,7 @@
 #define CALLOC_SIZE __attribute__((alloc_size(1, 2)))
 #define REALLOC_SIZE __attribute__((alloc_size(2)))
 #define ZONE_ALLOC_SIZE __attribute__((alloc_size(2)))
-#define ASSUME_ALIGNED __attribute__((assume_aligned (8)))
+#define ASSUME_ALIGNED __attribute__((assume_aligned(8)))
 
 #define UNMASK_ZONE_HANDLE(zone) \
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
