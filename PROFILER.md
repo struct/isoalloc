@@ -21,54 +21,152 @@ The profiler outputs a file (example below) that contains information about the 
 allocated=5766465
 
 # Number of allocations sampled
-alloc_sampled=566
+alloc_sampled=551
 
 # Total free's
-freed=5766464
+freed=4324848
 
 # Number of free's sampled
-free_sampled=586
+free_sampled=427
 
 # Sampled unique backtraces to malloc/free
 # backtrace id, backtrace hash, number of calls, smallest size requested, largest size requested, backtrace
-allocated=5766465
-alloc_sampled=561
-freed=5766464
-free_sampled=570
-alloc_backtrace=0,backtrace_hash=0xbabc,calls=134,lower_bound_size=16,upper_bound_size=8192,0xffffbd060ce8,0x400f34,0x401124,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-alloc_backtrace=1,backtrace_hash=0xbae8,calls=11,lower_bound_size=45,upper_bound_size=538,0xffffbd060ce8,0x400f34,0x401170,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-alloc_backtrace=2,backtrace_hash=0x63e4,calls=113,lower_bound_size=16,upper_bound_size=8192,0xffffbd05d860,0xffffbd060d14,0x400cf4,0x401220,0xffffbceda090,0x4008d4,0x0,0x0
-alloc_backtrace=3,backtrace_hash=0x63a8,calls=6,lower_bound_size=134,upper_bound_size=4114,0xffffbd05d860,0xffffbd060d14,0x400cf4,0x40126c,0xffffbceda090,0x4008d4,0x0,0x0
-alloc_backtrace=4,backtrace_hash=0xb0f4,calls=146,lower_bound_size=16,upper_bound_size=8192,0xffffbd060ce8,0xffffbd060df4,0x400ab0,0x40131c,0xffffbceda090,0x4008d4,0x0,0x0
-alloc_backtrace=5,backtrace_hash=0xbd34,calls=122,lower_bound_size=8,upper_bound_size=4096,0xffffbd060ce8,0x400a84,0x40131c,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-alloc_backtrace=6,backtrace_hash=0xb080,calls=10,lower_bound_size=151,upper_bound_size=4124,0xffffbd060ce8,0xffffbd060df4,0x400ab0,0x401368,0xffffbceda090,0x4008d4,0x0,0x0
-alloc_backtrace=7,backtrace_hash=0xbd40,calls=11,lower_bound_size=19,upper_bound_size=2062,0xffffbd060ce8,0x400a84,0x401368,0xffffbceda090,0x4008d4,0x0,0x0,0x0
 
-free_backtrace=0,backtrace_hash=0xbbcc,calls=61,0xffffbd060d40,0x400fec,0x401124,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=1,backtrace_hash=0xa444,calls=59,0xffffbd060d40,0x401064,0x401124,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=2,backtrace_hash=0xbb98,calls=7,0xffffbd060d40,0x400fec,0x401170,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=3,backtrace_hash=0xa410,calls=8,0xffffbd060d40,0x401064,0x401170,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=4,backtrace_hash=0xba88,calls=70,0xffffbd060d40,0x400dac,0x401220,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=5,backtrace_hash=0xb900,calls=65,0xffffbd060d40,0x400e24,0x401220,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=6,backtrace_hash=0xbac4,calls=6,0xffffbd060d40,0x400dac,0x40126c,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=7,backtrace_hash=0xb94c,calls=6,0xffffbd060d40,0x400e24,0x40126c,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=8,backtrace_hash=0xb2f8,calls=127,0xffffbd060d40,0xffffbd060e50,0x400ab0,0x40131c,0xffffbceda090,0x4008d4,0x0,0x0
-free_backtrace=9,backtrace_hash=0xbd70,calls=67,0xffffbd060d40,0x400b68,0x40131c,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=10,backtrace_hash=0xbdf8,calls=64,0xffffbd060d40,0x400be0,0x40131c,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=11,backtrace_hash=0xb28c,calls=7,0xffffbd060d40,0xffffbd060e50,0x400ab0,0x401368,0xffffbceda090,0x4008d4,0x0,0x0
-free_backtrace=12,backtrace_hash=0xbd04,calls=6,0xffffbd060d40,0x400b68,0x401368,0xffffbceda090,0x4008d4,0x0,0x0,0x0
-free_backtrace=13,backtrace_hash=0xbd8c,calls=3,0xffffbd060d40,0x400be0,0x401368,0xffffbceda090,0x4008d4,0x0,0x0,0x0
+alloc_backtrace=0,backtrace_hash=0x8614,calls=117,lower_bound_size=16,upper_bound_size=8192
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0x400f44 -> [?]
+	0x401134 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=1,backtrace_hash=0x86a0,calls=9,lower_bound_size=45,upper_bound_size=538
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0x400f44 -> [?]
+	0x401180 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=2,backtrace_hash=0xea18,calls=148,lower_bound_size=16,upper_bound_size=8192
+	0xffffab916d64 -> [?]
+	0xffffab91a03c -> iso_calloc build/libisoalloc.so
+	0x400d04 -> [?]
+	0x401230 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=3,backtrace_hash=0xea54,calls=16,lower_bound_size=134,upper_bound_size=8212
+	0xffffab916d64 -> [?]
+	0xffffab91a03c -> iso_calloc build/libisoalloc.so
+	0x400d04 -> [?]
+	0x40127c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=4,backtrace_hash=0x81dc,calls=127,lower_bound_size=8,upper_bound_size=4096
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0x400a94 -> [?]
+	0x40132c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=5,backtrace_hash=0x2040,calls=104,lower_bound_size=16,upper_bound_size=8192
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0xffffab91a1c8 -> iso_realloc build/libisoalloc.so
+	0x400ac0 -> [?]
+	0x40132c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=6,backtrace_hash=0x2014,calls=11,lower_bound_size=151,upper_bound_size=4124
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0xffffab91a1c8 -> iso_realloc build/libisoalloc.so
+	0x400ac0 -> [?]
+	0x401378 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+alloc_backtrace=7,backtrace_hash=0x8188,calls=11,lower_bound_size=75,upper_bound_size=2062
+	0xffffab91a010 -> iso_alloc build/libisoalloc.so
+	0x400a94 -> [?]
+	0x401378 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=0,backtrace_hash=0x86d4,calls=66
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400ffc -> [?]
+	0x401134 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=1,backtrace_hash=0x995c,calls=60
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x401074 -> [?]
+	0x401134 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=2,backtrace_hash=0x99e8,calls=7
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x401074 -> [?]
+	0x401180 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=3,backtrace_hash=0x8660,calls=6
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400ffc -> [?]
+	0x401180 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=4,backtrace_hash=0x8418,calls=66
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400e34 -> [?]
+	0x401230 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=5,backtrace_hash=0x8790,calls=72
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400dbc -> [?]
+	0x401230 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=6,backtrace_hash=0x87dc,calls=6
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400dbc -> [?]
+	0x40127c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=7,backtrace_hash=0x8454,calls=4
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400e34 -> [?]
+	0x40127c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=8,backtrace_hash=0x80c0,calls=64
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400bf0 -> [?]
+	0x40132c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=9,backtrace_hash=0x8048,calls=55
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400b78 -> [?]
+	0x40132c -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=10,backtrace_hash=0x8094,calls=4
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400bf0 -> [?]
+	0x401378 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
+free_backtrace=11,backtrace_hash=0x801c,calls=5
+	0xffffab91a068 -> iso_free build/libisoalloc.so
+	0x400b78 -> [?]
+	0x401378 -> [?]
+	0xffffab793090 -> __libc_start_main /lib/aarch64-linux-gnu/libc.so.6
+	0x4008e4 -> [?]
 
 # Chunk size, number of zones holding that size,
 # number of times that zone was 75% full
-256,1,8
-512,1,23
-1024,1,51
-2048,1,82
-4096,14,575
-8192,71,2592
-16384,15,546
-
+128,1,1
+256,1,6
+512,1,29
+1024,1,58
+2048,4,116
+4096,16,570
+8192,65,3195
+16384,33,13
 ```
 
 The profiler will collect backtraces in order to produce a report about callers into IsoAlloc. This data is helpful for understanding memory allocation patterns in a program. These hashes are not immediately usable, the profiler uses them internally to track unique call stacks. If the profiler data shows a large number of backtraces then its unlikely using just a handful of memory allocation abstractions (e.g. its frequently calling malloc/new). Due to their size (16 bits) calculated backtraces may not be entirely unique. To get the most accurate results from this feature please compile IsoAlloc and your program with the `-fno-omit-frame-pointer` option.

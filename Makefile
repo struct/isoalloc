@@ -84,7 +84,7 @@ HUGE_PAGES = -DHUGE_PAGES=1
 ## the target. This file can be consumed by the profiler
 ## CLI utility. See PROFILER.md for the format of this file
 #HEAP_PROFILER = -DHEAP_PROFILER=1 -fno-omit-frame-pointer \
-#				-fno-optimize-sibling-calls
+#				-fno-optimize-sibling-calls -ldl
 
 ## Enable CPU pinning support on a per-zone basis. This is
 ## a minor security feature which introduces an allocation

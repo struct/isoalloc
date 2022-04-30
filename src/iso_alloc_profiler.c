@@ -2,6 +2,7 @@
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
+#include <dlfcn.h>
 
 #if DEBUG && MEM_USAGE
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
@@ -235,7 +236,7 @@ INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash() {
 #define SAVE_BACKTRACE_FRAME(frame, bts)                                          \
     if(__builtin_frame_address(frame)) {                                          \
         uint64_t r = (uint64_t) __builtin_return_address(frame);                  \
-        if(r != 0) {                                                              \
+        if(r > 0x1000) {                                                              \
             bts->callers[frame - 1] = (uint64_t) __builtin_return_address(frame); \
         }                                                                         \
     } else {                                                                      \
@@ -279,16 +280,44 @@ INTERNAL_HIDDEN void _iso_output_profile() {
 
     for(uint32_t i = 0; i < _alloc_bts_count; i++) {
         iso_alloc_traces_t *abts = &_alloc_bts[i];
-        _iso_alloc_printf(profiler_fd, "alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
-                          i, abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size, abts->callers[0], abts->callers[1],
-                          abts->callers[2], abts->callers[3], abts->callers[4], abts->callers[5], abts->callers[6], abts->callers[7]);
+        _iso_alloc_printf(profiler_fd, "alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d\n",
+                          i, abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size);
+
+        for(int32_t j = 0; j < BACKTRACE_DEPTH; j++) {
+            if(abts->callers[j] < 0x1000) {
+                continue;
+            }
+
+            Dl_info dl;
+            dladdr((void *)abts->callers[j], &dl);
+
+            if(dl.dli_sname != NULL) {
+                _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", abts->callers[j], dl.dli_sname, dl.dli_fname);
+            } else {
+                _iso_alloc_printf(profiler_fd, "\t0x%x -> [?]\n", abts->callers[j]);
+            }
+        }
     }
 
     for(uint32_t i = 0; i < _free_bts_count; i++) {
         iso_free_traces_t *fbts = &_free_bts[i];
-        _iso_alloc_printf(profiler_fd, "free_backtrace=%d,backtrace_hash=0x%x,calls=%d,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
-                          i, fbts->backtrace_hash, fbts->call_count, fbts->callers[0], fbts->callers[1], fbts->callers[2],
-                          fbts->callers[3], fbts->callers[4], fbts->callers[5], fbts->callers[6], fbts->callers[7]);
+        _iso_alloc_printf(profiler_fd, "free_backtrace=%d,backtrace_hash=0x%x,calls=%d\n",
+                          i, fbts->backtrace_hash, fbts->call_count);
+
+        for(int32_t j = 0; j < BACKTRACE_DEPTH; j++) {
+            if(fbts->callers[j] < 0x1000) {
+                continue;
+            }
+
+            Dl_info dl;
+            dladdr((void *)fbts->callers[j], &dl);
+
+            if(dl.dli_sname != NULL) {
+                _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", fbts->callers[j], dl.dli_sname, dl.dli_fname);
+            } else {
+                _iso_alloc_printf(profiler_fd, "\t0x%x -> [?]\n", fbts->callers[j]);
+            }
+        }
     }
 
     for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
