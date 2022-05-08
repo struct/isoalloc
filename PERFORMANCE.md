@@ -20,6 +20,8 @@ By default user chunks are not sanitized upon free. While this helps mitigate un
 
 When `USE_MLOCK` is enabled in the Makefile (on by default) the meta data for the IsoAlloc root and other caches will be locked with `mlock`. This means this data will never be swapped to disk. We do this because using these data structures is required for both the alloc and free hot paths. This operation may fail if we are running inside a container with memory limits. Failure to lock the memory will not cause an abort and all failures will be silently ignored.
 
+When enabled `USE_SPINLOCK` will use spinlocks via `atomic_flag` instead of a pthread mutex. Performance and load testing of IsoAlloc has shown spinlocks are slightly slower than a mutex so it is not the preferred default option.
+
 If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic/mutex lock/unlock operations from the allocator, which will result in significant performance gains in some programs. If you do require thread support then you may want to profile your program to determine what default zone sizes will benefit performance.
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance.
