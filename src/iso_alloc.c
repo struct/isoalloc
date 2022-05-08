@@ -219,10 +219,14 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This may negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx = 0;
+    bitmap_index_t bm_idx;
 
+    /* The largest max_bitmap_idx we will ever
+     * have is 8192 for SMALLEST_CHUNK_SZ (16) */
     if(max_bitmap_idx > ALIGNMENT) {
-        bm_idx = (rand_uint64() % (max_bitmap_idx - 1));
+        bm_idx = ((uint32_t) rand_uint64() * (max_bitmap_idx - 1) >> 32);
+    } else {
+        bm_idx = 0;
     }
 
     memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
@@ -232,7 +236,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
     for(free_bit_slot_cache_index = 0; free_bit_slot_cache_index < BIT_SLOT_CACHE_SZ; bm_idx++) {
         /* Don't index outside of the bitmap or
          * we will return inaccurate bit slots */
-        if(bm_idx >= max_bitmap_idx) {
+        if(UNLIKELY(bm_idx >= max_bitmap_idx)) {
             zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
             return;
         }
@@ -1240,7 +1244,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
     const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
-    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+    if(UNLIKELY((chunk_offset & (zone->chunk_size - 1)) != 0)) {
         LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
     }
 
@@ -1328,7 +1332,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
      * handled by the 'big allocation' path. If a zone was
      * passed in we abort because its a misuse of the API */
-    if(LIKELY(size < SMALL_SZ_MAX)) {
+    if(LIKELY(size <= SMALL_SZ_MAX)) {
 #if FUZZ_MODE
         _verify_all_zones();
 #endif
@@ -1423,7 +1427,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
 
         if(UNLIKELY(zone != NULL)) {
-            LOG_AND_ABORT("Allocations of >= %d cannot use private zones", SMALL_SZ_MAX);
+            LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone", size, SMALL_SZ_MAX);
         }
 
         return _iso_big_alloc(size);
@@ -1712,9 +1716,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
 
     /* Ensure the pointer is a multiple of chunk size */
-    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+    if(UNLIKELY((chunk_offset & (zone->chunk_size - 1)) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits",
-                      p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
+                      p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
     }
 
     const size_t chunk_number = (chunk_offset / zone->chunk_size);
