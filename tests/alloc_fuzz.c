@@ -12,7 +12,8 @@
 uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                ZONE_256, ZONE_512, ZONE_1024,
                                ZONE_2048, ZONE_4096, ZONE_8192,
-                               SMALL_SZ_MAX / 4, SMALL_SZ_MAX / 2, SMALL_SZ_MAX};
+                               SMALL_SZ_MAX / 4, SMALL_SZ_MAX / 2,
+                               SMALL_SZ_MAX - 1, SMALL_SZ_MAX };
 
 uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 
@@ -112,9 +113,17 @@ int allocate(size_t array_size, size_t allocation_size) {
     if(rand() % 100 == 1) {
         if(private_zone != NULL) {
             iso_alloc_destroy_zone(private_zone);
+
+            private_zone = NULL;
         }
 
-        private_zone = iso_alloc_new_zone(allocation_size);
+        if(allocation_size <= SMALL_SZ_MAX) {
+            private_zone = iso_alloc_new_zone(allocation_size);
+
+            if(private_zone == NULL) {
+                LOG_AND_ABORT("Could not allocate private zone!");
+            }
+        }
     }
 
     for(int i = 0; i < array_size; i++) {
