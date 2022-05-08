@@ -637,6 +637,10 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
+    if(size > SMALL_SZ_MAX) {
+        return NULL;
+    }
+
     LOCK_ROOT();
     iso_alloc_zone_t *zone = _iso_new_zone(size, internal);
     UNLOCK_ROOT();
@@ -1112,7 +1116,9 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         big = (iso_alloc_big_zone_t *) (p + _root->system_page_size);
         madvise(big, _root->system_page_size, MADV_WILLNEED);
         uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
-        big = (iso_alloc_big_zone_t *) ((p + _root->system_page_size) + (random_offset % (_root->system_page_size - sizeof(iso_alloc_big_zone_t))));
+        size_t s = _root->system_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
+
+        big = (iso_alloc_big_zone_t *) ((p + _root->system_page_size) + ((random_offset * s) >> 32));
         big->free = false;
         big->size = size;
         big->next = NULL;
@@ -1901,14 +1907,29 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 #endif
 
+    if(UNLIKELY(size > SMALL_SZ_MAX)) {
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
+
+        if(UNLIKELY(big_zone == NULL)) {
+            LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
+        }
+
+        iso_free_big_zone(big_zone, false);
+        return;
+    }
+
     LOCK_ROOT();
 
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
+    if(UNLIKELY(zone == NULL)) {
+        LOG_AND_ABORT("Could not find zone for %p", p);
+    }
+
     /* We can't check for an exact size match because
      * its possible we chose a larger zone to hold this
      * chunk when we allocated it */
-    if(zone->chunk_size < size) {
+    if(UNLIKELY(zone->chunk_size < size)) {
         LOG_AND_ABORT("Invalid size (expected %d, got %d) for chunk 0x%p", zone->chunk_size, size, p);
     }
 
