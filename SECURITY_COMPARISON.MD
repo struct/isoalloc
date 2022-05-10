@@ -10,16 +10,14 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 
 :x: = Not available
 
-🤞 = Probabilistic
-
 :grey_question: = Todo
 
 
 | Security Feature      | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  | PartitionAlloc   | snmalloc |
 |:---------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
 |Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|???
-|Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |🤞
-|Non-global canary      |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:grey_question:   |🤞
+|Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
+|Non-global canary      |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
 |Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
 |Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
 |Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |:heavy_check_mark:|:heavy_check_mark:
