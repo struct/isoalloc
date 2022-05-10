@@ -15,7 +15,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 
 | Security Feature      | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  | PartitionAlloc   | snmalloc |
 |:---------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|???
+|Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:
 |Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
 |Non-global canary      |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
 |Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
@@ -23,7 +23,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |:heavy_check_mark:|:heavy_check_mark:
 |Double Free Detection  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
 |Chunk Alignment Check  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
-|Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:               |:heavy_check_mark: (Free lists in band, but protected)
+|Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:               |:heavy_check_mark:
 |Permanent Frees        |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
 |Freed Chunk Sanitization   |:heavy_plus_sign:|:heavy_check_mark:|:x:            |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:x:
 |Adjacent Chunk Verification|:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
@@ -36,8 +36,8 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |:grey_question:   |:heavy_plus_sign:
 |Zero Size Allocation Special Handling|:heavy_check_mark:|:x: |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
 |Read-only global structure|:heavy_minus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
-|SW Memory Tagging      |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:              |:x:              |:heavy_check_mark:|:x:
-|Guarded Memcpy         |:x:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:              |:x:              |:x:|:heavy_check_mark:
+|SW Memory Tagging      |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:
+|Guarded Memcpy         |:x:               |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
 
 **Lexicon**
 
@@ -56,6 +56,13 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 - *Read-only global structure*: The global state structure is entirely read-only after initialization.
 - *SW Memory Tagging*: The ability to tag pointers with a unique tag that is later verified before pointer dereference
 - *Guarded Memcpy*: Ability to use allocator meta-data to protect destination of memcpy from overflow.
+
+**Notes**
+
+Not every security feature is needed in every allocator. A missing feature in the table above may not mean the allocator needs it but may instead may not require it. The table needs a N/A qualifier. This section attempts to capture some of this nuance.
+
+- SNMalloc stores free lists in band but protects it
+
 **Sources**
 
 https://github.com/struct/IsoAlloc
