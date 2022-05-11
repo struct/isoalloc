@@ -84,7 +84,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * When `SHUFFLE_BIT_SLOT_CACHE` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
 * When destroying private zones if `NEVER_REUSE_ZONES` is enabled IsoAlloc won't attempt to repurpose the zone
 * Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`.
-* When `MEMORY_TAGGING` is enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/iso_alloc_tagged_ptr_test.cpp) for an example of how to use it.
+* When `MEMORY_TAGGING` is enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/tagged_ptr_test.cpp) for an example of how to use it.
 
 ## Building
 
