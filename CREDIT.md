@@ -10,5 +10,6 @@ The following list of people have contributed to IsoAlloc through code, issues, 
 * [Jean-Michaël Celerier](https://github.com/struct/isoalloc/issues/8)
 * [theimpostor](https://github.com/struct/isoalloc/issues/10)
 * [jvoisin](https://github.com/struct/isoalloc/search?q=jvoisin&type=commits)
+* [devnexen](https://github.com/struct/isoalloc/pull/82)
 
 If you belong on this list and I have forgotten you just reach out!
