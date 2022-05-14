@@ -5,7 +5,7 @@
  * https://github.com/struct/isoalloc/pull/5 */
 
 #if __linux__
-#include <linux/random.h>
+#define GRND_NONBLOCK 0x0001
 #include <sys/syscall.h>
 #elif __APPLE__
 #include <Security/SecRandom.h>
