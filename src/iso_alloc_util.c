@@ -36,6 +36,7 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
     size = ROUND_UP_PAGE(size);
 
     int32_t flags = (MAP_PRIVATE | MAP_ANONYMOUS);
+    int fd = -1;
 
 #if __linux__
 #if PRE_POPULATE_PAGES
@@ -51,9 +52,17 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
         flags |= MAP_HUGETLB;
     }
 #endif
+#elif __APPLE__
+#if VM_FLAGS_SUPERPAGE_SIZE_2MB && HUGE_PAGES
+    /* If we are allocating pages for a user zone
+     * we are going to use the 2 MB superpage flag */
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE / 2)) {
+        fd = VM_FLAGS_SUPERPAGE_SIZE_2MB;
+    }
+#endif
 #endif
 
-    p = mmap(p, size, prot, flags, -1, 0);
+    p = mmap(p, size, prot, flags, fd, 0);
 
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");
