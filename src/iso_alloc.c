@@ -34,6 +34,7 @@ static size_t chunk_quarantine_count;
 #endif
 
 uint32_t g_page_size;
+uint32_t g_page_size_shift;
 iso_alloc_root *_root;
 
 /* Zones are linked by their next_sz_index member which
@@ -72,10 +73,9 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     bit_slot_t bit_slot;
 
     const bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone) - 1;
-    const uint64_t chunk_count = GET_CHUNK_COUNT(zone);
 
     /* Roughly %1 of the chunks in this zone will become a canary */
-    const uint64_t canary_count = (chunk_count / CANARY_COUNT_DIV);
+    const uint64_t canary_count = (zone->chunk_count / CANARY_COUNT_DIV);
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -409,6 +409,8 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #endif
 
     g_page_size = sysconf(_SC_PAGESIZE);
+    g_page_size_shift = _log2(g_page_size);
+
     iso_alloc_initialize_global_root();
 #if HEAP_PROFILER
     _initialize_profiler();
@@ -491,7 +493,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
 
 #if MEMORY_TAGGING
         /* Clear the memory tags */
-        size_t s = ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE));
+        size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint8_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
         memset(_mtp, 0x0, s);
         mprotect_pages(_mtp, s, PROT_NONE);
@@ -681,7 +683,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
-    size_t chunk_count = GET_CHUNK_COUNT(new_zone);
+    size_t chunk_count = (ZONE_USER_SIZE / new_zone->chunk_size);
 
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
@@ -714,11 +716,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
 #endif
 
     size_t total_size = ZONE_USER_SIZE + (_root->system_page_size << 1);
+    new_zone->chunk_count = chunk_count;
 
 #if MEMORY_TAGGING
     /* Each tag is 1 byte in size and the start address
      * of each valid chunk is assigned a tag */
-    size_t tag_mapping_size = ROUND_UP_PAGE((GET_CHUNK_COUNT(new_zone) * MEM_TAG_SIZE));
+    size_t tag_mapping_size = ROUND_UP_PAGE((new_zone->chunk_count * MEM_TAG_SIZE));
 
     if(internal == false) {
         total_size += (tag_mapping_size + g_page_size);
@@ -1246,7 +1249,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
 #if MEMORY_TAGGING
     void *user_pages_start = UNMASK_USER_PTR(zone);
 
-    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
+    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
     const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
@@ -1782,7 +1785,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 #if !ENABLE_ASAN && !DISABLE_CANARY
     write_canary(zone, p);
 
-    if((chunk_number + 1) != GET_CHUNK_COUNT(zone)) {
+    if((chunk_number + 1) != zone->chunk_count) {
         const bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
         if((GET_BIT(bm[(bit_slot_over >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_over) + 1))) == 1) {
             check_canary(zone, p + zone->chunk_size);
@@ -1949,7 +1952,7 @@ INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
      * and has allocated and freed more than ZONE_ALLOC_RETIRE
      * chunks in its lifetime then we destroy and replace it with
      * a new zone */
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (GET_CHUNK_COUNT(zone) * ZONE_ALLOC_RETIRE))) {
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count * ZONE_ALLOC_RETIRE))) {
         if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
             return true;
         }
@@ -1960,8 +1963,8 @@ INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > ((GET_CHUNK_COUNT(zone) * ZONE_ALLOC_RETIRE)) / 4)) {
-        size_t s = ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE));
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count * ZONE_ALLOC_RETIRE)) >> 2) {
+        size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint64_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
 
         for(uint64_t o = 0; o > s / sizeof(uint64_t); o++) {
@@ -2004,7 +2007,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
                 /* We only need to refresh this single tag */
                 if(zone->tagged == true) {
                     void *user_pages_start = UNMASK_USER_PTR(zone);
-                    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE((GET_CHUNK_COUNT(zone) * MEM_TAG_SIZE)));
+                    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
                     uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
                     _mtp += (chunk_offset / zone->chunk_size);
 

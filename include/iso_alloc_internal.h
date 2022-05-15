@@ -232,13 +232,13 @@ using namespace std;
     n &= ~(1UL << k);
 
 #define ALIGN_SZ_UP(n) \
-    ((((n) + (ALIGNMENT) -1) / (ALIGNMENT)) * (ALIGNMENT))
+    ((((n) + (ALIGNMENT) - 1) >> 3 ) * ALIGNMENT)
 
 #define ALIGN_SZ_DOWN(n) \
-    ((((n) + (ALIGNMENT) -1) / (ALIGNMENT)) * (ALIGNMENT)) - ALIGNMENT
+    ((((n) + (ALIGNMENT) -1) >> 3) * ALIGNMENT) - ALIGNMENT
 
 #define ROUND_UP_PAGE(n) \
-    ((((n) + (g_page_size) -1) / (g_page_size)) * (g_page_size))
+  ((((n) + (g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
 
 #define ROUND_DOWN_PAGE(n) \
     (ROUND_UP_PAGE(n) - g_page_size)
@@ -270,9 +270,6 @@ using namespace std;
 
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
     ((iso_alloc_big_zone_t *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
-
-#define GET_CHUNK_COUNT(zone) \
-    (ZONE_USER_SIZE / zone->chunk_size)
 
 /* Each user allocation zone we make is 4mb in size.
  * With MAX_ZONES at 8192 this means we top out at
@@ -322,12 +319,15 @@ using namespace std;
 
 /* Calculate the user pointer given a zone and a bit slot */
 #define POINTER_FROM_BITSLOT(zone, bit_slot) \
-    ((void *) zone->user_pages_start + ((bit_slot / BITS_PER_CHUNK) * zone->chunk_size));
+    ((void *) zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
 
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
  * preferred but we need this to setup the root. */
 extern uint32_t g_page_size;
+
+/* We need to know what power of 2 the page size is */
+extern uint32_t g_page_size_shift;
 
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Allocations are 'first fit' up until
@@ -365,6 +365,7 @@ typedef struct {
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
+    uint32_t chunk_count;
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif
@@ -576,6 +577,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone_t *zone, char *name);
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
+INTERNAL_HIDDEN INLINE uint32_t _log2(uint32_t v);
 INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 
