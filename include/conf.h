@@ -15,9 +15,10 @@
  * then it has (ZONE_USER_SIZE / 128) = 32768 total
  * chunks available for it. The number of canaries is
  * calculated as (32768 / CANARY_COUNT_DIV) = 327.
- * When CANARY_COUNT_DIV = 100 we set aside %1 of user
- * chunks as canaries */
-#define CANARY_COUNT_DIV 100
+ * When CANARY_COUNT_DIV = 7 we set aside < %1 of user
+ * chunks as canaries because we right shift zone
+ * chunk count by this value */
+#define CANARY_COUNT_DIV 7
 
 /* If you're compiling for Android and want custom names
  * for internal mappings you can modify those here */

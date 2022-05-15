@@ -75,7 +75,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     const bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone) - 1;
 
     /* Roughly %1 of the chunks in this zone will become a canary */
-    const uint64_t canary_count = (zone->chunk_count / CANARY_COUNT_DIV);
+    const uint64_t canary_count = (zone->chunk_count >> CANARY_COUNT_DIV);
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -683,11 +683,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
-    size_t chunk_count = (ZONE_USER_SIZE / new_zone->chunk_size);
+    new_zone->chunk_size_pow2 = _log2(new_zone->chunk_size);
+    new_zone->chunk_count = (ZONE_USER_SIZE >> new_zone->chunk_size_pow2);
 
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
-    uint32_t bitmap_size = (chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
+    uint32_t bitmap_size = (new_zone->chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
 
     /* All of the following fields are immutable
@@ -716,7 +717,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
 #endif
 
     size_t total_size = ZONE_USER_SIZE + (_root->system_page_size << 1);
-    new_zone->chunk_count = chunk_count;
 
 #if MEMORY_TAGGING
     /* Each tag is 1 byte in size and the start address
@@ -1731,7 +1731,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
                       p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
     }
 
-    const size_t chunk_number = (chunk_offset / zone->chunk_size);
+    const size_t chunk_number = (chunk_offset >> zone->chunk_size_pow2);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
@@ -2010,7 +2010,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
                     void *user_pages_start = UNMASK_USER_PTR(zone);
                     uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
                     uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
-                    _mtp += (chunk_offset / zone->chunk_size);
+                    _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
                     /* Generate and write a new tag for this chunk */
                     uint8_t mem_tag = (uint8_t) rand_uint64();
