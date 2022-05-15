@@ -1302,6 +1302,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         }
 
         g_page_size = sysconf(_SC_PAGESIZE);
+        g_page_size_shift = _log2(g_page_size);
         iso_alloc_initialize_global_root();
 
 #if NO_ZERO_ALLOCATIONS
