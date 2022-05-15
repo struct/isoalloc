@@ -365,7 +365,8 @@ typedef struct {
     uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
-    uint32_t chunk_count;
+    uint32_t chunk_count;                              /* Total number of chunks in this zone */
+    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) */
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif
