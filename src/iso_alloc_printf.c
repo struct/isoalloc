@@ -76,7 +76,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
         if(*idx == 'x' || *idx == 'p') {
             i = va_arg(arg, int64_t);
             s = (char *) _fmt(i, 16);
-            strncpy(p, s, strlen(s));
+            __builtin_strncpy(p, s, strlen(s));
             p += strlen(s);
         } else if(*idx == 'd' || *idx == 'u') {
             j = va_arg(arg, int32_t);
@@ -89,7 +89,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
 
             s = (char *) _fmt(j, 10);
 
-            strncpy(p, s, strlen(s));
+            __builtin_strncpy(p, s, strlen(s));
             p += strlen(s);
         } else if(*idx == 'l') {
             if(*(idx + 1) == 'd' || *(idx + 1) == 'u') {
@@ -106,7 +106,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
 
             s = (char *) _fmt(i, 10);
 
-            strncpy(p, s, strlen(s));
+            __builtin_strncpy(p, s, strlen(s));
             p += strlen(s);
         } else if(*idx == 's') {
             s = va_arg(arg, char *);
@@ -115,7 +115,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
                 break;
             }
 
-            strncpy(p, s, strlen(s));
+            __builtin_strncpy(p, s, strlen(s));
             p += strlen(s);
         }
     }

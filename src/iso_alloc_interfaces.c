@@ -57,7 +57,7 @@ EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, s
     }
 
     if(p != NULL) {
-        memcpy(r, p, size);
+        __builtin_memcpy(r, p, size);
     }
 
 #if PERM_FREE_REALLOC
@@ -90,7 +90,7 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone
         return NULL;
     }
 
-    memcpy(p, str, size);
+    __builtin_memcpy(p, str, size);
     return p;
 }
 
@@ -116,10 +116,10 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zon
     }
 
     if(s_size > n) {
-        memcpy(p, str, n);
+        __builtin_memcpy(p, str, n);
         p[n - 1] = '\0';
     } else {
-        memcpy(p, str, s_size);
+        __builtin_memcpy(p, str, s_size);
     }
 
     return p;

@@ -75,7 +75,7 @@ UNIT_TESTING = -DUNIT_TESTING=1
 MALLOC_HOOK = -DMALLOC_HOOK=1
 
 ## Use Huge pages for any allocation that is a multiple
-## of 2mb. Linux only, ignored on MacOS. See PERFORMANCE.md
+## of 2 megabytes. See PERFORMANCE.md for additional info
 HUGE_PAGES = -DHUGE_PAGES=1
 
 ## Enable the built-in heap profiler. When this is enabled
