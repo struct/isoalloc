@@ -9,6 +9,8 @@
 #include <sys/syscall.h>
 #elif __APPLE__
 #include <Security/SecRandom.h>
+#elif __FreeBSD__
+#include <sys/random.h>
 #else
 #error "unknown OS"
 #endif
@@ -27,6 +29,8 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void) {
     ret = syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __APPLE__
     ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
+#elif __FreeBSD__
+    ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #endif
 
 #if ABORT_NO_ENTROPY

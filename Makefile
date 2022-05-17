@@ -171,6 +171,12 @@ ifeq ($(UNAME), Linux)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 endif
 
+ifeq ($(UNAME), FreeBSD)
+STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
+## Using spinlocks to avoid recursive locks contentions with calloc
+USE_SPINLOCK = -DUSE_SPINLOCK=1
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)

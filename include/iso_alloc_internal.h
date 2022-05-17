@@ -79,6 +79,10 @@ using namespace std;
 #include <sched.h>
 #endif
 
+#if defined(__FreeBSD__)
+#define MAP_HUGETLB MAP_ALIGNED_SUPER
+#endif
+
 #if HEAP_PROFILER
 #include <fcntl.h>
 #endif
