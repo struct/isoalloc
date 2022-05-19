@@ -1,0 +1,15 @@
+env:
+  CIRRUS_CLONE_DEPTH: 1
+  ARCH: amd64
+
+freebsd_instance:
+  # TODO: the 13.1 image should be around the corner soon
+  image_family: freebsd-13-0
+
+task:
+  name: testsuite-freebsd-amd64
+  install_script:
+    - pkg install bash gmake
+  script:
+    - gmake tests
+    - gmake cpp_tests
