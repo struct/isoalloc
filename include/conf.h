@@ -60,7 +60,7 @@
 /* See PERFORMANCE.md for notes on huge page sizes.
  * If your system uses a non-default value for huge
  * page sizes you will need to adjust that here */
-#if (__linux__ && MAP_HUGETLB) || (__APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB) && HUGE_PAGES
+#if (__linux__ && MAP_HUGETLB) || (__APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB) || (__FreeBSD__ && MAP_HUGETLB) && HUGE_PAGES
 #define HUGE_PAGE_SZ 2097152
 #endif
 

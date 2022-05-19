@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # This script runs all debug tests including vulnerable
 # examples of code that should crash
 $(echo '' > test_output.txt)
