@@ -361,15 +361,15 @@ typedef struct {
     uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
     uint32_t chunk_size;                               /* Size of chunks managed by this zone */
     uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
-    bitmap_index_t max_bitmap_idx;
-    bool internal;           /* Zones can be managed by iso_alloc or private */
-    bool is_full;            /* Flags whether this zone is full to avoid bit slot searches */
-    uint16_t index;          /* Zone index */
-    uint16_t next_sz_index;  /* What is the index of the next zone of this size */
-    uint32_t alloc_count;    /* Total number of lifetime allocations */
-    uint32_t af_count;       /* Increment/Decrement with each alloc/free operation */
-    uint32_t chunk_count;    /* Total number of chunks in this zone */
-    uint8_t chunk_size_pow2; /* Computed by _log2(chunk_size) at zone creation */
+    bitmap_index_t max_bitmap_idx;                     /* Max bitmap index for this bitmap */
+    bool internal;                                     /* Zones can be managed by iso_alloc or private */
+    bool is_full;                                      /* Flags whether this zone is full to avoid bit slot searches */
+    uint16_t index;                                    /* Zone index */
+    uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
+    uint32_t alloc_count;                              /* Total number of lifetime allocations */
+    uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
+    uint32_t chunk_count;                              /* Total number of chunks in this zone */
+    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) at zone creation */
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif
