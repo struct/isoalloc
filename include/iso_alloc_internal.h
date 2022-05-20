@@ -236,19 +236,16 @@ using namespace std;
     n &= ~(1UL << k);
 
 #define ALIGN_SZ_UP(n) \
-    ((((n) + (ALIGNMENT) - 1) >> 3 ) * ALIGNMENT)
+    ((((n + ALIGNMENT) - 1) >> 3) * ALIGNMENT)
 
 #define ALIGN_SZ_DOWN(n) \
-    ((((n) + (ALIGNMENT) -1) >> 3) * ALIGNMENT) - ALIGNMENT
+    ((((n + ALIGNMENT) - 1) >> 3) * ALIGNMENT) - ALIGNMENT
 
 #define ROUND_UP_PAGE(n) \
-  ((((n) + (g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
+    ((((n + g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
 
 #define ROUND_DOWN_PAGE(n) \
     (ROUND_UP_PAGE(n) - g_page_size)
-
-#define GET_MAX_BITMASK_INDEX(zone) \
-    (zone->bitmap_size >> 3)
 
 #define MASK_ZONE_PTRS(zone) \
     MASK_BITMAP_PTRS(zone);  \
@@ -336,8 +333,7 @@ extern uint32_t g_page_size_shift;
 /* iso_alloc makes a number of default zones for common
  * allocation sizes. Allocations are 'first fit' up until
  * ZONE_1024 at which point a new zone is created for that
- * specific size request. You can create additional startup
- * profile by adjusting the next few lines below. */
+ * specific size request. */
 #define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
 #define MEM_TAG_SIZE 1
@@ -351,6 +347,8 @@ typedef int64_t bitmap_index_t;
 typedef uint16_t zone_lookup_table_t;
 typedef uint16_t chunk_lookup_table_t;
 
+#define BIT_SLOT_CACHE_SZ 255
+
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */
     void *bitmap_start;         /* Start of the bitmap */
@@ -363,6 +361,7 @@ typedef struct {
     uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
     uint32_t chunk_size;                               /* Size of chunks managed by this zone */
     uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
+    bitmap_index_t max_bitmap_idx;                     /* Max bitmap index for this bitmap */
     bool internal;                                     /* Zones can be managed by iso_alloc or private */
     bool is_full;                                      /* Flags whether this zone is full to avoid bit slot searches */
     uint16_t index;                                    /* Zone index */
@@ -370,7 +369,7 @@ typedef struct {
     uint32_t alloc_count;                              /* Total number of lifetime allocations */
     uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
     uint32_t chunk_count;                              /* Total number of chunks in this zone */
-    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) */
+    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) at zone creation */
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif

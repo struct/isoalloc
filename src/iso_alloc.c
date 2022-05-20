@@ -72,7 +72,7 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot;
 
-    const bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone) - 1;
+    const bitmap_index_t max_bitmap_idx = (zone->max_bitmap_idx - 1);
 
     /* Roughly %1 of the chunks in this zone will become a canary */
     const uint64_t canary_count = (zone->chunk_count >> CANARY_COUNT_DIV);
@@ -174,7 +174,6 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     UNMASK_ZONE_PTRS(zone);
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    const bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
     bit_slot_t bit_slot;
 
     if(zone->next_sz_index > _root->zones_used) {
@@ -188,7 +187,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
         }
     }
 
-    for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
+    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
         for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             /* If this bit is set it is either a free chunk or
              * a canary chunk. Either way it should have a set
@@ -213,7 +212,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
  * find any free slots. */
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    const bitmap_index_t max_bitmap_idx = GET_MAX_BITMASK_INDEX(zone);
 
     /* This gives us an arbitrary spot in the bitmap to
      * start searching but may mean we end up with a smaller
@@ -221,10 +219,10 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
      * leads to a less predictable free list */
     bitmap_index_t bm_idx;
 
-    /* The largest max_bitmap_idx we will ever
+    /* The largest zone->max_bitmap_idx we will ever
      * have is 8192 for SMALLEST_CHUNK_SZ (16) */
-    if(max_bitmap_idx > ALIGNMENT) {
-        bm_idx = ((uint32_t) rand_uint64() * (max_bitmap_idx - 1) >> 32);
+    if(zone->max_bitmap_idx > ALIGNMENT) {
+        bm_idx = ((uint32_t) rand_uint64() * (zone->max_bitmap_idx - 1) >> 32);
     } else {
         bm_idx = 0;
     }
@@ -236,7 +234,7 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
     for(free_bit_slot_cache_index = 0; free_bit_slot_cache_index < BIT_SLOT_CACHE_SZ; bm_idx++) {
         /* Don't index outside of the bitmap or
          * we will return inaccurate bit slots */
-        if(UNLIKELY(bm_idx >= max_bitmap_idx)) {
+        if(UNLIKELY(bm_idx >= zone->max_bitmap_idx)) {
             zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
             return;
         }
@@ -452,18 +450,11 @@ INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
     chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
 
     munmap(zone->bitmap_start, zone->bitmap_size);
-    madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
     munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
-    madvise(zone->bitmap_start - _root->system_page_size, _root->system_page_size, MADV_DONTNEED);
     munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
-    madvise(zone->bitmap_start + zone->bitmap_size, _root->system_page_size, MADV_DONTNEED);
-
     munmap(zone->user_pages_start, ZONE_USER_SIZE);
-    madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
     munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
-    madvise(zone->user_pages_start - _root->system_page_size, _root->system_page_size, MADV_DONTNEED);
     munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
-    madvise(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size, MADV_DONTNEED);
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
@@ -690,6 +681,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
      * then we need to allocate a minimum size bitmap */
     uint32_t bitmap_size = (new_zone->chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
+    new_zone->max_bitmap_idx = new_zone->bitmap_size >> 3;
 
     /* All of the following fields are immutable
      * and should not change once they are set */
@@ -840,10 +832,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
  * looking for empty holes (i.e. slot == 0) */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    const bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
     /* Iterate the entire bitmap a qword at a time */
-    for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
+    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
         /* If the byte is 0 then there are some free
          * slots we can use at this location */
         if(bm[i] == 0x0) {
@@ -861,9 +852,8 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
  * that indicates there is at least 1 free bit slot  */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    const bitmap_index_t max_bm_idx = GET_MAX_BITMASK_INDEX(zone);
 
-    for(bitmap_index_t i = 0; i < max_bm_idx; i++) {
+    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             /* We can easily check if every bitslot represented by
              * this qword is allocated with or without canaries */
@@ -1175,10 +1165,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
     void *p = POINTER_FROM_BITSLOT(zone, bitslot);
     UNPOISON_ZONE_CHUNK(zone, p);
 
-#if !ENABLE_ASAN && !DISABLE_CANARY
-    __builtin_prefetch(p, 1);
-#endif
-
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     /* Read out 64 bits from the bitmap. We will write
@@ -1187,9 +1173,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
      * which could result in a page fault */
     bitmap_index_t b = bm[dwords_to_bit_slot];
 
-    if(UNLIKELY(p > zone->user_pages_start + ZONE_USER_SIZE)) {
+    if(UNLIKELY(p >= zone->user_pages_start + ZONE_USER_SIZE)) {
         LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %lu %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
-                      p, zone->index, bitslot, p - (zone->user_pages_start + ZONE_USER_SIZE), (p - (zone->user_pages_start + ZONE_USER_SIZE)) / _root->system_page_size,
+                      p, zone->index, bitslot, p - zone->user_pages_start + ZONE_USER_SIZE, (p - zone->user_pages_start + ZONE_USER_SIZE) / _root->system_page_size,
                       zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
@@ -1257,7 +1243,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
         LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
     }
 
-    _mtp += (chunk_offset / zone->chunk_size);
+    _mtp += (chunk_offset >> zone->chunk_size_pow2);
     return *_mtp;
 #else
     return 0;
@@ -1351,7 +1337,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
              * thread recently used for an alloc/free operation.
              * It's likely we are allocating a similar size chunk
              * and this will speed up that operation */
-            for(int64_t i = 0; i < zone_cache_count; i++) {
+            for(size_t i = 0; i < zone_cache_count; i++) {
                 if(zone_cache[i].chunk_size >= size) {
                     bool fit = iso_does_zone_fit(zone_cache[i].zone, size);
 
@@ -1504,7 +1490,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < zone_cache_count; i++) {
+    for(size_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
         bitmap_start = UNMASK_BITMAP_PTR(tmp_zone);
 
@@ -1548,7 +1534,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < zone_cache_count; i++) {
+    for(size_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
         user_pages_start = UNMASK_USER_PTR(tmp_zone);
 
@@ -1757,10 +1743,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     /* Set the next bit so we know this chunk was used */
     SET_BIT(b, (which_bit + 1));
 
-#if !ENABLE_ASAN && (!DISABLE_CANARY || SANITIZE_CHUNKS)
-    __builtin_prefetch(p, 1);
-#endif
-
     /* Unset the bit and write the value into the bitmap
      * if this is not a permanent free. A permanent free
      * means this chunk will be marked as if it is a canary */
@@ -1850,7 +1832,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(p == _zero_alloc_page) {
+    if(UNLIKELY(p == _zero_alloc_page)) {
         return;
     }
 #endif
@@ -1894,7 +1876,7 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(p == _zero_alloc_page && size != 0) {
+    if(UNLIKELY(p == _zero_alloc_page && size != 0)) {
         LOG_AND_ABORT("Zero sized chunk (0x%p) with non-zero (%d) size passed to free", p, size);
     }
 

@@ -49,9 +49,6 @@
  * of its current chunks are free */
 #define ZONE_ALLOC_RETIRE 32
 
-/* The size of our bit slot freelist */
-#define BIT_SLOT_CACHE_SZ 255
-
 /* This byte value will overwrite the contents
  * of all free'd user chunks if -DSANITIZE_CHUNKS
  * is enabled in the Makefile */
@@ -60,7 +57,7 @@
 /* See PERFORMANCE.md for notes on huge page sizes.
  * If your system uses a non-default value for huge
  * page sizes you will need to adjust that here */
-#if (__linux__ && MAP_HUGETLB) || (__APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB) || (__FreeBSD__ && MAP_HUGETLB) && HUGE_PAGES
+#if(__linux__ && MAP_HUGETLB) || (__APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB) || (__FreeBSD__ && MAP_HUGETLB) && HUGE_PAGES
 #define HUGE_PAGE_SZ 2097152
 #endif
 

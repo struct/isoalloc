@@ -48,7 +48,7 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
 #if MAP_HUGETLB && HUGE_PAGES
     /* If we are allocating pages for a user zone
      * then take advantage of the huge TLB */
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE / 2)) {
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
         flags |= MAP_HUGETLB;
     }
 #endif
@@ -56,7 +56,7 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
 #if VM_FLAGS_SUPERPAGE_SIZE_2MB && HUGE_PAGES
     /* If we are allocating pages for a user zone
      * we are going to use the 2 MB superpage flag */
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE / 2)) {
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
         fd = VM_FLAGS_SUPERPAGE_SIZE_2MB;
     }
 #endif
@@ -70,7 +70,7 @@ INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, i
     }
 
 #if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE / 2)) {
+    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
         madvise(p, size, MADV_HUGEPAGE);
     }
 #endif
@@ -121,10 +121,10 @@ INTERNAL_HIDDEN INLINE CONST size_t next_pow2(size_t sz) {
 }
 
 const uint32_t _log_table[32] = {
-    0,  9,  1, 10, 13, 21,  2, 29,
-    11, 14, 16, 18, 22, 25,  3, 30,
-    8, 12, 20, 28, 15, 17, 24,  7,
-    19, 27, 23,  6, 26,  5,  4, 31};
+    0, 9, 1, 10, 13, 21, 2, 29,
+    11, 14, 16, 18, 22, 25, 3, 30,
+    8, 12, 20, 28, 15, 17, 24, 7,
+    19, 27, 23, 6, 26, 5, 4, 31};
 
 /* Fast log2() implementation for 32 bit integers */
 INTERNAL_HIDDEN uint32_t _log2(uint32_t v) {
@@ -133,5 +133,5 @@ INTERNAL_HIDDEN uint32_t _log2(uint32_t v) {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
-    return _log_table[(uint32_t)(v*0x07C4ACDD) >> 27];
+    return _log_table[(uint32_t) (v * 0x07C4ACDD) >> 27];
 }
