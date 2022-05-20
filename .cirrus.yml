@@ -9,7 +9,7 @@ freebsd_instance:
 task:
   name: testsuite-freebsd-amd64
   install_script:
-    - pkg install bash gmake
+    - pkg install -y bash gmake
   script:
     - gmake tests
     - gmake cpp_tests
