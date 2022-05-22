@@ -55,6 +55,15 @@ jobs:
       - uses: actions/checkout@v2
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
+  testsuite-musl:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: apk update && apk add build-base bash musl-dev
+      - run: make tests CC=gcc CXX=g++
+      - run: make cpp_tests CC=gcc CXX=g++
 
 
 
