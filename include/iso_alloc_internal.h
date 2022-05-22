@@ -515,7 +515,7 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p);
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);

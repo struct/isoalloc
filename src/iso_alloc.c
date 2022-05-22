@@ -188,11 +188,12 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     }
 
     for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
+        bit_slot_t bsl = bm[i];
         for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             /* If this bit is set it is either a free chunk or
              * a canary chunk. Either way it should have a set
              * of canaries we can verify */
-            if((GET_BIT(bm[i], j)) == 1) {
+            if((GET_BIT(bsl, j)) == 1) {
                 bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
                 const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
                 check_canary(zone, p);
@@ -239,15 +240,17 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
             return;
         }
 
-        for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
-                zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
-                return;
-            }
+        bit_slot_t bmt = bm[bm_idx];
 
-            if((GET_BIT(bm[bm_idx], j)) == 0) {
+        for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+            if((GET_BIT(bmt, j)) == 0) {
                 zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
                 free_bit_slot_cache_index++;
+
+                if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+                    zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
+                    return;
+                }
             }
         }
     }
@@ -295,6 +298,7 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t
 
     zone->free_bit_slot_cache[zone->free_bit_slot_cache_index] = bit_slot;
     zone->free_bit_slot_cache_index++;
+    zone->is_full = false;
 }
 
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
@@ -849,16 +853,17 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
  * and returns the first free bit position. In a heavily
  * used zone this function will be slow to search. We
  * speed it up by looking for a constant ALLOCATED_BITSLOTS
- * that indicates there is at least 1 free bit slot  */
+ * that indicates there is at least 1 free bit slot */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
+        bit_slot_t bts = bm[i];
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             /* We can easily check if every bitslot represented by
              * this qword is allocated with or without canaries */
-            if(bm[i] < ALLOCATED_BITSLOTS) {
-                if((GET_BIT(bm[i], j)) == 0) {
+            if(bts < ALLOCATED_BITSLOTS) {
+                if((GET_BIT(bts, j)) == 0) {
                     return ((i << BITS_PER_QWORD_SHIFT) + j);
                 }
             }
@@ -1565,7 +1570,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
     return;
 }
 
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
     return;
 }
 
@@ -1599,7 +1604,7 @@ INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big) {
  * freed, or when the API requests validation. We
  * sacrifice the high byte in entropy to prevent
  * unbounded string reads from leaking it */
-INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, const void *p) {
+INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p) {
     const uint64_t canary = (zone->canary_secret ^ (uint64_t) p) & CANARY_VALIDATE_MASK;
     *(uint64_t *) p = canary;
     p += (zone->chunk_size - sizeof(uint64_t));
@@ -1749,7 +1754,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     if(LIKELY(permanent == false)) {
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
-        zone->is_full = false;
 #if !ENABLE_ASAN && SANITIZE_CHUNKS
         iso_clear_user_chunk(p, zone->chunk_size);
 #endif
