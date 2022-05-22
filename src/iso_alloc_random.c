@@ -4,17 +4,20 @@
 /* Contributed by Oscar Reparaz (@oreparaz)
  * https://github.com/struct/isoalloc/pull/5 */
 
-#if __linux__
-#define GRND_NONBLOCK 0x0001
+#include "iso_alloc_internal.h"
+
+#define OLD_GLIBC (__GLIBC__ == 2 && __GLIBC_MINOR__ <= 24)
+
+#if OLD_GLIBC
+#include <linux/random.h>
 #include <sys/syscall.h>
 #elif __APPLE__
 #include <Security/SecRandom.h>
-#elif __FreeBSD__
+#elif __FreeBSD__ || __linux__
 #include <sys/random.h>
 #else
 #error "unknown OS"
 #endif
-#include "iso_alloc_internal.h"
 
 INTERNAL_HIDDEN uint64_t rand_uint64(void) {
     uint64_t val = 0;
@@ -25,11 +28,11 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void) {
  * Use the raw system call as a lower common denominator.
  * We give up on checking the return value. The alternative would be
  * to crash. We prefer here to keep going with degraded randomness. */
-#if __linux__
+#if OLD_GLIBC
     ret = syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __APPLE__
     ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
-#elif __FreeBSD__
+#elif __FreeBSD__ || __linux__
     ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #endif
 
