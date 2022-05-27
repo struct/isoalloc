@@ -528,10 +528,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         POISON_ZONE(zone);
     } else {
         if(replace == true) {
-            /* The only time we ever destroy a default non-private zone
+            /* The only time we ever destroy a non-private zone
              * is from the destructor so its safe unmap pages */
             int16_t zones_used = _root->zones_used;
-            size_t size = zone->chunk_size;
 
             /* _iso_new_zone() will use _root->zones_used to place
              * the new zone at the correct index in _root->zones.
@@ -539,7 +538,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
              * been created */
             _root->zones_used = zone->index;
             _unmap_zone(zone);
-            _iso_new_zone(size, true);
+            _iso_new_zone(zone->chunk_size, true);
             _root->zones_used = zones_used;
         } else {
             _unmap_zone(zone);
@@ -989,9 +988,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
                 LOG_AND_ABORT("Lookup table should never contain private zones");
             }
 
-            bool fits = iso_does_zone_fit(zone, size);
-
-            if(fits == true) {
+            if(iso_does_zone_fit(zone, size) == true) {
                 return zone;
             }
 
@@ -1027,9 +1024,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
     for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        bool fits = iso_does_zone_fit(zone, size);
-
-        if(fits == true) {
+        if(iso_does_zone_fit(zone, size) == true) {
             return zone;
         }
     }
@@ -1214,7 +1209,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
     return p;
 }
 
-/* Populates the thread cache, requires the root is locked and zone is unmasked */
+/* Does not require the root is locked */
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
     if(UNLIKELY(zone->internal == false)) {
         return;
@@ -1331,8 +1326,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #endif
 
     /* Allocation requests of SMALL_SZ_MAX bytes or larger are
-     * handled by the 'big allocation' path. If a zone was
-     * passed in we abort because its a misuse of the API */
+     * handled by the 'big allocation' path. */
     if(LIKELY(size <= SMALL_SZ_MAX)) {
 #if FUZZ_MODE
         _verify_all_zones();
@@ -1344,9 +1338,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
              * and this will speed up that operation */
             for(size_t i = 0; i < zone_cache_count; i++) {
                 if(zone_cache[i].chunk_size >= size) {
-                    bool fit = iso_does_zone_fit(zone_cache[i].zone, size);
-
-                    if(fit == true) {
+                    if(iso_does_zone_fit(zone_cache[i].zone, size) == true) {
                         zone = zone_cache[i].zone;
                         break;
                     }
@@ -1413,13 +1405,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
         MASK_ZONE_PTRS(zone);
         UNLOCK_ROOT();
-
-        /* Zones internal status cannot be converted, it's
-         * safe to access this bool after unlocking and
-         * then populating the zone cache */
-        if(zone->internal == false) {
-            populate_zone_cache(zone);
-        }
+        populate_zone_cache(zone);
 
         return p;
     } else {
@@ -1470,13 +1456,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p) {
     return NULL;
 }
 
-/* iso_find_zone_bitmap_range and iso_find_zone_range are
- * logically identical functions that both return a zone
- * for a pointer. The only difference is where the pointer
- * addresses, a bitmap or user pages */
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restrict p) {
-    iso_alloc_zone_t *zone = NULL;
-
+INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *restrict p) {
     /* The chunk lookup table is the fastest way to find a
      * zone given a pointer to a chunk so we check it first */
     uint16_t zone_index = chunk_lookup_table[ADDR_TO_CHUNK_TABLE(p)];
@@ -1485,7 +1465,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
         LOG_AND_ABORT("Pointer to zone lookup table corrupted at position %zu", ADDR_TO_CHUNK_TABLE(p));
     }
 
-    zone = &_root->zones[zone_index];
+    return &_root->zones[zone_index];
+}
+
+/* iso_find_zone_bitmap_range and iso_find_zone_range are
+ * logically identical functions that both return a zone
+ * for a pointer. The only difference is where the pointer
+ * addresses, a bitmap or user pages */
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restrict p) {
+    iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
+
     void *bitmap_start = UNMASK_BITMAP_PTR(zone);
 
     if(LIKELY(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p)) {
@@ -1495,7 +1484,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(size_t i = 0; i < zone_cache_count; i++) {
+    for(int64_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
         bitmap_start = UNMASK_BITMAP_PTR(tmp_zone);
 
@@ -1507,7 +1496,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
-
         bitmap_start = UNMASK_BITMAP_PTR(zone);
 
         if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
@@ -1519,19 +1507,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
-    iso_alloc_zone_t *zone = NULL;
-
-    /* The chunk lookup table is the fastest way to find a
-     * zone given a pointer to a chunk so we check it first */
-    uint16_t zone_index = chunk_lookup_table[ADDR_TO_CHUNK_TABLE(p)];
-
-    if(UNLIKELY(zone_index > _root->zones_used)) {
-        LOG_AND_ABORT("Pointer to zone lookup table corrupted at position %zu", ADDR_TO_CHUNK_TABLE(p));
-    }
-
-    zone = &_root->zones[zone_index];
+    iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
     void *user_pages_start = UNMASK_USER_PTR(zone);
 
+    /* The chunk_lookup_table has a high hit rate. Most
+     * calls to this function will return here. */
     if(LIKELY(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p)) {
         return zone;
     }
@@ -1539,7 +1519,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     iso_alloc_zone_t *tmp_zone = NULL;
 
     /* Now we check the MRU thread zone cache */
-    for(size_t i = 0; i < zone_cache_count; i++) {
+    for(int64_t i = 0; i < zone_cache_count; i++) {
         tmp_zone = zone_cache[i].zone;
         user_pages_start = UNMASK_USER_PTR(tmp_zone);
 
@@ -1551,7 +1531,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
-
         user_pages_start = UNMASK_USER_PTR(zone);
 
         if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
@@ -1788,7 +1767,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 #endif
 
     POISON_ZONE_CHUNK(zone, p);
-    populate_zone_cache(zone);
 }
 
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent) {
@@ -1924,14 +1902,17 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 
     _iso_free_internal_unlocked(p, false, zone);
-
     UNLOCK_ROOT();
 }
 
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
     LOCK_ROOT();
-    _iso_free_internal_unlocked(p, permanent, NULL);
+    iso_alloc_zone_t *zone = _iso_free_internal_unlocked(p, permanent, NULL);
     UNLOCK_ROOT();
+
+    if(zone != NULL) {
+        populate_zone_cache(zone);
+    }
 }
 
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
@@ -1964,7 +1945,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
     return false;
 }
 
-INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone) {
 #if FUZZ_MODE
     _verify_all_zones();
 #endif
@@ -2011,6 +1992,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
             _iso_alloc_ptr_search(p, true);
         }
 #endif
+        return zone;
     } else {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
 
@@ -2019,6 +2001,7 @@ INTERNAL_HIDDEN void _iso_free_internal_unlocked(void *p, bool permanent, iso_al
         }
 
         iso_free_big_zone(big_zone, permanent);
+        return NULL;
     }
 }
 
