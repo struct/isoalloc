@@ -17,7 +17,7 @@
  * calculated as (32768 / CANARY_COUNT_DIV) = 327.
  * When CANARY_COUNT_DIV = 7 we set aside < %1 of user
  * chunks as canaries because we right shift zone
- * chunk count by this value */
+ * chunk count by this value, e.g. (65535 >> 7 = 511) */
 #define CANARY_COUNT_DIV 7
 
 /* If you're compiling for Android and want custom names
