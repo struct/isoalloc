@@ -406,7 +406,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     MLOCK(&chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
     for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
-        if((_iso_new_zone(default_zones[i], true)) == NULL) {
+        if((_iso_new_zone(default_zones[i], true, -1)) == NULL) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
     }
@@ -545,16 +545,8 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         if(replace == true) {
             /* The only time we ever destroy a non-private zone
              * is from the destructor so its safe unmap pages */
-            int16_t zones_used = _root->zones_used;
-
-            /* _iso_new_zone() will use _root->zones_used to place
-             * the new zone at the correct index in _root->zones.
-             * We will restore this value after the new zone has
-             * been created */
-            _root->zones_used = zone->index;
             _unmap_zone(zone);
-            _iso_new_zone(zone->chunk_size, true);
-            _root->zones_used = zones_used;
+            _iso_new_zone(zone->chunk_size, true, zone->index);
         } else {
             _unmap_zone(zone);
         }
@@ -653,14 +645,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
     }
 
     LOCK_ROOT();
-    iso_alloc_zone_t *zone = _iso_new_zone(size, internal);
+    iso_alloc_zone_t *zone = _iso_new_zone(size, internal, -1);
     UNLOCK_ROOT();
     return zone;
 }
 
 /* Requires the root is locked */
-INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
-    if(UNLIKELY(_root->zones_used >= MAX_ZONES)) {
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index) {
+    if(UNLIKELY(_root->zones_used >= MAX_ZONES) || UNLIKELY(index > 0 && index >= MAX_ZONES)) {
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
     }
 
@@ -684,9 +676,20 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
         size = SMALLEST_CHUNK_SZ;
     }
 
-    iso_alloc_zone_t *new_zone = &_root->zones[_root->zones_used];
+    iso_alloc_zone_t *new_zone = NULL;
 
+    /* We created a new zone, we did not replace a retired one */
+    if(index > 0) {
+        new_zone = &_root->zones[index];
+    } else {
+        new_zone = &_root->zones[_root->zones_used];
+    }
+
+    uint16_t next_sz_index = new_zone->next_sz_index;
     memset(new_zone, 0x0, sizeof(iso_alloc_zone_t));
+
+    /* Restore next_sz_index */
+    new_zone->next_sz_index = next_sz_index;
 
     new_zone->internal = internal;
     new_zone->is_full = false;
@@ -788,7 +791,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
 
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
 
-    new_zone->index = _root->zones_used;
+    /* We created a new zone, we did not replace a retired one */
+    if(index > 0) {
+        new_zone->index = index;
+    } else {
+        new_zone->index = _root->zones_used;
+    }
+
     new_zone->canary_secret = rand_uint64();
     new_zone->pointer_mask = rand_uint64();
 
@@ -816,24 +825,28 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
         if(zone_lookup_table[size] == 0) {
             zone_lookup_table[size] = new_zone->index;
         } else {
-            /* Other zones exist that hold this size. We need to
-             * fixup the most recent ones next_sz_index member.
-             * We do this by walking the list using next_sz_index */
-            for(int32_t i = zone_lookup_table[size]; i < _root->zones_used;) {
-                iso_alloc_zone_t *zt = &_root->zones[i];
+            /* If this was a zone replacement then its next_sz_index
+             * is in tact and we can leave it alone */
+            if(index < 0) {
+                /* Other zones exist that hold this size. We need to
+                 * fixup the most recent ones next_sz_index member.
+                 * We do this by walking the list using next_sz_index */
+                for(int32_t i = zone_lookup_table[size]; i < _root->zones_used;) {
+                    iso_alloc_zone_t *zt = &_root->zones[i];
 
-                if(zt->chunk_size != size) {
-                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, size);
-                }
+                    if(zt->chunk_size != size) {
+                        LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, size);
+                    }
 
-                /* Follow this zone's next_sz_index member */
-                if(zt->next_sz_index != 0) {
-                    i = zt->next_sz_index;
-                } else {
-                    /* If this zones next_sz_index is zero then set
-                     * it to the zone we just created and break */
-                    zt->next_sz_index = new_zone->index;
-                    break;
+                    /* Follow this zone's next_sz_index member */
+                    if(zt->next_sz_index != 0) {
+                        i = zt->next_sz_index;
+                    } else {
+                        /* If this zones next_sz_index is zero then set
+                         * it to the zone we just created and break */
+                        zt->next_sz_index = new_zone->index;
+                        break;
+                    }
                 }
             }
         }
@@ -841,7 +854,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal) {
 
     MASK_ZONE_PTRS(new_zone);
 
-    _root->zones_used++;
+    /* We created a new zone, we did not replace a retired one */
+    if(index < 0) {
+        _root->zones_used++;
+    }
 
     return new_zone;
 }
@@ -1395,7 +1411,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         } else {
             /* Extra Slow Path: We need a new zone in order
              * to satisfy this allocation request */
-            zone = _iso_new_zone(size, true);
+            zone = _iso_new_zone(size, true, -1);
 
             if(UNLIKELY(zone == NULL)) {
                 LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
