@@ -240,16 +240,31 @@ INTERNAL_HIDDEN INLINE void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
             return;
         }
 
-        bit_slot_t bmt = bm[bm_idx];
+        bit_slot_t bts = bm[bm_idx];
+        bitmap_index_t bm_idx_shf = bm_idx << BITS_PER_QWORD_SHIFT;
 
-        for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if((GET_BIT(bmt, j)) == 0) {
-                zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx << BITS_PER_QWORD_SHIFT) + j;
+        /* If the byte is 0 then its faster to add each
+         * bitslot without checking each bit value */
+        if(bts == 0x0) {
+            for(uint64_t z = 0; z < BITS_PER_QWORD; z += BITS_PER_CHUNK) {
+                zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + z);
                 free_bit_slot_cache_index++;
 
                 if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
                     zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
                     return;
+                }
+            }
+        } else {
+            for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+                if((GET_BIT(bts, j)) == 0) {
+                    zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + j);
+                    free_bit_slot_cache_index++;
+
+                    if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+                        zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
+                        return;
+                    }
                 }
             }
         }
@@ -850,21 +865,18 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
 
 /* This function scans an entire bitmap bit-by-bit
  * and returns the first free bit position. In a heavily
- * used zone this function will be slow to search. We
- * speed it up by looking for a constant ALLOCATED_BITSLOTS
- * that indicates there is at least 1 free bit slot */
+ * used zone this function will be slow to search. */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
         bit_slot_t bts = bm[i];
+
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
             /* We can easily check if every bitslot represented by
              * this qword is allocated with or without canaries */
-            if(bts < ALLOCATED_BITSLOTS) {
-                if((GET_BIT(bts, j)) == 0) {
-                    return ((i << BITS_PER_QWORD_SHIFT) + j);
-                }
+            if((GET_BIT(bts, j)) == 0) {
+                return ((i << BITS_PER_QWORD_SHIFT) + j);
             }
         }
     }
