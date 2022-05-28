@@ -7,32 +7,29 @@
  * value and return it or overwrite the first potentially
  * dangling pointer with the address of an unmapped page */
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
-    uint8_t *h = NULL;
+    uint8_t *search = NULL;
+    uint8_t *end = NULL;
 
     for(int32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
-        UNMASK_ZONE_PTRS(zone);
-        h = zone->user_pages_start;
+        search = UNMASK_USER_PTR(zone);
+        end = search + ZONE_USER_SIZE;
 
-        while(h <= (uint8_t *) (zone->user_pages_start + ZONE_USER_SIZE - sizeof(uint64_t))) {
-            if(LIKELY((uint64_t) * (uint64_t *) h != (uint64_t) n)) {
-                h++;
+        while(search <= (uint8_t *) (end - sizeof(uint64_t))) {
+            if(LIKELY((uint64_t) * (uint64_t *) search != (uint64_t) n)) {
+                search++;
             } else {
                 if(poison == false) {
-                    MASK_ZONE_PTRS(zone);
-                    return h;
+                    return search;
                 } else {
 #if UAF_PTR_PAGE
-                    *(uint64_t *) h = UAF_PTR_PAGE_ADDR;
-                    MASK_ZONE_PTRS(zone);
-                    return h;
+                    *(uint64_t *) search = UAF_PTR_PAGE_ADDR;
+                    return search;
 #endif
                 }
             }
         }
-
-        MASK_ZONE_PTRS(zone);
     }
 
     return NULL;
