@@ -7,6 +7,6 @@
 int main(int argc, char *argv[]) {
     size_t size = 1024;
     uint8_t *p = iso_alloc(size);
-    iso_free_size(p, size * 2);
+    iso_free_size(p, size * 4);
     return 0;
 }
