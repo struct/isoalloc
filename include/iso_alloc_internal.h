@@ -523,7 +523,7 @@ INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
-INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal);
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *p);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *p);
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *p);
