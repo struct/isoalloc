@@ -652,7 +652,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
 
 /* Requires the root is locked */
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index) {
-    if(UNLIKELY(_root->zones_used >= MAX_ZONES) || UNLIKELY(index > 0 && index >= MAX_ZONES)) {
+    if(UNLIKELY(_root->zones_used >= MAX_ZONES) || UNLIKELY(index >= MAX_ZONES)) {
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
     }
 
@@ -826,7 +826,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
             zone_lookup_table[size] = new_zone->index;
         } else {
             /* If this was a zone replacement then its next_sz_index
-             * is in tact and we can leave it alone */
+             * is intact and we can leave it alone */
             if(index < 0) {
                 /* Other zones exist that hold this size. We need to
                  * fixup the most recent ones next_sz_index member.
