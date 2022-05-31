@@ -75,7 +75,7 @@ EXTERNAL_API void *memalign(size_t alignment, size_t s) {
     return iso_alloc(s);
 }
 
-#if __ANDROID__
+#if __ANDROID__ || __FreeBSD__
 EXTERNAL_API size_t malloc_usable_size(const void *ptr) {
     return iso_chunksz((void *) ptr);
 }
