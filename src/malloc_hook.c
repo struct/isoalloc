@@ -79,6 +79,14 @@ EXTERNAL_API void *memalign(size_t alignment, size_t s) {
 EXTERNAL_API size_t malloc_usable_size(const void *ptr) {
     return iso_chunksz((void *) ptr);
 }
+#elif __APPLE__
+EXTERNAL_API size_t malloc_size(const void *ptr) {
+    return iso_chunksz((void *) ptr);
+}
+
+EXTERNAL_API size_t malloc_good_size(size_t size) {
+    return ALIGN_SZ_UP(size);
+}
 #else
 EXTERNAL_API size_t malloc_usable_size(void *ptr) {
     return iso_chunksz(ptr);
