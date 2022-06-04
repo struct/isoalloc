@@ -69,6 +69,16 @@ EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, s
     return r;
 }
 
+EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size) {
+    unsigned int res;
+
+    if(__builtin_umul_overflow(nmemb, size, &res)) {
+        return NULL;
+    }
+
+    return iso_realloc(p, nmemb * size);
+}
+
 EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str) {
     return iso_strdup_from_zone(NULL, str);
 }

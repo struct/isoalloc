@@ -45,6 +45,14 @@ EXTERNAL_API void *realloc(void *p, size_t s) {
     return iso_realloc(p, s);
 }
 
+EXTERNAL_API void *__libc_reallocarray(void *p, size_t n, size_t s) {
+    return iso_reallocarray(p, n, s);
+}
+
+EXTERNAL_API void *reallocarray(void *p, size_t n, size_t s) {
+    return iso_reallocarray(p, n, s);
+}
+
 EXTERNAL_API int __posix_memalign(void **r, size_t a, size_t s) {
     /* All iso_alloc allocations are 8 byte aligned */
     *r = iso_alloc(s);
