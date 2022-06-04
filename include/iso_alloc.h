@@ -33,6 +33,7 @@ extern "C" {
 EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size);
+EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size);
 EXTERNAL_API void iso_free(void *p);
 EXTERNAL_API void iso_free_size(void *p, size_t size);
 EXTERNAL_API void iso_free_permanently(void *p);

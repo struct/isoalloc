@@ -38,6 +38,17 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("iso_realloc failed")
     }
 
+    /* Test iso_reallocarray */
+    if(iso_reallocarray(NULL, SIZE_MAX, SIZE_MAX) != NULL) {
+        LOG_AND_ABORT("iso_reallocarray should have overflown");
+    }
+
+    p = iso_reallocarray(p, 16, 16);
+
+    if(p == NULL) {
+        LOG_AND_ABORT("iso_reallocarray failed")
+    }
+
     iso_free(p);
 
     p = iso_alloc(1024);
