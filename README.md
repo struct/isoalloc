@@ -145,6 +145,8 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void *iso_realloc(void *p, size_t size)` - Equivalent to `realloc`. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
 
+`void *iso_reallocarray(void *p, size_t nmemb, size_t size)` - Equivalent to `reallocarray`. In the same principles as `iso_realloc`, reallocates a new chunk but for an array of nmemb elements of size bytes and in addition check for possible size overflow.
+
 `void iso_free(void *p)` - Frees any chunk allocated and returned by any API call (e.g. `iso_alloc, iso_calloc, iso_realloc, iso_strdup, iso_strndup`).
 
 `void iso_free_size(void *p, size_t size)` - The same as `iso_free` but requires a size argument so a strict size check can be performed
