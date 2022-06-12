@@ -21,7 +21,8 @@
 #define CANARY_COUNT_DIV 7
 
 /* If you're compiling for Android and want custom names
- * for internal mappings you can modify those here */
+ * for internal mappings that are viewable from procfs
+ * (i.e. /proc/pid/maps) you can modify those names here */
 #if NAMED_MAPPINGS
 #define SAMPLED_ALLOC_NAME "isoalloc sampled allocation"
 #define BIG_ZONE_UD_NAME "isoalloc big zone user data"
@@ -72,7 +73,8 @@
  * it does correspond to the size of the _root.zones
  * array. Currently the iso_alloc_zone_t structure is
  * roughly 2112 bytes so this results in 17301504 bytes
- * (~17 MB) for zone meta data */
+ * (~17 MB) for zone meta data. See PERFORMANCE.md for
+ * more information on this value. Max is 65335 */
 #define MAX_ZONES 8192
 
 /* We allocate zones at startup for common sizes.
@@ -94,7 +96,7 @@
  * certain decisions based on this value such as the
  * number of canary values in a zone. It is safe to
  * modify to a larger value but you will likely be
- * wasting memory by doing so */
+ * wasting memory by doing so. */
 #define MAX_DEFAULT_ZONE_SZ ZONE_8192
 
 /* If you have specific allocation pattern requirements
