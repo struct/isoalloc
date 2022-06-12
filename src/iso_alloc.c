@@ -812,7 +812,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     get_next_free_bit_slot(new_zone);
 
 #if CPU_PIN
-    new_zone->cpu_core = sched_getcpu();
+    new_zone->cpu_core = _iso_getcpu();
 #endif
 
     POISON_ZONE(new_zone);
@@ -903,7 +903,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
 
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
 #if CPU_PIN
-    if(zone->cpu_core != sched_getcpu()) {
+    if(zone->cpu_core != _iso_getcpu()) {
         return false;
     }
 #endif
@@ -2115,5 +2115,28 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
  * in release builds of the library */
 EXTERNAL_API iso_alloc_root *_get_root(void) {
     return _root;
+}
+#endif
+
+#if CPU_PIN
+/* sched_getcpu's performance depends on the
+ * architecture/kernel version, so we lower
+ * the cost of feature's abstraction here.
+ */
+INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
+#if defined(SCHED_GETCPU)
+    return sched_getcpu();
+#elif defined(__x86_64__)
+    /* rdtscp is not always available and is pretty slow
+     * we instead load from the global descriptor table
+     * then "mov" it to a.
+     */
+    unsigned int a;
+    const unsigned int cpunodesegment = 15 * 8 + 3;
+    __asm__ volatile("lsl %1, %0" : "=r"(a) : "r"(cpunodesegment));
+    return (int)(a & 0xfff);
+#else
+    return -1;
+#endif
 }
 #endif
