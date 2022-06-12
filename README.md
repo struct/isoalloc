@@ -153,7 +153,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_free_permanently(void *p)` - Same as `iso_free` but marks the chunk in such a way that it will not be reallocated
 
-`void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone)` - Free's a chunk from a private zone. Can take a tagged or untagged pointer if `MEMORY_TAGGING` is enabled.
+`void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone)` - Free's a chunk from a private zone. Can take a tagged or untagged pointer if `MEMORY_TAGGING` is enabled. These chunks are not quarantined.
 
 `void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone)` - Permanently free's a chunk from a zone
 

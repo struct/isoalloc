@@ -380,6 +380,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     _root->zones = (void *) (p + g_page_size);
     name_mapping(p, _root->zones_size, "isoalloc zone metadata");
+    MLOCK(_root->zones, _root->zones_size);
 
 #if !THREAD_SUPPORT
     size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
@@ -653,7 +654,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
 /* Requires the root is locked */
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index) {
     if(UNLIKELY(_root->zones_used >= MAX_ZONES) || UNLIKELY(index >= MAX_ZONES)) {
-        LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d", _root->zones_used);
+        LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d zones", _root->zones_used);
     }
 
     /* In order for our bitmap to be a power of 2
@@ -901,6 +902,12 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
+#if CPU_PIN
+    if(zone->cpu_core != sched_getcpu()) {
+        return false;
+    }
+#endif
+
     /* If the zone is full it is not usable */
     if(zone->is_full == true) {
         return NULL;
@@ -913,7 +920,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
      * sizes beyond ZONE_1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
-    if(zone->internal == true && size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
+    if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
     }
 
@@ -962,38 +969,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
     }
 }
 
-/* Implements the check for iso_find_zone_fit */
-INTERNAL_HIDDEN bool iso_does_zone_fit(iso_alloc_zone_t *zone, size_t size) {
-#if CPU_PIN
-    if(zone->cpu_core != sched_getcpu()) {
-        return false;
-    }
-#endif
-
-    /* Don't return a zone that handles a size far larger
-     * than we need. This could lead to high memory usage
-     * depending on allocation patterns but helps enforce
-     * spatial separation based on sized */
-    if(zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
-        return false;
-    }
-
-    if(zone->chunk_size < size || zone->internal == false || zone->is_full == true) {
-        return false;
-    }
-
-    /* We found a zone, lets try to find a free slot in it */
-    zone = is_zone_usable(zone, size);
-
-    if(zone == NULL) {
-        return false;
-    } else {
-        return true;
-    }
-}
-
 /* Finds a zone that can fit this allocation request */
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
+INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     iso_alloc_zone_t *zone = NULL;
     int32_t i = 0;
 
@@ -1016,7 +993,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
                 LOG_AND_ABORT("Lookup table should never contain private zones");
             }
 
-            if(iso_does_zone_fit(zone, size) == true) {
+            if(is_zone_usable(zone, size) != NULL) {
                 return zone;
             }
 
@@ -1052,7 +1029,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_fit(size_t size) {
     for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        if(iso_does_zone_fit(zone, size) == true) {
+        if(zone->chunk_size < size || zone->internal == false) {
+            continue;
+        }
+
+        /* Don't waste memory, enforce spatial separation by size */
+        if(zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
+            continue;
+        }
+
+        if(is_zone_usable(zone, size) != NULL) {
             return zone;
         }
     }
@@ -1366,8 +1352,15 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
              * and this will speed up that operation */
             for(size_t i = 0; i < zone_cache_count; i++) {
                 if(zone_cache[i].chunk_size >= size) {
-                    if(iso_does_zone_fit(zone_cache[i].zone, size) == true) {
-                        zone = zone_cache[i].zone;
+                    iso_alloc_zone_t *_zone = zone_cache[i].zone;
+
+                    /* Don't waste memory, enforce spatial separation by size */
+                    if(_zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
+                        continue;
+                    }
+
+                    if(is_zone_usable(_zone, size) != NULL) {
+                        zone = _zone;
                         break;
                     }
                 }
@@ -1380,13 +1373,13 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
          * looking for a suitable one, this includes the
          * zones we cached above */
         if(zone == NULL) {
-            zone = iso_find_zone_fit(size);
+            zone = find_suitable_zone(size);
         }
 
-        /* We only need to check if the zone is usable
-         * if it's a private zone. If we chose this zone
-         * then its guaranteed to already be usable */
         if(LIKELY(zone != NULL)) {
+            /* We only need to check if the zone is usable
+             * if it's a private zone. If we chose this zone
+             * then its guaranteed to already be usable */
             if(zone->internal == false) {
                 zone = is_zone_usable(zone, size);
 
@@ -1919,7 +1912,7 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
-        LOG_AND_ABORT("Could not find zone for %p", p);
+        LOG_AND_ABORT("Could not find zone for 0x%p", p);
     }
 
     /* We can't check for an exact size match because
@@ -2001,16 +1994,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
         if(zone->tagged == true) {
             if(_refresh_zone_mem_tags(zone) == false) {
                 /* We only need to refresh this single tag */
-                if(zone->tagged == true) {
-                    void *user_pages_start = UNMASK_USER_PTR(zone);
-                    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-                    uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
-                    _mtp += (chunk_offset >> zone->chunk_size_pow2);
+                void *user_pages_start = UNMASK_USER_PTR(zone);
+                uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
+                uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+                _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
-                    /* Generate and write a new tag for this chunk */
-                    uint8_t mem_tag = (uint8_t) rand_uint64();
-                    *_mtp = mem_tag;
-                }
+                /* Generate and write a new tag for this chunk */
+                uint8_t mem_tag = (uint8_t) rand_uint64();
+                *_mtp = mem_tag;
             }
         }
 #endif
