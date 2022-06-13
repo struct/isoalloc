@@ -97,11 +97,6 @@ void run_test_threads() {
     pthread_create(&t, NULL, allocate, (void *) &ALLOC);
     pthread_create(&tt, NULL, allocate, (void *) &REALLOC);
     pthread_create(&ttt, NULL, allocate, (void *) &CALLOC);
-
-    pthread_join(t, NULL);
-    pthread_join(tt, NULL);
-    pthread_join(ttt, NULL);
-    pthread_exit(NULL);
 #endif
 }
 

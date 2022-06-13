@@ -518,7 +518,6 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine(void);
-INTERNAL_HIDDEN INLINE void clear_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
@@ -552,6 +551,7 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size);
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent);
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent);
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
+INTERNAL_HIDDEN void _iso_free_quarantine(void *p);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
