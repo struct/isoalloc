@@ -605,3 +605,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root(void);
 #endif
+
+#if CPU_PIN
+INTERNAL_HIDDEN INLINE int _iso_getcpu(void);
+#endif

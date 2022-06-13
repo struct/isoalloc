@@ -93,6 +93,8 @@ HUGE_PAGES = -DHUGE_PAGES=1
 ## and has negative performance implications
 CPU_PIN = -DCPU_PIN=0
 
+SCHED_GETCPU =
+
 ## Enable the allocation sanity feature. This works a lot
 ## like GWP-ASAN does. It samples calls to iso_alloc and
 ## randomly swaps them out for raw page allocations that
@@ -169,12 +171,16 @@ endif
 
 ifeq ($(UNAME), Linux)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
+SCHED_GETCPU = -DSCHED_GETCPU
 endif
 
 ifeq ($(UNAME), FreeBSD)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 ## Using spinlocks to avoid recursive locks contentions with calloc
 USE_SPINLOCK = -DUSE_SPINLOCK=1
+## Once FreeBSD 13.1 becomes the minimal non EOL version
+## it can be enabled
+## SCHED_GETCPU = -DSCHED_GETCPU
 endif
 
 HOOKS = $(MALLOC_HOOK)
@@ -187,7 +193,7 @@ else
 BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
-	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
+	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
 	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY) \
 	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) $(MEMORY_TAGGING)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
