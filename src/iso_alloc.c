@@ -29,28 +29,9 @@ static _tzc *zone_cache;
 static size_t zone_cache_count;
 #endif
 
-/* The chunk quarantine is shared by each thread.
- * It is protected by the root lock */
-static uintptr_t *chunk_quarantine;
-static size_t chunk_quarantine_count;
-
 uint32_t g_page_size;
 uint32_t g_page_size_shift;
 iso_alloc_root *_root;
-
-/* Zones are linked by their next_sz_index member which
- * tells the allocator where in the _root->zones array
- * it can find the next zone that holds the same size
- * chunks. The lookup table helps us find the first zone
- * that holds a specific size in O(1) time */
-static zone_lookup_table_t *zone_lookup_table;
-
-/* The chunk to zone lookup table provides a high hit
- * rate cache for finding which zone owns a user chunk.
- * It works by mapping the MSB of the chunk addressq
- * to a zone index. Misses are gracefully handled and
- * more common with a higher RSS and more mappings. */
-static chunk_lookup_table_t *chunk_lookup_table;
 
 #if NO_ZERO_ALLOCATIONS
 void *_zero_alloc_page;
@@ -345,11 +326,10 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     }
 
     r = (iso_alloc_root *) (p + g_page_size);
-    r->system_page_size = g_page_size;
     r->guard_below = p;
     create_guard_page(r->guard_below);
 
-    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + sizeof(iso_alloc_root) + r->system_page_size));
+    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + sizeof(iso_alloc_root) + g_page_size));
     create_guard_page(r->guard_above);
     return r;
 }
@@ -384,11 +364,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     MLOCK(_root->zones, _root->zones_size);
 
     size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
-    chunk_quarantine = mmap_rw_pages(c + (g_page_size * 2), true, NULL);
-    create_guard_page(chunk_quarantine);
-    chunk_quarantine = chunk_quarantine + (g_page_size / sizeof(uintptr_t));
-    create_guard_page((void *) chunk_quarantine + c);
-    MLOCK(chunk_quarantine, c);
+    _root->chunk_quarantine = mmap_rw_pages(c + (g_page_size * 2), true, NULL);
+    create_guard_page(_root->chunk_quarantine);
+    _root->chunk_quarantine = _root->chunk_quarantine + (g_page_size / sizeof(uintptr_t));
+    create_guard_page((void *) _root->chunk_quarantine + c);
+    MLOCK(_root->chunk_quarantine, c);
 
 #if !THREAD_SUPPORT
     size_t z = ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc));
@@ -401,11 +381,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
-    zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
-    MLOCK(&zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+    _root->zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
+    MLOCK(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
 
-    chunk_lookup_table = mmap_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
-    MLOCK(&chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+    _root->chunk_lookup_table = mmap_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
+    MLOCK(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
     for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
         if((_iso_new_zone(default_zones[i], true, -1)) == NULL) {
@@ -460,22 +440,22 @@ INTERNAL_HIDDEN void flush_caches() {
 
 INTERNAL_HIDDEN INLINE void _flush_chunk_quarantine() {
     /* Free all the thread quarantined chunks */
-    for(int64_t i = 0; i < chunk_quarantine_count; i++) {
-        _iso_free_internal_unlocked((void *) chunk_quarantine[i], false, NULL);
+    for(int64_t i = 0; i < _root->chunk_quarantine_count; i++) {
+        _iso_free_internal_unlocked((void *) _root->chunk_quarantine[i], false, NULL);
     }
 
-    memset(chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
-    chunk_quarantine_count = 0;
+    memset(_root->chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
+    _root->chunk_quarantine_count = 0;
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
-    chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
+    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
     munmap(zone->bitmap_start, zone->bitmap_size);
-    munmap(zone->bitmap_start - _root->system_page_size, _root->system_page_size);
-    munmap(zone->bitmap_start + zone->bitmap_size, _root->system_page_size);
+    munmap(zone->bitmap_start - g_page_size, g_page_size);
+    munmap(zone->bitmap_start + zone->bitmap_size, g_page_size);
     munmap(zone->user_pages_start, ZONE_USER_SIZE);
-    munmap(zone->user_pages_start - _root->system_page_size, _root->system_page_size);
-    munmap(zone->user_pages_start + ZONE_USER_SIZE, _root->system_page_size);
+    munmap(zone->user_pages_start - g_page_size, g_page_size);
+    munmap(zone->user_pages_start + ZONE_USER_SIZE, g_page_size);
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
@@ -506,7 +486,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
 #if MEMORY_TAGGING
         /* Clear the memory tags */
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
-        uint8_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
+        uint8_t *_mtp = (zone->user_pages_start - g_page_size - s);
         memset(_mtp, 0x0, s);
         mprotect_pages(_mtp, s, PROT_NONE);
         zone->tagged = false;
@@ -615,22 +595,22 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
 
 #if ISO_DTOR_CLEANUP
         /* Free the user pages first */
-        void *up = big_zone->user_pages_start - _root->system_page_size;
-        munmap(up, (_root->system_page_size << 1) + big_zone->size);
+        void *up = big_zone->user_pages_start - g_page_size;
+        munmap(up, (g_page_size << 1) + big_zone->size);
 
         /* Free the meta data */
-        munmap(big_zone - _root->system_page_size, (_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
+        munmap(big_zone - g_page_size, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
 #endif
         big_zone = big;
     }
 
 #if ISO_DTOR_CLEANUP
-    munmap(_root->guard_below, _root->system_page_size);
-    munmap(_root->guard_above, _root->system_page_size);
+    munmap(_root->guard_below, g_page_size);
+    munmap(_root->guard_above, g_page_size);
     munmap(_root, sizeof(iso_alloc_root));
-    munmap(zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
-    munmap(chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
-    munmap(chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)) + (g_page_size * 2));
+    munmap(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+    munmap(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+    munmap(_root->chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)) + (g_page_size * 2));
     munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
 #endif
     UNLOCK_ROOT();
@@ -703,12 +683,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     /* All of the following fields are immutable
      * and should not change once they are set */
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (_root->system_page_size << 1), true, ZONE_BITMAP_NAME);
+    void *p = mmap_rw_pages(new_zone->bitmap_size + (g_page_size << 1), true, ZONE_BITMAP_NAME);
 
     void *bitmap_pages_guard_below = p;
-    new_zone->bitmap_start = (p + _root->system_page_size);
+    new_zone->bitmap_start = (p + g_page_size);
 
-    void *bitmap_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (new_zone->bitmap_size + _root->system_page_size));
+    void *bitmap_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (new_zone->bitmap_size + g_page_size));
 
     create_guard_page(bitmap_pages_guard_below);
     create_guard_page(bitmap_pages_guard_above);
@@ -726,7 +706,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     }
 #endif
 
-    size_t total_size = ZONE_USER_SIZE + (_root->system_page_size << 1);
+    size_t total_size = ZONE_USER_SIZE + (g_page_size << 1);
 
 #if MEMORY_TAGGING
     /* Each tag is 1 byte in size and the start address
@@ -756,32 +736,32 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
 #if MEMORY_TAGGING
     if(new_zone->tagged == true) {
-        create_guard_page(p + _root->system_page_size + tag_mapping_size);
-        new_zone->user_pages_start = (p + _root->system_page_size + tag_mapping_size + _root->system_page_size);
+        create_guard_page(p + g_page_size + tag_mapping_size);
+        new_zone->user_pages_start = (p + g_page_size + tag_mapping_size + g_page_size);
 
-        uint64_t *_mtp = p + _root->system_page_size;
+        uint64_t *_mtp = p + g_page_size;
 
         /* Generate random tags */
         for(uint64_t o = 0; o < tag_mapping_size / sizeof(uint64_t); o++) {
             _mtp[o] = rand_uint64();
         }
     } else {
-        new_zone->user_pages_start = (p + _root->system_page_size);
+        new_zone->user_pages_start = (p + g_page_size);
     }
 #else
-    new_zone->user_pages_start = (p + _root->system_page_size);
+    new_zone->user_pages_start = (p + g_page_size);
 #endif
 
     void *user_pages_guard_above;
 
 #if MEMORY_TAGGING
     if(new_zone->tagged == false) {
-        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
+        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + g_page_size));
     } else {
-        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + tag_mapping_size + (ZONE_USER_SIZE + _root->system_page_size * 2));
+        user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + tag_mapping_size + (ZONE_USER_SIZE + g_page_size * 2));
     }
 #else
-    user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + _root->system_page_size));
+    user_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (ZONE_USER_SIZE + g_page_size));
 #endif
 
     create_guard_page(user_pages_guard_above);
@@ -815,12 +795,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     /* The lookup table is never used for private zones */
     if(LIKELY(internal == true)) {
-        chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
+        _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
 
         /* If no other zones of this size exist then set the
          * index in the zone lookup table to its index */
-        if(zone_lookup_table[size] == 0) {
-            zone_lookup_table[size] = new_zone->index;
+        if(_root->zone_lookup_table[size] == 0) {
+            _root->zone_lookup_table[size] = new_zone->index;
         } else {
             /* If this was a zone replacement then its next_sz_index
              * is intact and we can leave it alone */
@@ -828,7 +808,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
                 /* Other zones exist that hold this size. We need to
                  * fixup the most recent ones next_sz_index member.
                  * We do this by walking the list using next_sz_index */
-                for(int32_t i = zone_lookup_table[size]; i < _root->zones_used;) {
+                for(int32_t i = _root->zone_lookup_table[size]; i < _root->zones_used;) {
                     iso_alloc_zone_t *zt = &_root->zones[i];
 
                     if(zt->chunk_size != size) {
@@ -975,8 +955,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     }
 
     /* Fast path via lookup table */
-    if(zone_lookup_table[size] != 0) {
-        i = zone_lookup_table[size];
+    if(_root->zone_lookup_table[size] != 0) {
+        i = _root->zone_lookup_table[size];
 
         for(; i < _root->zones_used;) {
             iso_alloc_zone_t *zone = &_root->zones[i];
@@ -1099,7 +1079,7 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
     if(big == NULL) {
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((_root->system_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, BIG_ZONE_UD_NAME);
+        void *user_pages = mmap_rw_pages((g_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, BIG_ZONE_UD_NAME);
 
         if(user_pages == NULL) {
             UNLOCK_BIG_ZONE();
@@ -1109,19 +1089,19 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
             return NULL;
         }
 
-        void *p = mmap_rw_pages((_root->system_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
+        void *p = mmap_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
 
         /* The first page before meta data is a guard page */
         create_guard_page(p);
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
-        big = (iso_alloc_big_zone_t *) (p + _root->system_page_size);
-        madvise(big, _root->system_page_size, MADV_WILLNEED);
+        big = (iso_alloc_big_zone_t *) (p + g_page_size);
+        madvise(big, g_page_size, MADV_WILLNEED);
         uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
-        size_t s = _root->system_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
+        size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
 
-        big = (iso_alloc_big_zone_t *) ((p + _root->system_page_size) + ((random_offset * s) >> 32));
+        big = (iso_alloc_big_zone_t *) ((p + g_page_size) + ((random_offset * s) >> 32));
         big->free = false;
         big->size = size;
         big->next = NULL;
@@ -1135,14 +1115,14 @@ INTERNAL_HIDDEN void *_iso_big_alloc(size_t size) {
         }
 
         /* Create the guard page after the meta data */
-        void *next_gp = (p + (_root->system_page_size << 1));
+        void *next_gp = (p + (g_page_size << 1));
         create_guard_page(next_gp);
 
         /* The first page is a guard page */
         create_guard_page(user_pages);
 
         /* Tell the kernel we want to access this big zone allocation */
-        user_pages += _root->system_page_size;
+        user_pages += g_page_size;
         madvise(user_pages, size, MADV_WILLNEED);
 
         /* The last page beyond user data is a guard page */
@@ -1185,7 +1165,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
 
     if(UNLIKELY(p >= zone->user_pages_start + ZONE_USER_SIZE)) {
         LOG_AND_ABORT("Allocating an address 0x%p from zone[%d], bit slot %lu %ld bytes %ld pages outside zones user pages 0x%p 0x%p",
-                      p, zone->index, bitslot, p - zone->user_pages_start + ZONE_USER_SIZE, (p - zone->user_pages_start + ZONE_USER_SIZE) / _root->system_page_size,
+                      p, zone->index, bitslot, p - zone->user_pages_start + ZONE_USER_SIZE, (p - zone->user_pages_start + ZONE_USER_SIZE) / g_page_size,
                       zone->user_pages_start, zone->user_pages_start + ZONE_USER_SIZE);
     }
 
@@ -1245,7 +1225,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
 #if MEMORY_TAGGING
     void *user_pages_start = UNMASK_USER_PTR(zone);
 
-    uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
+    uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
     const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
@@ -1319,7 +1299,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
          * larger size and it makes tracking them less complex */
         const size_t sampled_size = ALIGN_SZ_UP(size);
 
-        if(sampled_size < _root->system_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+        if(sampled_size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
             void *ps = _iso_alloc_sample(sampled_size);
@@ -1476,7 +1456,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p) {
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *restrict p) {
     /* The chunk lookup table is the fastest way to find a
      * zone given a pointer to a chunk so we check it first */
-    uint16_t zone_index = chunk_lookup_table[ADDR_TO_CHUNK_TABLE(p)];
+    uint16_t zone_index = _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(p)];
 
     if(UNLIKELY(zone_index > _root->zones_used)) {
         LOG_AND_ABORT("Pointer to zone lookup table corrupted at position %zu", ADDR_TO_CHUNK_TABLE(p));
@@ -1698,7 +1678,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
 
         /* Big zone meta data is at a random offset from its base page */
-        mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), _root->system_page_size, PROT_NONE);
+        mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), g_page_size, PROT_NONE);
     }
 
     UNLOCK_BIG_ZONE();
@@ -1845,15 +1825,15 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
     LOCK_ROOT();
 
-    if(chunk_quarantine_count >= CHUNK_QUARANTINE_SZ) {
+    if(_root->chunk_quarantine_count >= CHUNK_QUARANTINE_SZ) {
         /* If the quarantine is full that means we got the
          * lock before our handle_quarantine_thread could.
          * Flushing the quarantine has the same perf cost */
         _flush_chunk_quarantine();
     }
 
-    chunk_quarantine[chunk_quarantine_count] = (uintptr_t) p;
-    chunk_quarantine_count++;
+    _root->chunk_quarantine[_root->chunk_quarantine_count] = (uintptr_t) p;
+    _root->chunk_quarantine_count++;
 
     UNLOCK_ROOT();
 }
@@ -1939,7 +1919,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
     if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count * ZONE_ALLOC_RETIRE)) >> 2) {
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
-        uint64_t *_mtp = (zone->user_pages_start - _root->system_page_size - s);
+        uint64_t *_mtp = (zone->user_pages_start - g_page_size - s);
 
         for(uint64_t o = 0; o > s / sizeof(uint64_t); o++) {
             _mtp[o] = rand_uint64();
@@ -1980,7 +1960,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
             if(_refresh_zone_mem_tags(zone) == false) {
                 /* We only need to refresh this single tag */
                 void *user_pages_start = UNMASK_USER_PTR(zone);
-                uint8_t *_mtp = (user_pages_start - _root->system_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
+                uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
                 uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
                 _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
@@ -2118,8 +2098,10 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
      */
     unsigned int a;
     const unsigned int cpunodesegment = 15 * 8 + 3;
-    __asm__ volatile("lsl %1, %0" : "=r"(a) : "r"(cpunodesegment));
-    return (int)(a & 0xfff);
+    __asm__ volatile("lsl %1, %0"
+                     : "=r"(a)
+                     : "r"(cpunodesegment));
+    return (int) (a & 0xfff);
 #else
     return -1;
 #endif
