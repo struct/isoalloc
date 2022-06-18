@@ -448,9 +448,22 @@ typedef struct iso_alloc_big_zone_t {
  * that hold chunks containing caller data */
 typedef struct {
     uint16_t zones_used;
-    uint16_t system_page_size;
     void *guard_below;
     void *guard_above;
+    uintptr_t *chunk_quarantine;
+    size_t chunk_quarantine_count;
+    /* Zones are linked by their next_sz_index member which
+     * tells the allocator where in the _root->zones array
+     * it can find the next zone that holds the same size
+     * chunks. The lookup table helps us find the first zone
+     * that holds a specific size in O(1) time */
+    zone_lookup_table_t *zone_lookup_table;
+    /* The chunk to zone lookup table provides a high hit
+     * rate cache for finding which zone owns a user chunk.
+     * It works by mapping the MSB of the chunk addressq
+     * to a zone index. Misses are gracefully handled and
+     * more common with a higher RSS and more mappings. */
+    chunk_lookup_table_t *chunk_lookup_table;
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
