@@ -251,7 +251,7 @@ larsonN     isoalloc    249.791 63996 7.09 17.51 0 15567
 
 larsonN-sized jemalloc    4.872 84428 39.56 0.22 1 52874
 larsonN-sized mimalloc    4.335 95388 39.82 0.13 0 25625
-larsonN-sized smimalloc   6.332 1q06372 39.71 0.17 0 27642
+larsonN-sized smimalloc   6.332 106372 39.71 0.17 0 27642
 larsonN-sized tcmalloc    4.230 64956 39.59 0.15 0 15669
 larsonN-sized scudo       44.601 32900 28.68 4.65 0 7793
 larsonN-sized isoalloc    363.176 70240 39.59 0.29 0 17222

@@ -3,6 +3,31 @@
 
 #include "iso_alloc_internal.h"
 
+#if CPU_PIN
+/* sched_getcpu's performance depends on the
+ * architecture/kernel version, so we lower
+ * the cost of feature's abstraction here.
+ */
+INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
+#if defined(SCHED_GETCPU)
+    return sched_getcpu();
+#elif defined(__x86_64__)
+    /* rdtscp is not always available and is pretty slow
+     * we instead load from the global descriptor table
+     * then "mov" it to a.
+     */
+    unsigned int a;
+    const unsigned int cpunodesegment = 15 * 8 + 3;
+    __asm__ volatile("lsl %1, %0"
+                     : "=r"(a)
+                     : "r"(cpunodesegment));
+    return (int) (a & 0xfff);
+#else
+    return -1;
+#endif
+}
+#endif
+
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
     if(p == NULL) {
         p = mmap_rw_pages(g_page_size, false, NULL);
@@ -20,11 +45,11 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
     return p;
 }
 
-INTERNAL_HIDDEN void *mmap_rw_pages(size_t size, bool populate, const char *name) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name) {
     return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
 }
 
-INTERNAL_HIDDEN void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
 #if !ENABLE_ASAN
     /* Produce a random page address as a hint for mmap */
     uint64_t hint = ROUND_DOWN_PAGE(rand_uint64());

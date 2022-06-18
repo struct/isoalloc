@@ -4,6 +4,35 @@
 #include "iso_alloc_internal.h"
 #include <dlfcn.h>
 
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone) {
+    LOCK_ROOT();
+    uint64_t leaks = _iso_alloc_zone_leak_detector(zone, false);
+    UNLOCK_ROOT();
+    return leaks;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
+    LOCK_ROOT();
+    uint64_t mem_usage = __iso_alloc_mem_usage();
+    mem_usage += _iso_alloc_big_zone_mem_usage();
+    UNLOCK_ROOT();
+    return mem_usage;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage() {
+    LOCK_BIG_ZONE();
+    uint64_t mem_usage = __iso_alloc_big_zone_mem_usage();
+    UNLOCK_BIG_ZONE();
+    return mem_usage;
+}
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
+    LOCK_ROOT();
+    uint64_t zone_mem_usage = __iso_alloc_zone_mem_usage(zone);
+    UNLOCK_ROOT();
+    return zone_mem_usage;
+}
+
 #if DEBUG && MEM_USAGE
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
     struct rusage _rusage = {0};
