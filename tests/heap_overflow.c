@@ -7,13 +7,22 @@
 int main(int argc, char *argv[]) {
     uint8_t *p = NULL;
 
-    for(int32_t i = 0; i < 128; i++) {
+    for(int32_t i = 0; i < 1024; i++) {
         p = (uint8_t *) iso_alloc(32);
         iso_free(p);
     }
 
     p = (uint8_t *) iso_alloc(32);
-    memset(p, 0x42, 65535);
+
+#if MEMCPY_SANITY
+    const char *A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    memcpy(p, A, strlen(A));
+#else
+    memset(p, 0x41, 65535);
+#endif
+
     iso_free(p);
     iso_verify_zones();
 

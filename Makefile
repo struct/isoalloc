@@ -92,7 +92,6 @@ HUGE_PAGES = -DHUGE_PAGES=1
 ## README for more detailed information. This is Linux only
 ## and has negative performance implications
 CPU_PIN = -DCPU_PIN=0
-
 SCHED_GETCPU =
 
 ## Enable the allocation sanity feature. This works a lot
@@ -103,6 +102,11 @@ SCHED_GETCPU =
 ## used in production builds and should not incur too
 ## much of a performance penalty
 ALLOC_SANITY = -DALLOC_SANITY=0
+
+## Enable hooking of memcpy to detect out of bounds r/w
+## operations on chunks allocated with IsoAlloc. Does
+## not require ALLOC_SANITY is enabled
+MEMCPY_SANITY = -DMEMCPY_SANITY=0
 
 ## Enable the userfaultfd based uninitialized read detection
 ## feature. This samples calls to malloc, and allocates raw
@@ -192,9 +196,10 @@ else
 BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
-	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) $(EXPERIMENTAL) $(UAF_PTR_PAGE) \
-	$(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) $(ABORT_NO_ENTROPY) \
-	$(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) $(MEMORY_TAGGING)
+	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
+	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
+	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
+	$(MEMORY_TAGGING)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer

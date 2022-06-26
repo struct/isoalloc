@@ -1186,6 +1186,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *restrict
         LOG_AND_ABORT("Pointer to zone lookup table corrupted at position %zu", ADDR_TO_CHUNK_TABLE(p));
     }
 
+    /* Its possible that zone_index is 0 and this is
+     * actually a cache miss. In this case we return
+     * the first zone and let the caller figure it out */
     return &_root->zones[zone_index];
 }
 
