@@ -6,16 +6,14 @@
 #if CPU_PIN
 /* sched_getcpu's performance depends on the
  * architecture/kernel version, so we lower
- * the cost of feature's abstraction here.
- */
+ * the cost of feature's abstraction here. */
 INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
 #if defined(SCHED_GETCPU)
     return sched_getcpu();
 #elif defined(__x86_64__)
     /* rdtscp is not always available and is pretty slow
      * we instead load from the global descriptor table
-     * then "mov" it to a.
-     */
+     * then "mov" it to 'a' */
     unsigned int a;
     const unsigned int cpunodesegment = 15 * 8 + 3;
     __asm__ volatile("lsl %1, %0"
@@ -26,11 +24,11 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
 #if __APPLE__
     /* unlike other operating systems, the tpidr_el0 register on macOs
      * is unused data stored for the current thread is instead fetchable
-     * from "tpidrro_el0".
-     */
+     * from "tpidrro_el0". */
     uintptr_t a;
-    __asm__ volatile("mrs %x0, tpidrro_el0" : "=r"(a) :: "memory");
-    return (int)((a & 0x8) - 1);
+    __asm__ volatile("mrs %x0, tpidrro_el0"
+                     : "=r"(a)::"memory");
+    return (int) ((a & 0x8) - 1);
 #else
     /* TODO most likely different register/making on other platforms */
     return -1;

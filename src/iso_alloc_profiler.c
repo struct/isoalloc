@@ -2,6 +2,11 @@
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
+
+#if MEMCPY_SANITY
+#include "iso_alloc_sanity.h"
+#endif
+
 #include <dlfcn.h>
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone) {
@@ -219,7 +224,11 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
  * be used to interpret allocation patterns */
 INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
     LOCK_ROOT();
-    memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
+#if MEMCPY_SANITY
+    __iso_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
+#else
+    __builtin_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
+#endif
     size_t sz = _alloc_bts_count;
     UNLOCK_ROOT();
     return sz;
@@ -227,7 +236,11 @@ INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
 
 INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out) {
     LOCK_ROOT();
-    memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
+#if MEMCPY_SANITY
+    __iso_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
+#else
+    __builtin_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
+#endif
     size_t sz = _free_bts_count;
     UNLOCK_ROOT();
     return sz;

@@ -1,4 +1,4 @@
-/* malloc_hook.c - A secure memory allocator
+/* malloc_hook.c - Provides low level hooks for malloc/free
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"

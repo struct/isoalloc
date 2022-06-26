@@ -11,6 +11,7 @@
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
+#if ALLOC_SANITY
 #if UNINIT_READ_SANITY
 #include <fcntl.h>
 #include <linux/userfaultfd.h>
@@ -79,3 +80,9 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size);
 INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p);
 INTERNAL_HIDDEN int32_t _remove_from_sane_trace(void *p);
 INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p);
+#endif
+
+#if MEMCPY_SANITY
+INTERNAL_HIDDEN void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n);
+INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restrict src, size_t n);
+#endif
