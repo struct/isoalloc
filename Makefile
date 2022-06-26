@@ -165,7 +165,6 @@ LIBNAME = libisoalloc.so
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
-CPU_PIN =
 LIBNAME = libisoalloc.dylib
 endif
 
