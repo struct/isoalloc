@@ -114,8 +114,10 @@ static void *libc_memalign(size_t alignment, size_t s, const void *caller) {
     return iso_alloc(s);
 }
 
+#if !__ANDROID__
 void *(*__malloc_hook)(size_t, const void *) = &libc_malloc;
 void *(*__realloc_hook)(void *, size_t, const void *) = &libc_realloc;
 void (*__free_hook)(void *, const void *) = &libc_free;
 void *(*__memalign_hook)(size_t, size_t, const void *) = &libc_memalign;
+#endif
 #endif
