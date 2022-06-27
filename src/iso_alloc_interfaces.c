@@ -175,12 +175,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_z
     iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
 
     void *p = _iso_alloc(zone, _zone->chunk_size);
-
-#if MEMORY_TAGGING
     return _tag_ptr(p, zone);
-#else
-    return p;
-#endif
 }
 
 EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone) {

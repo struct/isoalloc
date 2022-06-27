@@ -511,7 +511,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
      * but when we call create_canary_chunks() that will happen anyway */
     p = mmap_rw_pages(total_size, false, name);
 
-#if NAMED_MAPPINGS && __ANDROID__
+#if __ANDROID__ && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
         name = MEM_TAG_NAME;
     }
@@ -1205,15 +1205,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
         return zone;
     }
 
-    iso_alloc_zone_t *tmp_zone = NULL;
-
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
-        tmp_zone = zone_cache[i].zone;
-        bitmap_start = UNMASK_BITMAP_PTR(tmp_zone);
+        zone = zone_cache[i].zone;
+        bitmap_start = UNMASK_BITMAP_PTR(zone);
 
-        if(bitmap_start <= p && (bitmap_start + tmp_zone->bitmap_size) > p) {
-            return tmp_zone;
+        if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
+            return zone;
         }
     }
 
@@ -1240,15 +1238,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
         return zone;
     }
 
-    iso_alloc_zone_t *tmp_zone = NULL;
-
     /* Now we check the MRU thread zone cache */
     for(int64_t i = 0; i < zone_cache_count; i++) {
-        tmp_zone = zone_cache[i].zone;
-        user_pages_start = UNMASK_USER_PTR(tmp_zone);
+        zone = zone_cache[i].zone;
+        user_pages_start = UNMASK_USER_PTR(zone);
 
         if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
-            return tmp_zone;
+            return zone;
         }
     }
 

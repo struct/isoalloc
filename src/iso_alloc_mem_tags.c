@@ -23,15 +23,20 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
 }
 
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
     if(UNLIKELY(p == NULL || zone == NULL)) {
         return NULL;
     }
 
     const uint64_t tag = _iso_alloc_get_mem_tag(p, zone);
     return (void *) ((tag << UNTAGGED_BITS) | (uintptr_t) p);
+#else
+    return p;
+#endif
 }
 
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
     if(UNLIKELY(p == NULL || zone == NULL)) {
         return NULL;
     }
@@ -39,6 +44,9 @@ INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone) {
     void *untagged_p = (void *) ((uintptr_t) p & TAGGED_PTR_MASK);
     const uint64_t tag = _iso_alloc_get_mem_tag(untagged_p, zone);
     return (void *) ((tag << UNTAGGED_BITS) ^ (uintptr_t) p);
+#else
+    return p;
+#endif
 }
 
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
