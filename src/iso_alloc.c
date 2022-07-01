@@ -177,6 +177,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
      * result in a soft page fault */
     MLOCK(&_root, sizeof(iso_alloc_root));
 
+    _root->zone_retirement_shf = _log2(ZONE_ALLOC_RETIRE);
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
@@ -779,8 +780,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
         bit_slot_t bts = bm[i];
 
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            /* We can easily check if every bitslot represented by
-             * this qword is allocated with or without canaries */
+            /* Check each bit to see if its available */
             if((GET_BIT(bts, j)) == 0) {
                 return ((i << BITS_PER_QWORD_SHIFT) + j);
             }
@@ -1619,7 +1619,7 @@ INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
      * and has allocated and freed more than ZONE_ALLOC_RETIRE
      * chunks in its lifetime then we destroy and replace it with
      * a new zone */
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count * ZONE_ALLOC_RETIRE))) {
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count << _root->zone_retirement_shf))) {
         if(zone->internal == true && zone->chunk_size < (MAX_DEFAULT_ZONE_SZ * 2)) {
             return true;
         }
