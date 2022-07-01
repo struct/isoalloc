@@ -3,8 +3,7 @@ env:
   ARCH: amd64
 
 freebsd_instance:
-  # TODO: the 13.1 image should be around the corner soon
-  image_family: freebsd-13-0
+  image_family: freebsd-13-1
 
 task:
   name: testsuite-freebsd-amd64
