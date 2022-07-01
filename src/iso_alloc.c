@@ -458,6 +458,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
+    /* We compute this now so that in the hot path we can
+     * perform a fast bit shift:
+     *  chunk_number = (chunk_offset >> zone->chunk_size_pow2)
+     * vs a slow division:
+     *  chunk_number = (chunk_offset / zone->chunk_size) */
     new_zone->chunk_size_pow2 = _log2(new_zone->chunk_size);
     new_zone->chunk_count = (ZONE_USER_SIZE >> new_zone->chunk_size_pow2);
 
@@ -747,8 +752,8 @@ INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
     return zone->next_free_bit_slot;
 }
 
-/* Iterate through a zone bitmap a qword at a time
- * looking for empty holes (i.e. slot == 0) */
+/* Iterate through a zone bitmap a qword at
+ * a time looking for empty slots */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
@@ -1409,7 +1414,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
                       p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
     }
 
-    if(UNLIKELY(dwords_to_bit_slot > (zone->bitmap_size >> 3))) {
+    if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
