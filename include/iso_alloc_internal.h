@@ -450,6 +450,7 @@ typedef struct {
     uint16_t zones_used;
     void *guard_below;
     void *guard_above;
+    uint32_t zone_retirement_shf;
     uintptr_t *chunk_quarantine;
     size_t chunk_quarantine_count;
     /* Zones are linked by their next_sz_index member which

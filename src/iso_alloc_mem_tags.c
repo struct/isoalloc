@@ -51,7 +51,10 @@ INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count * ZONE_ALLOC_RETIRE)) >> 2) {
+    /* This implements a similar policy to zone retirement.
+     * The only difference is that we refresh all tags at
+     * %25 of the configured zone retirement age */
+    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count << _root->zone_retirement_shf)) >> 2) {
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint64_t *_mtp = (zone->user_pages_start - g_page_size - s);
 

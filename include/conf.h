@@ -45,7 +45,7 @@
 
 /* Zones can be retired after a certain number of
  * allocations. This is computed as the total count
- * of chunks the zone can handle multiplied by this
+ * of chunks the zone can hold multiplied by this
  * value. The zone is replaced at that point if all
  * of its current chunks are free */
 #define ZONE_ALLOC_RETIRE 32
