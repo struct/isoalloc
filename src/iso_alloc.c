@@ -530,7 +530,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     if(new_zone->tagged == true) {
         create_guard_page(p + g_page_size + tag_mapping_size);
         new_zone->user_pages_start = (p + g_page_size + tag_mapping_size + g_page_size);
-
         uint64_t *_mtp = p + g_page_size;
 
         /* Generate random tags */
@@ -963,7 +962,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
 
     /* This chunk was either previously allocated and free'd
      * or it's a canary chunk. In either case this means it
-     * has a canary written in its first dword. Here we check
+     * has a canary written in its first qword. Here we check
      * that canary and abort if its been corrupted */
 #if !ENABLE_ASAN && !DISABLE_CANARY
     if((GET_BIT(b, (which_bit + 1))) == 1) {
@@ -971,6 +970,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
         *(uint64_t *) p = 0x0;
     }
 #endif
+
+    zone->af_count++;
+    zone->alloc_count++;
 
     /* Set the in-use bit */
     SET_BIT(b, which_bit);
@@ -981,19 +983,17 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
      * as a canary chunk. This bit is set again upon free */
     UNSET_BIT(b, (which_bit + 1));
     bm[dwords_to_bit_slot] = b;
-    zone->af_count++;
-    zone->alloc_count++;
     return p;
 }
 
 /* Does not require the root is locked */
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
-    if(UNLIKELY(zone->internal == false)) {
+    /* Don't cache this zone if it was recently cached */
+    if(zone_cache_count != 0 && zone_cache[zone_cache_count - 1].zone == zone) {
         return;
     }
 
-    /* Don't cache this zone if it was recently cached */
-    if(zone_cache_count != 0 && zone_cache[zone_cache_count - 1].zone == zone) {
+    if(UNLIKELY(zone->internal == false)) {
         return;
     }
 
@@ -1408,7 +1408,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
      * which could result in a page fault */
     bitmap_index_t b = bm[dwords_to_bit_slot];
 
-    /* Ensure the pointer is a multiple of chunk size */
+    /* Ensure the pointer is a multiple of chunk size. Chunk size
+     * should always be a power of 2 so this bitwise AND works and
+     * is generally faster than modulo */
     if(UNLIKELY((chunk_offset & (zone->chunk_size - 1)) != 0)) {
         LOG_AND_ABORT("Chunk at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits",
                       p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
