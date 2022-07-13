@@ -15,6 +15,8 @@
 #include <Security/SecRandom.h>
 #elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__
 #include <sys/random.h>
+#elif __NetBSD__
+#include <stdlib.h>
 #else
 #error "unknown OS"
 #endif
@@ -34,6 +36,10 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void) {
     ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
 #elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__
     ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
+#elif __NetBSD__
+/* Temporary solution until NetBSD 10 released with getrandom support
+ */
+    arc4random_buf(&val, sizeof(val));
 #endif
 
 #if ABORT_NO_ENTROPY
