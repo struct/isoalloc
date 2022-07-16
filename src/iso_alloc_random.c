@@ -37,8 +37,7 @@ INTERNAL_HIDDEN uint64_t rand_uint64(void) {
 #elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__
     ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __NetBSD__
-/* Temporary solution until NetBSD 10 released with getrandom support
- */
+    /* Temporary solution until NetBSD 10 released with getrandom support */
     arc4random_buf(&val, sizeof(val));
 #endif
 
