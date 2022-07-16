@@ -186,6 +186,13 @@ USE_SPINLOCK = -DUSE_SPINLOCK=1
 ## SCHED_GETCPU = -DSCHED_GETCPU
 endif
 
+ifeq ($(UNAME), DragonFly)
+STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
+USE_SPINLOCK = -DUSE_SPINLOCK=1
+HUGE_PAGES =
+OS_FLAGS = -I/usr/local/cxx_atomics
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
@@ -267,24 +274,24 @@ cpp_library_debug: clean c_library_objects_debug
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
 	@echo "make library_debug_unit_tests"
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/interfaces_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/thread_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/big_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_tests $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/double_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/double_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/big_double_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_double_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_overflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_overflow $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/heap_underflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_underflow $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/leaks_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/leaks_test $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/wild_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/wild_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/unaligned_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/zero_alloc.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/zero_alloc $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/interfaces_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/thread_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/big_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_tests $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/double_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/double_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/big_double_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_double_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/heap_overflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_overflow $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/heap_underflow.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/heap_underflow $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/leaks_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/leaks_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/wild_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/wild_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/unaligned_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/unaligned_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/zero_alloc.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/zero_alloc $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS)  tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
 	utils/run_tests.sh
 
 fuzz_test: clean library_debug_unit_tests
@@ -297,8 +304,8 @@ fuzz_test: clean library_debug_unit_tests
 ## monitoring enabled. Linux only
 perf_tests: clean
 	@echo "make perf_tests"
-	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
-	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests_gprof
+	$(CC) $(CFLAGS) $(C_SRCS) $(GDB_FLAGS) $(PERF_FLAGS) $(OS_FLAGS) tests/big_tests.c -o $(BUILD_DIR)/big_tests_gprof
 	$(BUILD_DIR)/tests_gprof
 	gprof -bl $(BUILD_DIR)/tests_gprof gmon.out > tests_perf_analysis.txt
 	$(BUILD_DIR)/big_tests_gprof
@@ -318,8 +325,8 @@ malloc_cmp_test: clean
 ## C++ Support - Build a debug version of the unit test
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/cxx_tests
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/tagged_ptr_test
 
