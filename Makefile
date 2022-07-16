@@ -193,6 +193,11 @@ HUGE_PAGES =
 OS_FLAGS = -I/usr/local/cxx_atomics
 endif
 
+ifeq ($(UNAME), NetBSD)
+STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
+HUGE_PAGES =
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
