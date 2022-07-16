@@ -866,6 +866,22 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
         size = ALIGN_SZ_UP(size);
     }
 
+    size_t orig_size = size;
+
+    /* If we are dealing with very small zones then
+     * find the first zone in the lookup table that
+     * could possibly allocate this chunk. We only
+     * do this for sizes up to 256 because we don't
+     * want 1) to waste memory and 2) weaken our
+     * isolation primitives */
+    while(size <= ZONE_256) {
+        if(_root->zone_lookup_table[size] == 0) {
+            size = next_pow2(size);
+        } else {
+            break;
+        }
+    }
+
     /* Fast path via lookup table */
     if(_root->zone_lookup_table[size] != 0) {
         i = _root->zone_lookup_table[size];
@@ -905,9 +921,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
      * slower iterative approach is used. The longer a
      * program runs the more likely we will fail this
      * fast path as default zones may fill up */
-    if(size >= ZONE_512 && size <= MAX_DEFAULT_ZONE_SZ) {
+    if(orig_size >= ZONE_512 && orig_size <= MAX_DEFAULT_ZONE_SZ) {
         i = DEFAULT_ZONE_COUNT >> 1;
-    } else if(size > MAX_DEFAULT_ZONE_SZ) {
+    } else if(orig_size > MAX_DEFAULT_ZONE_SZ) {
         i = DEFAULT_ZONE_COUNT;
     }
 #else
@@ -917,16 +933,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     for(; i < _root->zones_used; i++) {
         zone = &_root->zones[i];
 
-        if(zone->chunk_size < size || zone->internal == false) {
+        if(zone->chunk_size < orig_size || zone->internal == false) {
             continue;
         }
 
-        /* Don't waste memory, enforce spatial separation by size */
-        if(zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
-            continue;
-        }
-
-        if(is_zone_usable(zone, size) != NULL) {
+        if(is_zone_usable(zone, orig_size) != NULL) {
             return zone;
         }
     }
@@ -1093,12 +1104,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
             for(size_t i = 0; i < zone_cache_count; i++) {
                 if(zone_cache[i].chunk_size >= size) {
                     iso_alloc_zone_t *_zone = zone_cache[i].zone;
-
-                    /* Don't waste memory, enforce spatial separation by size */
-                    if(_zone->chunk_size >= ZONE_1024 && size <= ZONE_128) {
-                        continue;
-                    }
-
                     if(is_zone_usable(_zone, size) != NULL) {
                         zone = _zone;
                         break;

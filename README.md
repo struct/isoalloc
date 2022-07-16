@@ -12,7 +12,7 @@ Additional information about the allocator and some of its design choices can be
 
 ## Design
 
-You can think of Isolation Alloc as a [region based](https://en.wikipedia.org/wiki/Region-based_memory_management) memory allocator. If you are familiar with the implementation of arenas in other allocators then the concepts here will be familiar to you.
+At a high level IsoAlloc creates zones which are used to manage regions of memory that hold individual allocations of a specific size. If you are familiar with the implementation of arenas in other heap allocators then the concepts here will be familiar to you.
 
 ![Design of isoalloc schema](/misc/isoalloc_design.svg)
 
