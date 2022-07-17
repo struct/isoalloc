@@ -169,6 +169,21 @@ using namespace std;
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
+
+#if MEMCPY_SANITY
+#if ALLOC_SANITY
+#define iso_memcpy _iso_memcpy
+#define iso_memset _iso_memset
+#else
+#define iso_memcpy __builtin_memcpy
+#define iso_memset __builtin_memset
+#endif
+
+#else
+#define iso_memcpy memcpy
+#define iso_memset memset
+#endif
+
 /* GCC complains if your constructor priority is
  * 0-100 but Clang does not. We need the lowest
  * priority constructor for MALLOC_HOOK */

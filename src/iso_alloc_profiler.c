@@ -224,11 +224,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
  * be used to interpret allocation patterns */
 INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
     LOCK_ROOT();
-#if MEMCPY_SANITY
-    __iso_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
-#else
-    __builtin_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
-#endif
+    iso_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
     size_t sz = _alloc_bts_count;
     UNLOCK_ROOT();
     return sz;
@@ -236,11 +232,7 @@ INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
 
 INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out) {
     LOCK_ROOT();
-#if MEMCPY_SANITY
-    __iso_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
-#else
-    __builtin_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
-#endif
+    iso_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
     size_t sz = _free_bts_count;
     UNLOCK_ROOT();
     return sz;
@@ -248,8 +240,8 @@ INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out) {
 
 INTERNAL_HIDDEN void _iso_alloc_reset_traces() {
     LOCK_ROOT();
-    memset(_alloc_bts, 0x0, sizeof(_alloc_bts));
-    memset(_free_bts, 0x0, sizeof(_free_bts));
+    iso_memset(_alloc_bts, 0x0, sizeof(_alloc_bts));
+    iso_memset(_free_bts, 0x0, sizeof(_free_bts));
     _alloc_bts_count = 0;
     _free_bts_count = 0;
     UNLOCK_ROOT();

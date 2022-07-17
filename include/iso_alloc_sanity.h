@@ -85,4 +85,6 @@ INTERNAL_HIDDEN _sane_allocation_t *_get_sane_alloc(void *p);
 #if MEMCPY_SANITY
 INTERNAL_HIDDEN void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n);
 INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restrict src, size_t n);
+INTERNAL_HIDDEN void *__iso_memset(void *dest, int b, size_t n);
+INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n);
 #endif

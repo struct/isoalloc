@@ -61,11 +61,7 @@ EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, s
     }
 
     if(p != NULL) {
-#if MEMCPY_SANITY
-        __iso_memcpy(r, p, size);
-#else
-        __builtin_memcpy(r, p, size);
-#endif
+        iso_memcpy(r, p, size);
     }
 
 #if PERM_FREE_REALLOC
@@ -108,11 +104,7 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone
         return NULL;
     }
 
-#if MEMCPY_SANITY
-    __iso_memcpy(p, str, size);
-#else
-    __builtin_memcpy(p, str, size);
-#endif
+    iso_memcpy(p, str, size);
     return p;
 }
 
@@ -138,18 +130,10 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zon
     }
 
     if(s_size > n) {
-#if MEMCPY_SANITY
-        __iso_memcpy(p, str, n);
-#else
-        __builtin_memcpy(p, str, n);
-#endif
+        iso_memcpy(p, str, n);
         p[n - 1] = '\0';
     } else {
-#if MEMCPY_SANITY
-        __iso_memcpy(p, str, s_size);
-#else
-        __builtin_memcpy(p, str, s_size);
-#endif
+        iso_memcpy(p, str, s_size);
     }
 
     return p;
