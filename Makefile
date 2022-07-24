@@ -119,6 +119,14 @@ MEMCPY_SANITY = -DMEMCPY_SANITY=0
 ## and THREAD_SUPPORT are enabled. Linux only
 UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 
+## By default IsoAlloc may select a zone that holds chunks
+## that are larger than were requested. This is intended
+## to reduce memory consumpion and is only done for smaller
+## sizes. Enabling this feature configures IsoAlloc to only
+## use zones that are a perfect fit for the requested size
+## once its been rounded up to ALIGNMENT size (8)
+STRONG_SIZE_ISOLATION = -DSTRONG_SIZE_ISOLATION=0
+
 ## Enable a sampling mechanism that searches for references
 ## to a chunk currently being freed. The search only overwrites
 ## the first reference to that chunk because searching all
@@ -211,7 +219,7 @@ CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
-	$(MEMORY_TAGGING)
+	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer

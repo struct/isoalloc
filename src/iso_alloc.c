@@ -805,7 +805,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
      * created for chunks more than (N * larger) than the
      * requested allocation size then we would be wasting
      * a lot of memory by using it. We only do this for
-     * sizes beyond ZONE_1024 bytes. In other words we can
+     * sizes larger than 1024 bytes. In other words we can
      * live with some wasted space in zones that manage
      * chunks smaller than ZONE_1024 */
     if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
@@ -862,25 +862,23 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     iso_alloc_zone_t *zone = NULL;
     int32_t i = 0;
 
-    if(IS_ALIGNED(size) != 0) {
-        size = ALIGN_SZ_UP(size);
-    }
-
     size_t orig_size = size;
 
-    /* If we are dealing with very small zones then
+#if !STRONG_SIZE_ISOLATION
+    /* If we are dealing with small zones then
      * find the first zone in the lookup table that
      * could possibly allocate this chunk. We only
-     * do this for sizes up to 256 because we don't
+     * do this for sizes up to 1024 because we don't
      * want 1) to waste memory and 2) weaken our
      * isolation primitives */
-    while(size <= ZONE_256) {
+    while(size <= ZONE_1024) {
         if(_root->zone_lookup_table[size] == 0) {
             size = next_pow2(size);
         } else {
             break;
         }
     }
+#endif
 
     /* Fast path via lookup table */
     if(_root->zone_lookup_table[size] != 0) {
@@ -1040,6 +1038,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         return _zero_alloc_page;
     }
 #endif
+
+    if(IS_ALIGNED(size) != 0) {
+        size = ALIGN_SZ_UP(size);
+    }
 
     if(UNLIKELY(zone && size > zone->chunk_size)) {
         LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d", zone->index, zone->chunk_size);
