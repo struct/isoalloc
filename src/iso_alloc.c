@@ -1050,7 +1050,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     }
 #endif
 
-    if((is_pow2(size)) != true) {
+    /* Sizes are always a power of 2, even for private zones */
+    if(size < SMALL_SZ_MAX && is_pow2(size) != true) {
         size = next_pow2(size);
     }
 
