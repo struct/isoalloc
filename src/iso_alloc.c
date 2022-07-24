@@ -801,6 +801,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
         return NULL;
     }
 
+#if STRONG_SIZE_ISOLATION
+    if(UNLIKELY(zone->internal == false && size != zone->chunk_size)) {
+        return NULL;
+    }
+#endif
+
     /* This zone may fit this chunk but if the zone was
      * created for chunks more than (N * larger) than the
      * requested allocation size then we would be wasting
@@ -1019,9 +1025,14 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     unsigned int res;
+
+    if((is_pow2(size)) != true) {
+        size = next_pow2(size);
+    }
+
     size_t sz = nmemb * size;
 
-    if(__builtin_umul_overflow(nmemb, size, &res)) {
+    if(UNLIKELY(__builtin_umul_overflow(nmemb, size, &res))) {
         LOG_AND_ABORT("Call to calloc() will overflow nmemb=%zu size=%zu", nmemb, size);
         return NULL;
     }
@@ -1039,8 +1050,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     }
 #endif
 
-    if(IS_ALIGNED(size) != 0) {
-        size = ALIGN_SZ_UP(size);
+    if((is_pow2(size)) != true) {
+        size = next_pow2(size);
     }
 
     if(UNLIKELY(zone && size > zone->chunk_size)) {
@@ -1071,15 +1082,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #if ALLOC_SANITY
     /* We don't sample if we are allocating from a private zone */
     if(zone != NULL) {
-        /* We only sample allocations smaller than an individual
-         * page. We are unlikely to find uninitialized reads on
-         * larger size and it makes tracking them less complex */
-        const size_t sampled_size = ALIGN_SZ_UP(size);
-
-        if(sampled_size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+        if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
-            void *ps = _iso_alloc_sample(sampled_size);
+            void *ps = _iso_alloc_sample(size);
 
             if(ps != NULL) {
                 return ps;
