@@ -13,7 +13,18 @@ int main(int argc, char *argv[]) {
     }
 
     p = (uint8_t *) iso_alloc(32);
+
+#if MEMSET_SANITY
+    uint8_t *p_dest = p - 65535;
+    size_t n = 65535;
+
+    while(n--) {
+        *p_dest++ = 0;
+    }
+#else
     memset(p - 65535, 0x42, 65535);
+#endif
+
     iso_free(p);
     iso_verify_zones();
 

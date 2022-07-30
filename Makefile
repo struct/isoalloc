@@ -103,10 +103,13 @@ SCHED_GETCPU =
 ## much of a performance penalty
 ALLOC_SANITY = -DALLOC_SANITY=0
 
-## Enable hooking of memcpy to detect out of bounds r/w
-## operations on chunks allocated with IsoAlloc. Does
-## not require ALLOC_SANITY is enabled
-MEMCPY_SANITY = -DMEMCPY_SANITY=0
+## Enable hooking of memcpy/memset to detect out of bounds
+## r/w operations on chunks allocated with IsoAlloc. Does
+## not require ALLOC_SANITY is enabled. On MacOS you need
+## to set FORTIFY_SOURCE to 0. Leave these commented if
+## you aren't enabling them.
+#MEMCPY_SANITY = -DMEMCPY_SANITY=0 -D_FORTIFY_SOURCE=0
+#MEMSET_SANITY = -DMEMSET_SANITY=0 -D_FORTIFY_SOURCE=0
 
 ## Enable the userfaultfd based uninitialized read detection
 ## feature. This samples calls to malloc, and allocates raw
@@ -219,7 +222,7 @@ CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
-	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION)
+	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
@@ -304,8 +307,12 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/incorrect_chunk_size_multiple.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/incorrect_chunk_size_multiple $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/zero_alloc.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/zero_alloc $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS)  tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
 	utils/run_tests.sh
+
+libc_sanity_tests: clean library_debug_unit_tests
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"
