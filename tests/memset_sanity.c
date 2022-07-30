@@ -1,8 +1,12 @@
-/* iso_alloc heap_overflow.c
+/* iso_alloc memset_sanity.c
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
+
+#if !MEMSET_SANITY
+#error "This test intended to be run with -DMEMSET_SANITY=1"
+#endif
 
 int main(int argc, char *argv[]) {
     uint8_t *p = NULL;
@@ -13,18 +17,7 @@ int main(int argc, char *argv[]) {
     }
 
     p = (uint8_t *) iso_alloc(32);
-
-    const char *A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-#if MEMCPY_SANITY
-    memcpy(p, A, strlen(A));
-#else
-    size_t n = strlen(A);
-    while(n--) {
-        *p++ = *A++;
-    }
-#endif
+    memset(p, 0x41, 65535);
 
     iso_free(p);
     iso_verify_zones();
