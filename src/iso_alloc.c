@@ -420,6 +420,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d zones", _root->zones_used);
     }
 
+    if(size > SMALL_SZ_MAX) {
+        LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
+        return NULL;
+    }
+
     /* In order for our bitmap to be a power of 2
      * the size we allocate also needs to be. We
      * want our bitmap to be a power of 2 because
@@ -428,11 +433,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
      * whenever we need more bitslots */
     if((is_pow2(size)) != true) {
         size = next_pow2(size);
-    }
-
-    if(size > SMALL_SZ_MAX) {
-        LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
-        return NULL;
     }
 
     /* Minimum chunk size */
@@ -1026,7 +1026,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     unsigned int res;
 
-    if((is_pow2(size)) != true) {
+    if(size < SMALL_SZ_MAX && (is_pow2(size)) != true) {
         size = next_pow2(size);
     }
 
