@@ -18,6 +18,10 @@ int32_t _sane_sampled;
 uint8_t _sane_cache[SANE_CACHE_SIZE];
 _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
 
+#if MEMCPY_SANITY || MEMSET_SANITY
+#define MEM_SANITY_CHK(p) (user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) - n > p && n > zone->chunk_size)
+#endif
+
 #if UNINIT_READ_SANITY
 pthread_t _page_fault_thread;
 struct uffdio_api _uffd_api;
@@ -278,8 +282,6 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
 
 #if MEMCPY_SANITY
 
-#define MEMCPY_SANITY_CHK(p) (user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) - n > p && n > zone->chunk_size)
-
 INTERNAL_HIDDEN void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n) {
     char *p_dest = (char *) dest;
     char const *p_src = (char const *) src;
@@ -302,14 +304,14 @@ INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restric
         iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
         void *user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEMCPY_SANITY_CHK(dest)) {
+        if(MEM_SANITY_CHK(dest)) {
             LOG_AND_ABORT("Detected an out of bounds write memcpy: dest=0x%p (%d bytes) src=0x%p size=%d", dest, zone->chunk_size, src, n);
         }
 
         zone = search_chunk_lookup_table(src);
         user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEMCPY_SANITY_CHK(src)) {
+        if(MEM_SANITY_CHK(src)) {
             LOG_AND_ABORT("Detected an out of bounds read memcpy: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
         }
     }
@@ -319,8 +321,6 @@ INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restric
 #endif
 
 #if MEMSET_SANITY
-
-#define MEMSET_SANITY_CHK(p) (user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) - n > p && n > zone->chunk_size)
 
 INTERNAL_HIDDEN void *__iso_memset(void *dest, int b, size_t n) {
     char *p_dest = (char *) dest;
@@ -337,7 +337,7 @@ INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n) {
         iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
         void *user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEMSET_SANITY_CHK(dest)) {
+        if(MEM_SANITY_CHK(dest)) {
             LOG_AND_ABORT("Detected an out of bounds write memset: dest=0x%p (%d bytes) size=%d", dest, zone->chunk_size, n);
         }
     }
