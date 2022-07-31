@@ -108,8 +108,8 @@ ALLOC_SANITY = -DALLOC_SANITY=0
 ## not require ALLOC_SANITY is enabled. On MacOS you need
 ## to set FORTIFY_SOURCE to 0. Leave these commented if
 ## you aren't enabling them.
-#MEMCPY_SANITY = -DMEMCPY_SANITY=0 -D_FORTIFY_SOURCE=0
-#MEMSET_SANITY = -DMEMSET_SANITY=0 -D_FORTIFY_SOURCE=0
+MEMCPY_SANITY = -DMEMCPY_SANITY=0
+MEMSET_SANITY = -DMEMSET_SANITY=0
 
 ## Enable the userfaultfd based uninitialized read detection
 ## feature. This samples calls to malloc, and allocates raw
@@ -181,6 +181,9 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 LIBNAME = libisoalloc.dylib
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+CFLAGS += -D_FORTIFY_SOURCE=0
+endif
 endif
 
 ifeq ($(UNAME), Linux)
@@ -218,7 +221,7 @@ BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Werror -pedantic
 else
 BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
-CFLAGS = $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
+CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
@@ -313,6 +316,7 @@ tests: clean library_debug_unit_tests
 libc_sanity_tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
+	build/memset_sanity ; build/memcpy_sanity
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"
@@ -335,6 +339,9 @@ perf_tests: clean
 ## compared to the same malloc/free operations
 malloc_cmp_test: clean
 	@echo "make malloc_cmp_test"
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+	$(error "Please unset MEMSET_SANITY/MEMCPY_SANITY before running this test")
+endif
 	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests
 	echo "Running IsoAlloc Performance Test"

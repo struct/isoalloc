@@ -3,6 +3,10 @@
 
 #include "iso_alloc_internal.h"
 
+#if MEMCPY_SANITY || MEMSET_SANITY
+#define MEM_SANITY_CHK(p, start, sz) (start <= p && (start + ZONE_USER_SIZE) - n > p && n > sz)
+#endif
+
 #if ALLOC_SANITY
 
 #if THREAD_SUPPORT
@@ -17,10 +21,6 @@ uint64_t _sanity_canary;
 int32_t _sane_sampled;
 uint8_t _sane_cache[SANE_CACHE_SIZE];
 _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
-
-#if MEMCPY_SANITY || MEMSET_SANITY
-#define MEM_SANITY_CHK(p) (user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) - n > p && n > zone->chunk_size)
-#endif
 
 #if UNINIT_READ_SANITY
 pthread_t _page_fault_thread;
@@ -304,14 +304,14 @@ INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restric
         iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
         void *user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEM_SANITY_CHK(dest)) {
+        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds write memcpy: dest=0x%p (%d bytes) src=0x%p size=%d", dest, zone->chunk_size, src, n);
         }
 
         zone = search_chunk_lookup_table(src);
         user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEM_SANITY_CHK(src)) {
+        if(MEM_SANITY_CHK(src, user_pages_start, zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds read memcpy: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
         }
     }
@@ -337,7 +337,7 @@ INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n) {
         iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
         void *user_pages_start = UNMASK_USER_PTR(zone);
 
-        if(MEM_SANITY_CHK(dest)) {
+        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds write memset: dest=0x%p (%d bytes) size=%d", dest, zone->chunk_size, n);
         }
     }
