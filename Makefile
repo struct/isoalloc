@@ -177,6 +177,10 @@ USE_MLOCK = -DUSE_MLOCK=1
 
 LIBNAME = libisoalloc.so
 
+ifeq ($CI, true)
+CFLAGS += -fsanitize=undefined
+endif
+
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
