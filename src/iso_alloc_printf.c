@@ -1,12 +1,9 @@
 /* iso_alloc_printf.c - A secure memory allocator
  * Copyright 2022 - chris.rohlf@gmail.com */
 
+#include "iso_alloc_internal.h"
+
 #include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
@@ -38,7 +35,7 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base) {
 }
 
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
-    if(f == NULL) {
+    if(UNLIKELY(f == NULL)) {
         return;
     }
 
