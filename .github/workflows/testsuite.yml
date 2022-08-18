@@ -70,6 +70,12 @@ jobs:
       - run: apk update && apk add build-base bash musl-dev
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
+  testsuite-gcc-ubsan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: CC=gcc CXX=g++ CFLAGS=-fsanitize=undefined make tests
+      - run: CC=gcc CXX=g++ CXXFLAGS=-fsanitize=undefined make cpp_tests 
 
 
 
