@@ -1,4 +1,4 @@
-## Isolation Alloc Makefile
+## IsoAlloc Makefile
 ## Copyright 2022 - chris.rohlf@gmail.com
 
 CC = clang
@@ -181,7 +181,10 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 LIBNAME = libisoalloc.dylib
-ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+CFLAGS += -D_FORTIFY_SOURCE=0
+endif
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
 CFLAGS += -D_FORTIFY_SOURCE=0
 endif
 endif
@@ -339,8 +342,11 @@ perf_tests: clean
 ## compared to the same malloc/free operations
 malloc_cmp_test: clean
 	@echo "make malloc_cmp_test"
-ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
-	$(error "Please unset MEMSET_SANITY/MEMCPY_SANITY before running this test")
+ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+	$(error "Please unset MEMCPY_SANITY before running this test")
+endif
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
+	$(error "Please unset MEMSET_SANITY before running this test")
 endif
 	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests

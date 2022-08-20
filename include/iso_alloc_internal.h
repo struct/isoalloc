@@ -11,34 +11,20 @@
 #pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
 #endif
 
-#define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
-#define ASSUME_ALIGNED __attribute__((assume_aligned(8)))
-#define CONST __attribute__((const))
-
-/* This isn't standard in C as [[nodiscard]] until C23 */
-#define NO_DISCARD __attribute__((warn_unused_result))
-
-#if UNIT_TESTING
-#define EXTERNAL_API __attribute__((visibility("default")))
-#endif
-
-#if PERF_TEST_BUILD
-#define INLINE
-#define FLATTEN
-#else
-#define INLINE __attribute__((always_inline))
-#define FLATTEN __attribute__((flatten))
-#endif
-
 #if __linux__
-#include <byteswap.h>
-#define ENVIRON environ
-#elif __APPLE__
-#include <libkern/OSByteOrder.h>
-#include <mach/vm_statistics.h>
-#define bswap_32(x) OSSwapInt32(x)
-#define bswap_64(x) OSSwapInt64(x)
-#define ENVIRON NULL
+#include "os/linux.h"
+#endif
+
+#if __APPLE__
+#include "os/macos.h"
+#endif
+
+#if __ANDROID__
+#include "os/android.h"
+#endif
+
+#if __FreeBSD__
+#include "os/freebsd.h"
 #endif
 
 #include <errno.h>
@@ -54,7 +40,10 @@
 #include <sys/types.h>
 
 #include "iso_alloc.h"
-
+#include "iso_alloc_sanity.h"
+#include "iso_alloc_util.h"
+#include "iso_alloc_ds.h"
+#include "compiler.h"
 #include "conf.h"
 
 #if MEM_USAGE
@@ -71,28 +60,12 @@ using namespace std;
 #endif
 #endif
 
-#if __linux__ || __ANDROID__
-#include <sys/prctl.h>
-#endif
-
-#if defined(CPU_PIN) && defined(_GNU_SOURCE) && defined(__linux__)
-#include <sched.h>
-#endif
-
-#if defined(__FreeBSD__)
-#define MAP_HUGETLB MAP_ALIGNED_SUPER
-#endif
-
 #if HEAP_PROFILER
 #include <fcntl.h>
 #endif
 
 #ifndef MADV_DONTNEED
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
-#endif
-
-#if ALLOC_SANITY
-#include "iso_alloc_sanity.h"
 #endif
 
 #if ENABLE_ASAN
@@ -146,28 +119,8 @@ using namespace std;
 #define IS_POISONED_RANGE(ptr, size) 0
 #endif
 
-#if USE_MLOCK
-#define MLOCK(p, s) \
-    mlock(p, s);
-#else
-#define MLOCK(p, s)
-#endif
-
 #define OK 0
 #define ERR -1
-
-#ifdef __ANDROID__
-#ifndef PR_SET_VMA
-#define PR_SET_VMA 0x53564d41
-#endif
-
-#ifndef PR_SET_VMA_ANON_NAME
-#define PR_SET_VMA_ANON_NAME 0
-#endif
-#endif
-
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 /* GCC complains if your constructor priority is
  * 0-100 but Clang does not. We need the lowest
@@ -205,17 +158,6 @@ using namespace std;
 
 /* All chunks are 8 byte aligned */
 #define ALIGNMENT 8
-
-#if !NAMED_MAPPINGS
-#define SAMPLED_ALLOC_NAME ""
-#define BIG_ZONE_UD_NAME ""
-#define BIG_ZONE_MD_NAME ""
-#define GUARD_PAGE_NAME ""
-#define ROOT_NAME ""
-#define ZONE_BITMAP_NAME ""
-#define INTERNAL_UZ_NAME ""
-#define PRIVATE_UZ_NAME ""
-#endif
 
 #define WHICH_BIT(bit_slot) \
     (bit_slot & (BITS_PER_QWORD - 1))
@@ -342,52 +284,6 @@ extern uint32_t g_page_size_shift;
 #error "Smallest chunk size is 8 bytes, 16 is recommended!"
 #endif
 
-typedef int64_t bit_slot_t;
-typedef int64_t bitmap_index_t;
-typedef uint16_t zone_lookup_table_t;
-typedef uint16_t chunk_lookup_table_t;
-
-#define BIT_SLOT_CACHE_SZ 255
-
-typedef struct {
-    void *user_pages_start;     /* Start of the pages backing this zone */
-    void *bitmap_start;         /* Start of the bitmap */
-    int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
-    /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
-    uint8_t free_bit_slot_cache_index;                 /* Tracks how many entries in the cache are filled */
-    uint8_t free_bit_slot_cache_usable;                /* The oldest members of the free cache are served first */
-    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ]; /* A cache of bit slots that point to freed chunks */
-    uint64_t canary_secret;                            /* Each zone has its own canary secret */
-    uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;                               /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
-    bitmap_index_t max_bitmap_idx;                     /* Max bitmap index for this bitmap */
-    bool internal;                                     /* Zones can be managed by iso_alloc or private */
-    bool is_full;                                      /* Flags whether this zone is full to avoid bit slot searches */
-    uint16_t index;                                    /* Zone index */
-    uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
-    uint32_t alloc_count;                              /* Total number of lifetime allocations */
-    uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
-    uint32_t chunk_count;                              /* Total number of chunks in this zone */
-    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) at zone creation */
-#if MEMORY_TAGGING
-    bool tagged; /* Zone supports memory tagging */
-#endif
-#if CPU_PIN
-    uint8_t cpu_core; /* What CPU core this zone is pinned to */
-#endif
-} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_zone_t;
-
-/* Each thread gets a local cache of the most recently
- * used zones. This can greatly speed up allocations
- * if your threads are reusing the same zones. This
- * cache is first in last out, and is populated during
- * both alloc and free operations */
-typedef struct {
-    size_t chunk_size;
-    iso_alloc_zone_t *zone;
-} __attribute__((aligned(sizeof(int64_t)))) _tzc;
-
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
 extern atomic_flag root_busy_flag;
@@ -429,96 +325,8 @@ extern pthread_mutex_t big_zone_busy_mutex;
 #define UNLOCK_BIG_ZONE()
 #endif
 
-/* Meta data for big allocations are allocated near the
- * user pages themselves but separated via guard pages.
- * This meta data is stored at a random offset from the
- * beginning of the page it resides on */
-typedef struct iso_alloc_big_zone_t {
-    uint64_t canary_a;
-    bool free;
-    uint64_t size;
-    void *user_pages_start;
-    struct iso_alloc_big_zone_t *next;
-    uint64_t canary_b;
-} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_big_zone_t;
-
-/* There is only one iso_alloc root per-process.
- * It contains an array of zone structures. Each
- * Zone represents a number of contiguous pages
- * that hold chunks containing caller data */
-typedef struct {
-    uint16_t zones_used;
-    void *guard_below;
-    void *guard_above;
-    uint32_t zone_retirement_shf;
-    uintptr_t *chunk_quarantine;
-    size_t chunk_quarantine_count;
-    /* Zones are linked by their next_sz_index member which
-     * tells the allocator where in the _root->zones array
-     * it can find the next zone that holds the same size
-     * chunks. The lookup table helps us find the first zone
-     * that holds a specific size in O(1) time */
-    zone_lookup_table_t *zone_lookup_table;
-    /* The chunk to zone lookup table provides a high hit
-     * rate cache for finding which zone owns a user chunk.
-     * It works by mapping the MSB of the chunk addressq
-     * to a zone index. Misses are gracefully handled and
-     * more common with a higher RSS and more mappings. */
-    chunk_lookup_table_t *chunk_lookup_table;
-    uint64_t zone_handle_mask;
-    uint64_t big_zone_next_mask;
-    uint64_t big_zone_canary_secret;
-    iso_alloc_big_zone_t *big_zone_head;
-    iso_alloc_zone_t *zones;
-    size_t zones_size;
-} __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
-
-typedef struct {
-    void *user_pages_start;
-    void *bitmap_start;
-    uint32_t bitmap_size;
-    uint8_t ttl;
-} __attribute__((aligned(sizeof(int64_t)))) zone_quarantine_t;
-
 #if NO_ZERO_ALLOCATIONS
 extern void *_zero_alloc_page;
-#endif
-
-#if HEAP_PROFILER
-#define PROFILER_ODDS 10000
-#define HG_SIZE 65535
-#define CHUNK_USAGE_THRESHOLD 75
-#define PROFILER_ENV_STR "ISO_ALLOC_PROFILER_FILE_PATH"
-#define PROFILER_FILE_PATH "iso_alloc_profiler.data"
-#define BACKTRACE_DEPTH 8
-#define BACKTRACE_DEPTH_SZ 128
-
-/* The IsoAlloc profiler is not thread local but these
- * globals should only ever be touched by internal
- * allocator functions when the root is locked */
-uint64_t _alloc_count;
-uint64_t _free_count;
-uint64_t _alloc_sampled_count;
-uint64_t _free_sampled_count;
-
-int32_t profiler_fd;
-
-typedef struct {
-    uint64_t total;
-    uint64_t count;
-} zone_profiler_map_t;
-
-zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
-
-/* iso_alloc_traces_t is a public structure, and
- * is defined in the public header iso_alloc.h */
-iso_alloc_traces_t _alloc_bts[BACKTRACE_DEPTH_SZ];
-size_t _alloc_bts_count;
-
-/* iso_free_traces_t is a public structure, and
- * is defined in the public header iso_alloc.h */
-iso_free_traces_t _free_bts[BACKTRACE_DEPTH_SZ];
-size_t _free_bts_count;
 #endif
 
 /* The global root */
@@ -552,7 +360,6 @@ INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
-INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone);
@@ -570,9 +377,6 @@ INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN void *create_guard_page(void *p);
-INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name);
-INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
@@ -589,28 +393,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
-INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone_t *zone, char *name);
-INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
-INTERNAL_HIDDEN uint32_t _log2(uint32_t v);
-INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
-INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
-
-#if HEAP_PROFILER
-INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(void);
-INTERNAL_HIDDEN INLINE void _save_backtrace(iso_alloc_traces_t *abts);
-INTERNAL_HIDDEN INLINE uint64_t _call_count_from_hash(uint16_t hash);
-INTERNAL_HIDDEN void _iso_output_profile(void);
-INTERNAL_HIDDEN void _initialize_profiler(void);
-INTERNAL_HIDDEN void _iso_alloc_profile(size_t size);
-INTERNAL_HIDDEN void _iso_free_profile(void);
-INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out);
-INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out);
-INTERNAL_HIDDEN void _iso_alloc_reset_traces();
-#endif
+INTERNAL_HIDDEN void iso_alloc_initialize(void);
+INTERNAL_HIDDEN void iso_alloc_destroy(void);
 
 #if EXPERIMENTAL
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
@@ -618,8 +405,4 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
 
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root(void);
-#endif
-
-#if CPU_PIN
-INTERNAL_HIDDEN INLINE int _iso_getcpu(void);
 #endif

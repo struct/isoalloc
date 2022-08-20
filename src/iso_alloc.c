@@ -137,7 +137,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
 #endif
 
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
-    memset(p, POISON_BYTE, size);
+    __iso_memset(p, POISON_BYTE, size);
 }
 
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
@@ -226,7 +226,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->big_zone_canary_secret = rand_uint64();
 }
 
-__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
+INTERNAL_HIDDEN void iso_alloc_initialize(void) {
 #if THREAD_SUPPORT && !USE_SPINLOCK
     pthread_mutex_init(&root_busy_mutex, NULL);
     pthread_mutex_init(&big_zone_busy_mutex, NULL);
@@ -254,6 +254,10 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 #if ALLOC_SANITY
     _sanity_canary = rand_uint64();
 #endif
+}
+
+__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
+    iso_alloc_initialize();
 }
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
@@ -288,14 +292,14 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
     if(zone->internal == false) {
         /* This zone can be used again, we just need to wipe
          * any sensitive data from it and prime it for use */
-        memset(zone->bitmap_start, 0x0, zone->bitmap_size);
-        memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
+        __iso_memset(zone->bitmap_start, 0x0, zone->bitmap_size);
+        __iso_memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
 
 #if MEMORY_TAGGING
         /* Clear the memory tags */
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint8_t *_mtp = (zone->user_pages_start - g_page_size - s);
-        memset(_mtp, 0x0, s);
+        __iso_memset(_mtp, 0x0, s);
         mprotect_pages(_mtp, s, PROT_NONE);
         zone->tagged = false;
 #endif
@@ -307,7 +311,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
 
         /* Make this zone unusable */
-        memset(zone, 0x0, sizeof(iso_alloc_zone_t));
+        __iso_memset(zone, 0x0, sizeof(iso_alloc_zone_t));
         zone->is_full = true;
 #else
         zone->internal = true;
@@ -355,9 +359,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
 
 INTERNAL_HIDDEN INLINE void clear_zone_cache() {
 #if THREAD_SUPPORT
-    memset(zone_cache, 0x0, sizeof(zone_cache));
+    __iso_memset(zone_cache, 0x0, sizeof(zone_cache));
 #else
-    memset(zone_cache, 0x0, ZONE_CACHE_SZ * sizeof(_tzc));
+    __iso_memset(zone_cache, 0x0, ZONE_CACHE_SZ * sizeof(_tzc));
 #endif
 
     zone_cache_count = 0;
@@ -450,7 +454,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     }
 
     uint16_t next_sz_index = new_zone->next_sz_index;
-    memset(new_zone, 0x0, sizeof(iso_alloc_zone_t));
+    __iso_memset(new_zone, 0x0, sizeof(iso_alloc_zone_t));
 
     /* Restore next_sz_index */
     new_zone->next_sz_index = next_sz_index;
@@ -653,7 +657,7 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
         bm_idx = 0;
     }
 
-    memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
+    __iso_memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
     zone->free_bit_slot_cache_usable = 0;
     uint8_t free_bit_slot_cache_index;
 
@@ -1039,7 +1043,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
 
     void *p = _iso_alloc(NULL, sz);
 
-    memset(p, 0x0, sz);
+    __iso_memset(p, 0x0, sz);
     return p;
 }
 
@@ -1520,7 +1524,7 @@ INTERNAL_HIDDEN INLINE void flush_chunk_quarantine() {
         _iso_free_internal_unlocked((void *) _root->chunk_quarantine[i], false, NULL);
     }
 
-    memset(_root->chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
+    __iso_memset(_root->chunk_quarantine, 0x0, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
     _root->chunk_quarantine_count = 0;
 }
 
@@ -1709,7 +1713,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     }
 
 #if !ENABLE_ASAN && SANITIZE_CHUNKS
-    memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
+    __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
 
     madvise(big_zone->user_pages_start, big_zone->size, MADV_DONTNEED);
@@ -1752,7 +1756,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         }
 
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
-        memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
+        __iso_memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
 
         /* Big zone meta data is at a random offset from its base page */
         mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), g_page_size, PROT_NONE);
@@ -1928,7 +1932,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     return zone->chunk_size;
 }
 
-__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
+INTERNAL_HIDDEN void iso_alloc_destroy(void) {
     LOCK_ROOT();
 
     flush_chunk_quarantine();
@@ -2008,6 +2012,10 @@ __attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
     munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
 #endif
     UNLOCK_ROOT();
+}
+
+__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
+    iso_alloc_destroy();
 }
 
 #if UNIT_TESTING
