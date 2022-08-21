@@ -16,7 +16,7 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISAB
 ## Enable memory tagging support. This will generate a random
 ## 1 byte tag per addressable chunk of memory. These tags can
 ## be retrieved and verified
-MEMORY_TAGGING = -DMEMORY_TAGGING=1
+MEMORY_TAGGING = -DMEMORY_TAGGING=0
 
 ## Enable abort() when isoalloc can't gather enough entropy.
 ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
@@ -124,7 +124,7 @@ UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 
 ## By default IsoAlloc may select a zone that holds chunks
 ## that are larger than were requested. This is intended
-## to reduce memory consumpion and is only done for smaller
+## to reduce memory consumption and is only done for smaller
 ## sizes. Enabling this feature configures IsoAlloc to only
 ## use zones that are a perfect fit for the requested size
 ## once its been rounded up to ALIGNMENT size (8)

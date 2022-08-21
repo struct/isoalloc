@@ -3,6 +3,10 @@
 
 #include "iso_alloc_internal.h"
 
+#if HEAP_PROFILER
+#include "iso_alloc_profiler.h"
+#endif
+
 #if THREAD_SUPPORT
 
 #if USE_SPINLOCK
@@ -2005,11 +2009,11 @@ INTERNAL_HIDDEN void iso_alloc_destroy(void) {
 #if ISO_DTOR_CLEANUP
     munmap(_root->guard_below, g_page_size);
     munmap(_root->guard_above, g_page_size);
-    munmap(_root, sizeof(iso_alloc_root));
     munmap(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
     munmap(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
     munmap(_root->chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)) + (g_page_size * 2));
     munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
+    munmap(_root, sizeof(iso_alloc_root));
 #endif
     UNLOCK_ROOT();
 }

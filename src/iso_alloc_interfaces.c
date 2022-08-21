@@ -9,6 +9,10 @@
 #include "iso_alloc_sanity.h"
 #endif
 
+#if HEAP_PROFILER
+#include "iso_alloc_profiler.h"
+#endif
+
 EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size) {
     return _iso_alloc(NULL, size);
 }

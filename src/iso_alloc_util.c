@@ -28,7 +28,7 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
     uintptr_t a;
     __asm__ volatile("mrs %x0, tpidrro_el0"
                      : "=r"(a)::"memory");
-    return (int) ((a & 0x8) - 1);
+    return (int) ((a & 0x8));
 #else
     /* TODO most likely different register/making on other platforms */
     return -1;

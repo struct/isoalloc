@@ -12,6 +12,9 @@ typedef uint16_t zone_lookup_table_t;
 typedef uint16_t chunk_lookup_table_t;
 
 #define BIT_SLOT_CACHE_SZ 255
+#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
+#define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
+#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
 typedef struct {
     void *user_pages_start;     /* Start of the pages backing this zone */

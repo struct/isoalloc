@@ -243,10 +243,6 @@ using namespace std;
 #define IS_TAGGED_PTR_MASK 0xff00000000000000
 #define UNTAGGED_BITS 56
 
-#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
-#define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
-#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
-
 /* A uint64_t of bitslots below this value will
  * have at least 1 single free bit slot */
 #define ALLOCATED_BITSLOTS 0x5555555555555555

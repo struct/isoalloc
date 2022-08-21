@@ -237,4 +237,4 @@ typedef struct {
 } iso_free_traces_t;
 ```
 
-When `HEAP_PROFILER` is enabled these structure will contain information collected by the allocator by sampling `malloc` and `free` calls. This data structure is experimental and is subject to change. See `interfaces_test.c` file for an example of how to retrieve and inspect these structures.
+When `HEAP_PROFILER` is enabled these structure will contain information collected by the allocator by sampling `malloc` and `free` calls. This data structure is experimental and is subject to change. See `interfaces_test.c` file for an example of how to retrieve and inspect these structures. Note: On MacOS you may need to use gcc/g++ to compile this functionality without error.
