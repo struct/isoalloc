@@ -3,14 +3,6 @@
 
 #pragma once
 
-#if CPP_SUPPORT
-#define _GNU_SOURCE
-#endif
-
-#if !__aarch64__ && !__x86_64__
-#pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
-#endif
-
 #include "iso_alloc_util.h"
 
 #if ALLOC_SANITY

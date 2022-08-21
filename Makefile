@@ -16,7 +16,7 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISAB
 ## Enable memory tagging support. This will generate a random
 ## 1 byte tag per addressable chunk of memory. These tags can
 ## be retrieved and verified
-MEMORY_TAGGING = -DMEMORY_TAGGING=0
+MEMORY_TAGGING = -DMEMORY_TAGGING=1
 
 ## Enable abort() when isoalloc can't gather enough entropy.
 ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
@@ -241,7 +241,7 @@ ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
 LDFLAGS = -L$(BUILD_DIR) -lisoalloc
 
-all: library tests
+all: testsm
 
 ## Build a release version of the library
 library: clean

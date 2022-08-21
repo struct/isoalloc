@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if !__aarch64__ && !__x86_64__
+#pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
+#endif
+
 #ifndef EXTERNAL_API
 #define EXTERNAL_API __attribute__((visibility("default")))
 #endif

@@ -16,15 +16,14 @@
 #endif
 
 #if USE_MLOCK
-#define MLOCK(p, s) \
-    mlock(p, s);
+#define MLOCK(p, s) mlock(p, s)
 #else
 #define MLOCK(p, s)
 #endif
 
-INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n);
+INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *dest, const void *src, size_t n);
+INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *dest, const void *src, size_t n);
 INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n);
-INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restrict src, size_t n);
 INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n);
 
 INTERNAL_HIDDEN void *create_guard_page(void *p);
