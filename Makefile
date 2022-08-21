@@ -239,7 +239,7 @@ C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp
 ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
-LDFLAGS = -L$(BUILD_DIR) -lisoalloc
+LDFLAGS = -L$(BUILD_DIR) -lisoalloc -flto
 
 all: testsm
 

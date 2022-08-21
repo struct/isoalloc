@@ -2,6 +2,7 @@
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
+#include "iso_alloc_sanity.h"
 
 #if HEAP_PROFILER
 #include "iso_alloc_profiler.h"
@@ -139,10 +140,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     MASK_ZONE_PTRS(zone);
 }
 #endif
-
-INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size) {
-    __iso_memset(p, POISON_BYTE, size);
-}
 
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     void *p = NULL;
@@ -1458,10 +1455,10 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
 #if !ENABLE_ASAN && SANITIZE_CHUNKS
-        iso_clear_user_chunk(p, zone->chunk_size);
+        __iso_memset(p, POISON_BYTE, zone->chunk_size);
 #endif
     } else {
-        iso_clear_user_chunk(p, zone->chunk_size);
+        __iso_memset(p, POISON_BYTE, zone->chunk_size);
     }
 
     bm[dwords_to_bit_slot] = b;

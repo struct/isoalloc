@@ -4,10 +4,7 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 #include "iso_alloc_ds.h"
-
-#if MEMCPY_SANITY
 #include "iso_alloc_sanity.h"
-#endif
 
 #if HEAP_PROFILER
 #include "iso_alloc_profiler.h"

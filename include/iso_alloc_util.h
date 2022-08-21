@@ -21,11 +21,6 @@
 #define MLOCK(p, s)
 #endif
 
-INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *dest, const void *src, size_t n);
-INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *dest, const void *src, size_t n);
-INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n);
-INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n);
-
 INTERNAL_HIDDEN void *create_guard_page(void *p);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);
