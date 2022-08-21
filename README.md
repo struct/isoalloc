@@ -63,7 +63,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * A reused chunk will always have its canary checked before its returned by `iso_alloc`.
 * The top byte of user chunk canaries is `0x00` to prevent unbounded C string reads from leaking it.
 * A chunk can be permanently free'd with a call to `iso_free_permanently`.
-* If `SANITIZE_CHUNKS` is set all user chunks are cleared when passed to `iso_free` with the constant 0xDE.
+* If `SANITIZE_CHUNKS` is set all user chunks are cleared when passed to `iso_free` with the constant `0xde`.
 * When freeing a chunk the canary in adjacent chunks above/below are verified.
 * Some important zone metadata pointers are masked in-between `iso_alloc` and `iso_free` operations.
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort.
