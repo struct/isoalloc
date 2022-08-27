@@ -3,6 +3,7 @@
 
 #include "iso_alloc_internal.h"
 #include "iso_alloc_sanity.h"
+#include "iso_alloc_util.h"
 
 #if MEMCPY_SANITY
 EXTERNAL_API void *memcpy(void *restrict dest, const void *restrict src, size_t n) {

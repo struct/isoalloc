@@ -280,9 +280,8 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
 }
 #endif
 
+INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n) {
 #if MEMCPY_SANITY
-
-INTERNAL_HIDDEN void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n) {
     char *p_dest = (char *) dest;
     char const *p_src = (char const *) src;
 
@@ -291,9 +290,13 @@ INTERNAL_HIDDEN void *__iso_memcpy(void *restrict dest, const void *restrict src
     }
 
     return dest;
+#else
+    return __builtin_memcpy(dest, src, n);
+#endif
 }
 
 INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restrict src, size_t n) {
+#if MEMCPY_SANITY
     if(n > SMALLEST_CHUNK_SZ) {
         /* We don't want to add too much overhead here so we only
          * check the chunk-to-zone cache for zone data and we don't
@@ -315,14 +318,12 @@ INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restric
             LOG_AND_ABORT("Detected an out of bounds read memcpy: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
         }
     }
-
+#endif
     return __iso_memcpy(dest, src, n);
 }
-#endif
 
+INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n) {
 #if MEMSET_SANITY
-
-INTERNAL_HIDDEN void *__iso_memset(void *dest, int b, size_t n) {
     char *p_dest = (char *) dest;
 
     while(n--) {
@@ -330,9 +331,13 @@ INTERNAL_HIDDEN void *__iso_memset(void *dest, int b, size_t n) {
     }
 
     return dest;
+#else
+    return __builtin_memset(dest, b, n);
+#endif
 }
 
 INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n) {
+#if MEMSET_SANITY
     if(n > SMALLEST_CHUNK_SZ) {
         iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
         void *user_pages_start = UNMASK_USER_PTR(zone);
@@ -341,7 +346,6 @@ INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n) {
             LOG_AND_ABORT("Detected an out of bounds write memset: dest=0x%p (%d bytes) size=%d", dest, zone->chunk_size, n);
         }
     }
-
+#endif
     return __iso_memset(dest, b, n);
 }
-#endif

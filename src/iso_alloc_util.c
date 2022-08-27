@@ -28,7 +28,7 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
     uintptr_t a;
     __asm__ volatile("mrs %x0, tpidrro_el0"
                      : "=r"(a)::"memory");
-    return (int) ((a & 0x8) - 1);
+    return (int) ((a & 0x8));
 #else
     /* TODO most likely different register/making on other platforms */
     return -1;
@@ -124,14 +124,6 @@ INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     if((mprotect(p, size, protection)) == ERR) {
         LOG_AND_ABORT("Failed to mprotect pages @ 0x%p", p);
     }
-}
-
-INTERNAL_HIDDEN int32_t name_zone(iso_alloc_zone_t *zone, char *name) {
-#if NAMED_MAPPINGS && __ANDROID__
-    return name_mapping(zone->user_pages_start, ZONE_USER_SIZE, (const char *) name);
-#else
-    return 0;
-#endif
 }
 
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {

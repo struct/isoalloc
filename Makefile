@@ -1,4 +1,4 @@
-## Isolation Alloc Makefile
+## IsoAlloc Makefile
 ## Copyright 2022 - chris.rohlf@gmail.com
 
 CC = clang
@@ -124,7 +124,7 @@ UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 
 ## By default IsoAlloc may select a zone that holds chunks
 ## that are larger than were requested. This is intended
-## to reduce memory consumpion and is only done for smaller
+## to reduce memory consumption and is only done for smaller
 ## sizes. Enabling this feature configures IsoAlloc to only
 ## use zones that are a perfect fit for the requested size
 ## once its been rounded up to ALIGNMENT size (8)
@@ -181,7 +181,10 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 LIBNAME = libisoalloc.dylib
-ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+CFLAGS += -D_FORTIFY_SOURCE=0
+endif
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
 CFLAGS += -D_FORTIFY_SOURCE=0
 endif
 endif
@@ -236,9 +239,9 @@ C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp
 ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
-LDFLAGS = -L$(BUILD_DIR) -lisoalloc
+LDFLAGS = -L$(BUILD_DIR) -lisoalloc -flto
 
-all: library tests
+all: tests
 
 ## Build a release version of the library
 library: clean
@@ -339,8 +342,11 @@ perf_tests: clean
 ## compared to the same malloc/free operations
 malloc_cmp_test: clean
 	@echo "make malloc_cmp_test"
-ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1) || ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
-	$(error "Please unset MEMSET_SANITY/MEMCPY_SANITY before running this test")
+ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
+	$(error "Please unset MEMCPY_SANITY before running this test")
+endif
+ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
+	$(error "Please unset MEMSET_SANITY before running this test")
 endif
 	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests

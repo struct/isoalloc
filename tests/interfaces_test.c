@@ -4,6 +4,10 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
+#if HEAP_PROFILER
+#include "iso_alloc_profiler.h"
+#endif
+
 #include <assert.h>
 
 int main(int argc, char *argv[]) {

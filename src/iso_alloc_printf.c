@@ -2,8 +2,12 @@
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
-
 #include <stdarg.h>
+
+#if __GNUC__ && !__clang__
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
 
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
@@ -18,7 +22,7 @@ INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base) {
     int8_t *ptr;
     uint32_t count = 0;
 
-    memset(fmt_buf, 0x0, sizeof(fmt_buf));
+    __builtin_memset(fmt_buf, 0x0, sizeof(fmt_buf));
     ptr = &fmt_buf[63];
 
     while(n != 0) {
@@ -46,7 +50,7 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
     va_start(arg, f);
     char out[65535];
     char *p = out;
-    memset(p, 0x0, sizeof(out));
+    __builtin_memset(p, 0x0, sizeof(out));
 
     for(const char *idx = f; *idx != '\0'; idx++) {
         if(p >= (char *) (out + sizeof(out))) {
