@@ -6,11 +6,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #if !__aarch64__ && !__x86_64__
 #pragma error "IsoAlloc is untested and unsupported on 32 bit platforms"
-assert(sizeof(size_t) >= 64)
 #endif
+
+static_assert(sizeof(size_t) == 8, "IsoAlloc requires 64 bit size_t");
 
 #ifndef EXTERNAL_API
 #define EXTERNAL_API __attribute__((visibility("default")))
