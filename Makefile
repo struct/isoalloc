@@ -241,7 +241,7 @@ ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
 LDFLAGS = -L$(BUILD_DIR) -lisoalloc -flto
 
-all: testsm
+all: tests
 
 ## Build a release version of the library
 library: clean

@@ -4,17 +4,15 @@
 
 # Isolation Alloc
 
-Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is partially inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
+Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C11. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is partially inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
 
-Isolation Alloc is designed and [tested](https://github.com/struct/isoalloc/actions) for 64 bit Linux and MacOS. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. The number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. You can compile and run it on a 32 bit target but it remains untested. It may work on operating systems other than Linux/MacOS but that is also untested at this time.
-
-Additional information about the allocator and some of its design choices can be found [here](http://struct.github.io/iso_alloc.html). However this README and the documentation in this repository will always be more up to date and authoritative.
+IsoAlloc is designed and [tested](https://github.com/struct/isoalloc/actions) for 64 bit Linux and MacOS. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. The number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux/MacOS but that is also untested at this time. There is partial FreeBSD support but CI is often flakey.
 
 ## Design
 
 At a high level IsoAlloc creates zones which are used to manage regions of memory that hold individual allocations of a specific size. If you are familiar with the implementation of arenas in other heap allocators then the concepts here will be familiar to you.
 
-![Design of isoalloc schema](/misc/isoalloc_design.svg)
+![Design of IsoAlloc schema](/misc/isoalloc_design.svg)
 
 There is one `iso_alloc_root` structure which contains a pointer to a fixed number of `iso_alloc_zone` structures. These `iso_alloc_zone` structures are referred to as *zones*. Zones point to user chunks and a bitmap that is used to manage those chunks. The translation between bitmap and user chunks is referred to as *bit slots*. The pages that back both the user chunks and the bitmap are allocated separately. The pointers that reference these in the zone meta data are masked in between allocation and free operations. The bitmap contains 2 bits of state per user chunk. The current bit value specification is as follows:
 

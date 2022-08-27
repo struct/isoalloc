@@ -8,7 +8,8 @@
 #endif
 
 #if !__aarch64__ && !__x86_64__
-#pragma message "IsoAlloc is untested and unsupported on 32 bit platforms"
+#pragma error "IsoAlloc is untested and unsupported on 32 bit platforms"
+assert(sizeof(size_t) >= 64)
 #endif
 
 #if __linux__

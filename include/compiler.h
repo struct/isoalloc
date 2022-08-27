@@ -18,7 +18,11 @@
 #define INLINE
 #define FLATTEN
 #else
+#if __clang__
 #define INLINE __attribute__((always_inline))
+#else
+#define INLINE __attribute__((inline))
+#endif
 #define FLATTEN __attribute__((flatten))
 #endif
 

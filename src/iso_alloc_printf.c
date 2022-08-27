@@ -4,6 +4,11 @@
 #include "iso_alloc_internal.h"
 #include <stdarg.h>
 
+#if __GNUC__ && !__clang__
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
 /* This primitive printf implementation is only ever called
