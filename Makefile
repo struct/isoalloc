@@ -136,12 +136,6 @@ STRONG_SIZE_ISOLATION = -DSTRONG_SIZE_ISOLATION=0
 ## zones is very slow.
 UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 
-## Unmap user and bitmap in the destructor. You probably
-## don't want this as theres no guarantee the IsoAlloc
-## destructor will be called last and other destructors
-## that call free will segfault
-ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
-
 ## Verifies the free bit slot cache does not contain duplicate
 ## entries which might lead to IsoAlloc handing out an in-use
 ## chunk to a caller. This is a slow search that has a small
@@ -174,6 +168,19 @@ NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
 ## Enables mlock() on performance sensitive pages. For lower
 ## end devices with less memory you may want to disable this
 USE_MLOCK = -DUSE_MLOCK=1
+
+## When enabled the default library constructor and destructor
+## will be used to initialize and tear down the library. If
+## you disable this you can call iso_alloc_initialize and
+## iso_alloc_destroy to perform the same functions. Note if
+## you disable this you will want to enable ISO_DTOR_CLEANUP
+AUTO_CTOR_DTOR = -DAUTO_CTOR_DTOR=1
+
+## Unmap user and bitmap in the destructor. You probably
+## don't want this as theres no guarantee the IsoAlloc
+## destructor will be called last and other destructors
+## that call free will segfault
+ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 
 LIBNAME = libisoalloc.so
 
@@ -228,7 +235,7 @@ CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
-	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY)
+	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
@@ -295,7 +302,7 @@ cpp_library_debug: clean c_library_objects_debug
 
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
-	@echo "make library_debug_unit_tests"
+	@echo "make tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)
@@ -316,7 +323,13 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
 	utils/run_tests.sh
 
+init_test: clean library_debug_unit_tests
+	@echo "make init_test"
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/init_destroy.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/init_destroy $(LDFLAGS)
+	build/init_destroy
+
 libc_sanity_tests: clean library_debug_unit_tests
+	@echo "make libc_sanity_tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
 	build/memset_sanity ; build/memcpy_sanity

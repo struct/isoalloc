@@ -35,8 +35,11 @@ typedef void iso_alloc_zone_handle;
 #if CPP_SUPPORT
 extern "C" {
 #endif
+
 /* See https://github.com/struct/isoalloc/blob/master/README.md#api for
  * detailed information on how to use these functions */
+EXTERNAL_API void iso_alloc_initialize();
+EXTERNAL_API void iso_alloc_destroy();
 EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size);

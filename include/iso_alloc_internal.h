@@ -56,7 +56,7 @@ assert(sizeof(size_t) >= 64)
 #include <pthread.h>
 #ifdef __cplusplus
 #include <atomic>
-using namespace std;
+    using namespace std;
 #else
 #include <stdatomic.h>
 #endif
@@ -394,8 +394,8 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
-INTERNAL_HIDDEN void iso_alloc_initialize(void);
-INTERNAL_HIDDEN void iso_alloc_destroy(void);
+INTERNAL_HIDDEN void _iso_alloc_initialize(void);
+INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
 #if EXPERIMENTAL
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);

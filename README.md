@@ -4,7 +4,7 @@
 
 # Isolation Alloc
 
-Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C11. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is partially inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
+Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C11. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is originally inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
 
 IsoAlloc is designed and [tested](https://github.com/struct/isoalloc/actions) for 64 bit Linux and MacOS. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. The number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux/MacOS but that is also untested at this time. There is partial FreeBSD support but CI is often flakey.
 
@@ -140,6 +140,10 @@ If you are getting consistent crashes you can build a debug version of the libra
 If all else fails please file an issue on the [github project](https://github.com/struct/isoalloc/issues) page.
 
 ## API
+
+`void iso_alloc_initialize()` - Initializes the IsoAlloc root. Only needed if `AUTO_CTOR_DTOR` is disabled. See Makefile.
+
+`void iso_alloc_destroy()` - Destroys the IsoAlloc root. Only needed if `AUTO_CTOR_DTOR` is disabled. See Makefile.
 
 `void *iso_alloc(size_t size)` - Equivalent to `malloc`. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to `iso_free`.
 
