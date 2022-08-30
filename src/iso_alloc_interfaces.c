@@ -10,6 +10,14 @@
 #include "iso_alloc_profiler.h"
 #endif
 
+EXTERNAL_API void iso_alloc_initialize() {
+    _iso_alloc_initialize();
+}
+
+EXTERNAL_API void iso_alloc_destroy() {
+    _iso_alloc_destroy();
+}
+
 EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size) {
     return _iso_alloc(NULL, size);
 }

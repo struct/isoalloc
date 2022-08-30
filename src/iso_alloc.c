@@ -227,7 +227,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->big_zone_canary_secret = rand_uint64();
 }
 
-INTERNAL_HIDDEN void iso_alloc_initialize(void) {
+INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
+    if(_root != NULL) {
+        return;
+    }
+
 #if THREAD_SUPPORT && !USE_SPINLOCK
     pthread_mutex_init(&root_busy_mutex, NULL);
     pthread_mutex_init(&big_zone_busy_mutex, NULL);
@@ -257,9 +261,15 @@ INTERNAL_HIDDEN void iso_alloc_initialize(void) {
 #endif
 }
 
-__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
-    iso_alloc_initialize();
+#if AUTO_CTOR_DTOR
+__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
+    _iso_alloc_destroy();
 }
+
+__attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
+    _iso_alloc_initialize();
+}
+#endif
 
 INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
@@ -1067,6 +1077,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
+#if AUTO_CTOR_DTOR
         if(UNLIKELY(zone != NULL)) {
             LOG_AND_ABORT("_root was NULL but zone %p was not", zone);
         }
@@ -1082,6 +1093,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
             UNLOCK_ROOT();
             return _zero_alloc_page;
         }
+#endif
+#else
+        LOG_AND_ABORT("Root never initialized!");
 #endif
     }
 
@@ -1933,7 +1947,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     return zone->chunk_size;
 }
 
-INTERNAL_HIDDEN void iso_alloc_destroy(void) {
+INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     LOCK_ROOT();
 
     flush_chunk_quarantine();
@@ -2013,10 +2027,6 @@ INTERNAL_HIDDEN void iso_alloc_destroy(void) {
     munmap(_root, sizeof(iso_alloc_root));
 #endif
     UNLOCK_ROOT();
-}
-
-__attribute__((destructor(LAST_DTOR))) void iso_alloc_dtor(void) {
-    iso_alloc_destroy();
 }
 
 #if UNIT_TESTING
