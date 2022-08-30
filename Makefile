@@ -328,7 +328,6 @@ init_test: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/init_destroy.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/init_destroy $(LDFLAGS)
 	build/init_destroy
 
-
 libc_sanity_tests: clean library_debug_unit_tests
 	@echo "make libc_sanity_tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
