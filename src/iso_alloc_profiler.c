@@ -52,7 +52,7 @@ INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
         return ERR;
     }
 
-#if __linux__
+#if __linux__ || __FreeBSD__
     LOG("RSS: %d (mb)", (_rusage.ru_maxrss / KILOBYTE_SIZE));
 #elif __APPLE__
     LOG("RSS: %d (mb)", (_rusage.ru_maxrss / MEGABYTE_SIZE));
