@@ -1961,16 +1961,17 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #endif
 
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
+#if MEM_USAGE
     uint64_t mb = 0;
+#endif
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _iso_alloc_zone_leak_detector(zone, false);
     }
 
-    mb = __iso_alloc_mem_usage();
-
 #if MEM_USAGE
+    mb = __iso_alloc_mem_usage();
     LOG("Total megabytes consumed by all zones: %lu", mb);
     _iso_alloc_print_stats();
 #endif
