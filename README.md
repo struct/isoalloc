@@ -201,9 +201,11 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void iso_verify_zone(iso_alloc_zone_handle *zone)` - Verifies the state of specified zone. Will abort if inconsistencies are found.
 
-`int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of private zones via prctl on Android
+`int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name)` - Allows naming of private zones via prctl on Android.
 
-`void iso_flush_caches()` - Flushes all thread specific caches. Intended to be used upon thread destruction
+`void iso_flush_caches()` - Flushes all thread specific caches. Intended to be used upon thread destruction.
+
+`size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone)` - Returns the total number of chunks a private zone can hold not including canary chunks. If canaries are disabled this number is absolute, otherwise it is a safe lower bound and actual number may be higher due to canary creation random seed.
 
 ### Experimental APIs
 

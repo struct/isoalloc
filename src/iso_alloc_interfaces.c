@@ -52,6 +52,17 @@ EXTERNAL_API size_t iso_chunksz(void *p) {
     return _iso_chunk_size(p);
 }
 
+EXTERNAL_API NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone) {
+    UNMASK_ZONE_HANDLE(zone);
+    iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
+    size_t canaries = 0;
+
+#if !DISABLE_CANARY
+    canaries = _zone->chunk_count >> CANARY_COUNT_DIV;
+#endif
+    return (_zone->chunk_count - canaries);
+}
+
 EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size) {
     if(size == 0) {
         iso_free(p);

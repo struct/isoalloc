@@ -108,7 +108,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
  * a root like a GC, so if you purposefully did not free a
  * chunk then expect it to show up as leaked! */
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile) {
-    uint64_t in_use = 0;
+    uint32_t in_use = 0;
 
 #if LEAK_DETECTOR || HEAP_PROFILER
     if(zone == NULL) {
@@ -118,7 +118,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     UNMASK_ZONE_PTRS(zone);
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    int64_t was_used = 0;
+    uint32_t was_used = 0;
 
     for(int64_t i = 0; i < zone->bitmap_size / sizeof(bitmap_index_t); i++) {
         for(size_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
@@ -158,8 +158,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     }
 
     if(profile == false) {
-        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%lu) (%d percent) (%d)", zone->index, zone->chunk_size, zone->chunk_count,
-            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100.0, zone->bitmap_size);
+        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use (%d)", zone->index, zone->chunk_size, zone->chunk_count,
+            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100.0, in_use);
     }
 
     MASK_ZONE_PTRS(zone);
