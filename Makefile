@@ -321,6 +321,8 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/zero_alloc.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/zero_alloc $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uninit_read.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uninit_read $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/pool_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/pool_test $(LDFLAGS)
+
 	utils/run_tests.sh
 
 init_test: clean library_debug_unit_tests
@@ -363,9 +365,9 @@ ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
 endif
 	$(CC) $(CFLAGS) $(C_SRCS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
 	$(CC) $(CFLAGS) $(OPTIMIZE) $(EXE_CFLAGS) $(OS_FLAGS) -DMALLOC_PERF_TEST $(ISO_ALLOC_PRINTF_SRC) tests/tests.c -o $(BUILD_DIR)/malloc_tests
-	echo "Running IsoAlloc Performance Test"
+	@echo "Running IsoAlloc Performance Test"
 	build/tests
-	echo "Running system malloc Performance Test"
+	@echo "Running system malloc Performance Test"
 	build/malloc_tests
 
 ## C++ Support - Build a debug version of the unit test

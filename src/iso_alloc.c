@@ -283,7 +283,7 @@ INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
-    _iso_alloc_destroy_zone_unlocked(zone, true, false);
+    _iso_alloc_destroy_zone_unlocked(zone, true, true);
     UNLOCK_ROOT();
 }
 
@@ -325,8 +325,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         __iso_memset(zone, 0x0, sizeof(iso_alloc_zone_t));
         zone->is_full = true;
 #else
+        /* Flip the zone to internally managed */
         zone->internal = true;
         zone->is_full = false;
+
+        fixup_next_sz_index(zone, -1);
 
         /* Reusing private zones has the potential for introducing
          * zone-use-after-free patterns. So we bootstrap the zone
@@ -347,11 +350,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
         POISON_ZONE(zone);
     } else {
+        /* The only time we ever destroy an internally managed
+         * zone is from the destructor so its safe unmap pages */
         _unmap_zone(zone);
 
         if(replace == true) {
-            /* The only time we ever destroy a non-private zone
-             * is from the destructor so its safe unmap pages */
             _iso_new_zone(zone->chunk_size, true, zone->index);
         }
     }
@@ -601,38 +604,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     /* The lookup table is never used for private zones */
     if(LIKELY(internal == true)) {
-        _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
-
-        /* If no other zones of this size exist then set the
-         * index in the zone lookup table to its index */
-        if(_root->zone_lookup_table[size] == 0) {
-            _root->zone_lookup_table[size] = new_zone->index;
-        } else {
-            /* If this was a zone replacement then its next_sz_index
-             * is intact and we can leave it alone */
-            if(index < 0) {
-                /* Other zones exist that hold this size. We need to
-                 * fixup the most recent ones next_sz_index member.
-                 * We do this by walking the list using next_sz_index */
-                for(int32_t i = _root->zone_lookup_table[size]; i < _root->zones_used;) {
-                    iso_alloc_zone_t *zt = &_root->zones[i];
-
-                    if(zt->chunk_size != size) {
-                        LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, size);
-                    }
-
-                    /* Follow this zone's next_sz_index member */
-                    if(zt->next_sz_index != 0) {
-                        i = zt->next_sz_index;
-                    } else {
-                        /* If this zones next_sz_index is zero then set
-                         * it to the zone we just created and break */
-                        zt->next_sz_index = new_zone->index;
-                        break;
-                    }
-                }
-            }
-        }
+        fixup_next_sz_index(new_zone, new_zone->index);
     }
 
     MASK_ZONE_PTRS(new_zone);
@@ -643,6 +615,42 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     }
 
     return new_zone;
+}
+
+/* Fixes the next_sz_index list for a given zone */
+INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
+    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
+
+    /* If no other zones of this size exist then set the
+     * index in the zone lookup table to its index */
+    if(_root->zone_lookup_table[zone->chunk_size] == 0) {
+        _root->zone_lookup_table[zone->chunk_size] = zone->index;
+    } else {
+        /* If this was a zone replacement then its next_sz_index
+         * is intact and we can leave it alone */
+        if(index < 0) {
+            /* Other zones exist that hold this size. We need to
+             * fixup the most recent ones next_sz_index member.
+             * We do this by walking the list using next_sz_index */
+            for(int32_t i = _root->zone_lookup_table[zone->chunk_size]; i < _root->zones_used;) {
+                iso_alloc_zone_t *zt = &_root->zones[i];
+
+                if(zt->chunk_size != zone->chunk_size) {
+                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, zone->chunk_size);
+                }
+
+                /* Follow this zone's next_sz_index member */
+                if(zt->next_sz_index != 0) {
+                    i = zt->next_sz_index;
+                } else {
+                    /* If this zones next_sz_index is zero then set
+                     * it to the zone we just created and break */
+                    zt->next_sz_index = zone->index;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /* Pick a random index in the bitmap and start looking

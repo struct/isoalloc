@@ -60,6 +60,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_z
 EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone);
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
+EXTERNAL_API NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_protect_root();
 EXTERNAL_API void iso_alloc_unprotect_root();

@@ -394,6 +394,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
+INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
