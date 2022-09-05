@@ -76,7 +76,9 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
 }
 
 INTERNAL_HIDDEN void _verify_all_zones(void) {
-    for(int32_t i = 0; i < _root->zones_used; i++) {
+    size_t zones_used = _root->zones_used;
+
+    for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
         if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
@@ -620,11 +622,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 /* Fixes the next_sz_index list for a given zone */
 INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
+    size_t zones_used = _root->zones_used;
+    size_t chunk_size = zone->chunk_size;
+    size_t zi = _root->zone_lookup_table[chunk_size];
 
     /* If no other zones of this size exist then set the
      * index in the zone lookup table to its index */
-    if(_root->zone_lookup_table[zone->chunk_size] == 0) {
-        _root->zone_lookup_table[zone->chunk_size] = zone->index;
+    if(_root->zone_lookup_table[chunk_size] == 0) {
+        _root->zone_lookup_table[chunk_size] = zone->index;
     } else {
         /* If this was a zone replacement then its next_sz_index
          * is intact and we can leave it alone */
@@ -632,11 +637,11 @@ INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) 
             /* Other zones exist that hold this size. We need to
              * fixup the most recent ones next_sz_index member.
              * We do this by walking the list using next_sz_index */
-            for(int32_t i = _root->zone_lookup_table[zone->chunk_size]; i < _root->zones_used;) {
+            for(int32_t i = zi; i < zones_used;) {
                 iso_alloc_zone_t *zt = &_root->zones[i];
 
-                if(zt->chunk_size != zone->chunk_size) {
-                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, zone->chunk_size);
+                if(zt->chunk_size != chunk_size) {
+                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, chunk_size);
                 }
 
                 /* Follow this zone's next_sz_index member */
@@ -892,6 +897,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     int32_t i = 0;
 
     size_t orig_size = size;
+    size_t zones_used = _root->zones_used;
 
 #if !STRONG_SIZE_ISOLATION
     /* If we are dealing with small zones then
@@ -913,7 +919,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     if(_root->zone_lookup_table[size] != 0) {
         i = _root->zone_lookup_table[size];
 
-        for(; i < _root->zones_used;) {
+        for(; i < zones_used;) {
             iso_alloc_zone_t *zone = &_root->zones[i];
 
             if(zone->chunk_size != size) {
@@ -957,7 +963,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     i = 0;
 #endif
 
-    for(; i < _root->zones_used; i++) {
+    for(; i < zones_used; i++) {
         zone = &_root->zones[i];
 
         if(zone->chunk_size < orig_size || zone->internal == false) {
@@ -1137,7 +1143,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
              * thread recently used for an alloc/free operation.
              * It's likely we are allocating a similar size chunk
              * and this will speed up that operation */
-            for(size_t i = 0; i < zone_cache_count; i++) {
+            size_t _zone_cache_count = zone_cache_count;
+            for(size_t i = 0; i < _zone_cache_count; i++) {
                 if(zone_cache[i].chunk_size >= size) {
                     iso_alloc_zone_t *_zone = zone_cache[i].zone;
                     if(is_zone_usable(_zone, size) != NULL) {
@@ -1252,7 +1259,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     }
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < zone_cache_count; i++) {
+    size_t _zone_cache_count = zone_cache_count;
+    for(int64_t i = 0; i < _zone_cache_count; i++) {
         zone = zone_cache[i].zone;
         bitmap_start = UNMASK_BITMAP_PTR(zone);
 
@@ -1261,8 +1269,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
         }
     }
 
+    size_t zones_used = _root->zones_used;
+
     /* Now we check all zones, this is the slowest path */
-    for(int64_t i = 0; i < _root->zones_used; i++) {
+    for(int64_t i = 0; i < zones_used; i++) {
         zone = &_root->zones[i];
         bitmap_start = UNMASK_BITMAP_PTR(zone);
 
@@ -1285,7 +1295,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     }
 
     /* Now we check the MRU thread zone cache */
-    for(int64_t i = 0; i < zone_cache_count; i++) {
+    size_t _zone_cache_count = zone_cache_count;
+    for(int64_t i = 0; i < _zone_cache_count; i++) {
         zone = zone_cache[i].zone;
         user_pages_start = UNMASK_USER_PTR(zone);
 
@@ -1294,8 +1305,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
         }
     }
 
+    size_t zones_used = _root->zones_used;
+
     /* Now we check all zones, this is the slowest path */
-    for(int64_t i = 0; i < _root->zones_used; i++) {
+    for(int64_t i = 0; i < zones_used; i++) {
         zone = &_root->zones[i];
         user_pages_start = UNMASK_USER_PTR(zone);
 
@@ -1440,15 +1453,6 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
-    uint64_t which_bit = WHICH_BIT(bit_slot);
-    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
-
-    /* Read out 64 bits from the bitmap. We will write
-     * them back before we return. This reduces the
-     * number of times we have to hit the bitmap page
-     * which could result in a page fault */
-    bitmap_index_t b = bm[dwords_to_bit_slot];
-
     /* Ensure the pointer is a multiple of chunk size. Chunk size
      * should always be a power of 2 so this bitwise AND works and
      * is generally faster than modulo */
@@ -1460,6 +1464,15 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
+
+    uint64_t which_bit = WHICH_BIT(bit_slot);
+    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
+
+    /* Read out 64 bits from the bitmap. We will write
+     * them back before we return. This reduces the
+     * number of times we have to hit the bitmap page
+     * which could result in a page fault */
+    bitmap_index_t b = bm[dwords_to_bit_slot];
 
     /* Double free detection */
     if(UNLIKELY((GET_BIT(b, which_bit)) == 0)) {
@@ -1543,7 +1556,9 @@ INTERNAL_HIDDEN void flush_caches() {
 
 INTERNAL_HIDDEN INLINE void flush_chunk_quarantine() {
     /* Free all the thread quarantined chunks */
-    for(int64_t i = 0; i < _root->chunk_quarantine_count; i++) {
+    size_t chunk_quarantine_count = _root->chunk_quarantine_count;
+
+    for(int64_t i = 0; i < chunk_quarantine_count; i++) {
         _iso_free_internal_unlocked((void *) _root->chunk_quarantine[i], false, NULL);
     }
 
@@ -1973,7 +1988,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     uint64_t mb = 0;
 #endif
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    size_t zones_used = _root->zones_used;
+
+    for(uint32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _iso_alloc_zone_leak_detector(zone, false);
     }
@@ -1986,7 +2003,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #endif
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    for(uint32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _verify_zone(zone);
 #if ISO_DTOR_CLEANUP
