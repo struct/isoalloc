@@ -619,7 +619,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     return new_zone;
 }
 
-/* Fixes the next_sz_index list for a given zone */
+/* Appends a zone to the next_sz_index list for the size it manages */
 INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
     const size_t chunk_size = zone->chunk_size;
