@@ -9,8 +9,9 @@
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
     uint8_t *search = NULL;
     uint8_t *end = NULL;
+    const size_t zones_used = _root->zones_used;
 
-    for(int32_t i = 0; i < _root->zones_used; i++) {
+    for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
         search = UNMASK_USER_PTR(zone);
