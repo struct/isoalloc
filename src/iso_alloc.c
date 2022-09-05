@@ -1975,6 +1975,8 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
     flush_chunk_quarantine();
 
+    size_t zones_used = _root->zones_used;
+
 #if HEAP_PROFILER
     _iso_output_profile();
 #endif
@@ -1987,8 +1989,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #if MEM_USAGE
     uint64_t mb = 0;
 #endif
-
-    size_t zones_used = _root->zones_used;
 
     for(uint32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
