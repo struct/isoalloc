@@ -76,7 +76,7 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
 }
 
 INTERNAL_HIDDEN void _verify_all_zones(void) {
-    size_t zones_used = _root->zones_used;
+    const size_t zones_used = _root->zones_used;
 
     for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
@@ -622,15 +622,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 /* Fixes the next_sz_index list for a given zone */
 INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
-    size_t zones_used = _root->zones_used;
-    size_t chunk_size = zone->chunk_size;
-    size_t zi = _root->zone_lookup_table[chunk_size];
+    const size_t chunk_size = zone->chunk_size;
 
     /* If no other zones of this size exist then set the
      * index in the zone lookup table to its index */
     if(_root->zone_lookup_table[chunk_size] == 0) {
         _root->zone_lookup_table[chunk_size] = zone->index;
     } else {
+        const size_t zones_used = _root->zones_used;
+        const size_t zi = _root->zone_lookup_table[chunk_size];
+
         /* If this was a zone replacement then its next_sz_index
          * is intact and we can leave it alone */
         if(index < 0) {
@@ -897,7 +898,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     int32_t i = 0;
 
     size_t orig_size = size;
-    size_t zones_used = _root->zones_used;
+    const size_t zones_used = _root->zones_used;
 
 #if !STRONG_SIZE_ISOLATION
     /* If we are dealing with small zones then
@@ -1269,7 +1270,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
         }
     }
 
-    size_t zones_used = _root->zones_used;
+    const size_t zones_used = _root->zones_used;
 
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < zones_used; i++) {
@@ -1305,7 +1306,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
         }
     }
 
-    size_t zones_used = _root->zones_used;
+    const size_t zones_used = _root->zones_used;
 
     /* Now we check all zones, this is the slowest path */
     for(int64_t i = 0; i < zones_used; i++) {
@@ -1975,7 +1976,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
     flush_chunk_quarantine();
 
-    size_t zones_used = _root->zones_used;
+    const size_t zones_used = _root->zones_used;
 
 #if HEAP_PROFILER
     _iso_output_profile();
