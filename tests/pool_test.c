@@ -4,11 +4,11 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
-uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
-                               ZONE_256, ZONE_512, ZONE_1024,
-                               ZONE_2048, ZONE_4096, ZONE_8192};
+static const uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
+                                            ZONE_256, ZONE_512, ZONE_1024,
+                                            ZONE_2048, ZONE_4096, ZONE_8192};
 
-uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192};
+static const uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192};
 
 int allocate(size_t array_size, size_t allocation_size) {
     iso_alloc_zone_handle *zone = iso_alloc_new_zone(allocation_size);
