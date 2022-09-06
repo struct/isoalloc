@@ -349,7 +349,14 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
          * back to the OS. It will still be available if we
          * try to use it */
         madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
+#if !__APPLE__
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
+#else
+        /* we allow the system to better track user_pages_start here
+         * see MADV_FREE_REUSE note */
+        while(madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
+        }
+#endif
         POISON_ZONE(zone);
     } else {
         /* The only time we ever destroy an internally managed
@@ -577,7 +584,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     create_guard_page(user_pages_guard_above);
 
+#if !__APPLE__
     madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
+#else
+    /* on macOs, in order to get a more accurate accounting via the task_info api,
+     * we need to use the MADV_FREE_REUSE/MADV_FREE_REUSABLE duo instead which
+     * albeit happening in rare occasions might not succeed on device business
+     * thus EAGAIN is the only acceptable retry flow. */
+    while(madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_FREE_REUSE) && errno == EAGAIN) {
+    }
+#endif
 
     /* We created a new zone, we did not replace a retired one */
     if(index > 0) {
@@ -1755,7 +1771,12 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
 
+#if !__APPLE__
     madvise(big_zone->user_pages_start, big_zone->size, MADV_DONTNEED);
+#else
+    while(madvise(big_zone->user_pages_start, big_zone->size, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
+    }
+#endif
 
     /* If this isn't a permanent free then all we need
      * to do is sanitize the mapping and mark it free.
