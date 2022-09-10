@@ -619,7 +619,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     return new_zone;
 }
 
-/* Fixes the next_sz_index list for a given zone */
+/* Appends a zone to the next_sz_index list for the size it manages */
 INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
     const size_t chunk_size = zone->chunk_size;
@@ -672,14 +672,12 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
      * start searching but may mean we end up with a smaller
      * cache. This may negatively affect performance but
      * leads to a less predictable free list */
-    bitmap_index_t bm_idx;
+    bitmap_index_t bm_idx = 0;
 
     /* The largest zone->max_bitmap_idx we will ever
      * have is 8192 for SMALLEST_CHUNK_SZ (16) */
     if(zone->max_bitmap_idx > ALIGNMENT) {
-        bm_idx = ((uint32_t) rand_uint64() * (zone->max_bitmap_idx - 1) >> 32);
-    } else {
-        bm_idx = 0;
+        bm_idx = ((uint32_t) rand_uint64() & (zone->max_bitmap_idx - 1));
     }
 
     __iso_memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
