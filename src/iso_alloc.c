@@ -9,15 +9,6 @@
 #endif
 
 #if THREAD_SUPPORT
-
-#if USE_SPINLOCK
-atomic_flag root_busy_flag;
-atomic_flag big_zone_busy_flag;
-#else
-pthread_mutex_t root_busy_mutex;
-pthread_mutex_t big_zone_busy_mutex;
-#endif
-
 /* We cannot initialize this on thread creation so
  * we can't mmap them somewhere with guard pages but
  * they are thread local storage so their location
@@ -37,10 +28,6 @@ static size_t zone_cache_count;
 uint32_t g_page_size;
 uint32_t g_page_size_shift;
 iso_alloc_root *_root;
-
-#if NO_ZERO_ALLOCATIONS
-void *_zero_alloc_page;
-#endif
 
 #if ENABLE_ASAN
 INTERNAL_HIDDEN void verify_all_zones(void) {
@@ -234,24 +221,25 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
         return;
     }
 
+    g_page_size = sysconf(_SC_PAGESIZE);
+    g_page_size_shift = _log2(g_page_size);
+
+    iso_alloc_initialize_global_root();
+
 #if THREAD_SUPPORT && !USE_SPINLOCK
-    pthread_mutex_init(&root_busy_mutex, NULL);
-    pthread_mutex_init(&big_zone_busy_mutex, NULL);
+    pthread_mutex_init(&_root->root_busy_mutex, NULL);
+    pthread_mutex_init(&_root->big_zone_busy_mutex, NULL);
 #if ALLOC_SANITY
     pthread_mutex_init(&sane_cache_mutex, NULL);
 #endif
 #endif
 
-    g_page_size = sysconf(_SC_PAGESIZE);
-    g_page_size_shift = _log2(g_page_size);
-
-    iso_alloc_initialize_global_root();
 #if HEAP_PROFILER
     _initialize_profiler();
 #endif
 
 #if NO_ZERO_ALLOCATIONS
-    _zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
+    _root->zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
 #endif
 
 #if ALLOC_SANITY && UNINIT_READ_SANITY
@@ -975,8 +963,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
 
 /* Does not require the root is locked */
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
+    _tzc *tzc = zone_cache;
+
     /* Don't cache this zone if it was recently cached */
-    if(zone_cache_count != 0 && zone_cache[zone_cache_count - 1].zone == zone) {
+    if(zone_cache_count != 0 && tzc[zone_cache_count - 1].zone == zone) {
         return;
     }
 
@@ -985,13 +975,13 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
     }
 
     if(zone_cache_count < ZONE_CACHE_SZ) {
-        zone_cache[zone_cache_count].zone = zone;
-        zone_cache[zone_cache_count].chunk_size = zone->chunk_size;
+        tzc[zone_cache_count].zone = zone;
+        tzc[zone_cache_count].chunk_size = zone->chunk_size;
         zone_cache_count++;
     } else {
         zone_cache_count = 0;
-        zone_cache[zone_cache_count].zone = zone;
-        zone_cache[zone_cache_count].chunk_size = zone->chunk_size;
+        tzc[zone_cache_count].zone = zone;
+        tzc[zone_cache_count].chunk_size = zone->chunk_size;
     }
 }
 
@@ -1018,7 +1008,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
 #if NO_ZERO_ALLOCATIONS
     if(UNLIKELY(size == 0 && _root != NULL)) {
-        return _zero_alloc_page;
+        return _root->zero_alloc_page;
     }
 #endif
 
@@ -1048,7 +1038,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
          * initialized the root yet return the zero page */
         if(UNLIKELY(size == 0)) {
             UNLOCK_ROOT();
-            return _zero_alloc_page;
+            return _root->zero_alloc_page;
         }
 #endif
 #else
@@ -1087,9 +1077,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
              * It's likely we are allocating a similar size chunk
              * and this will speed up that operation */
             size_t _zone_cache_count = zone_cache_count;
+            _tzc *tzc = zone_cache;
+
             for(size_t i = 0; i < _zone_cache_count; i++) {
-                if(zone_cache[i].chunk_size >= size) {
-                    iso_alloc_zone_t *_zone = zone_cache[i].zone;
+                if(tzc[i].chunk_size >= size) {
+                    iso_alloc_zone_t *_zone = tzc[i].zone;
                     if(is_zone_usable(_zone, size) != NULL) {
                         zone = _zone;
                         break;
@@ -1203,8 +1195,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
 
     /* Now we check the MRU thread zone cache */
     size_t _zone_cache_count = zone_cache_count;
+    _tzc *tzc = zone_cache;
     for(int64_t i = 0; i < _zone_cache_count; i++) {
-        zone = zone_cache[i].zone;
+        zone = tzc[i].zone;
         bitmap_start = UNMASK_BITMAP_PTR(zone);
 
         if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
@@ -1239,8 +1232,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
 
     /* Now we check the MRU thread zone cache */
     size_t _zone_cache_count = zone_cache_count;
+    _tzc *tzc = zone_cache;
     for(int64_t i = 0; i < _zone_cache_count; i++) {
-        zone = zone_cache[i].zone;
+        zone = tzc[i].zone;
         user_pages_start = UNMASK_USER_PTR(zone);
 
         if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
@@ -1515,7 +1509,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(UNLIKELY(p == _zero_alloc_page)) {
+    if(UNLIKELY(p == _root->zero_alloc_page)) {
         return;
     }
 #endif
@@ -1558,11 +1552,11 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(UNLIKELY(p == _zero_alloc_page && size != 0)) {
+    if(UNLIKELY(p == _root->zero_alloc_page && size != 0)) {
         LOG_AND_ABORT("Zero sized chunk (0x%p) with non-zero (%d) size passed to free", p, size);
     }
 
-    if(p == _zero_alloc_page) {
+    if(p == _root->zero_alloc_page) {
         return;
     }
 #endif
@@ -1880,7 +1874,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     }
 
 #if NO_ZERO_ALLOCATIONS
-    if(UNLIKELY(p == _zero_alloc_page)) {
+    if(UNLIKELY(p == _root->zero_alloc_page)) {
         return 0;
     }
 #endif
@@ -1930,7 +1924,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #endif
 
 #if NO_ZERO_ALLOCATIONS
-    munmap(_zero_alloc_page, g_page_size);
+    munmap(_root->zero_alloc_page, g_page_size);
 #endif
 
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
