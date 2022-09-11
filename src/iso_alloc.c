@@ -273,16 +273,6 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 }
 #endif
 
-INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone) {
-    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
-    munmap(zone->bitmap_start, zone->bitmap_size);
-    munmap(zone->bitmap_start - g_page_size, g_page_size);
-    munmap(zone->bitmap_start + zone->bitmap_size, g_page_size);
-    munmap(zone->user_pages_start, ZONE_USER_SIZE);
-    munmap(zone->user_pages_start - g_page_size, g_page_size);
-    munmap(zone->user_pages_start + ZONE_USER_SIZE, g_page_size);
-}
-
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     _iso_alloc_destroy_zone_unlocked(zone, true, true);
@@ -302,70 +292,22 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
     UNMASK_ZONE_PTRS(zone);
     UNPOISON_ZONE(zone);
 
-    if(zone->internal == false) {
-        /* This zone can be used again, we just need to wipe
-         * any sensitive data from it and prime it for use */
-        __iso_memset(zone->bitmap_start, 0x0, zone->bitmap_size);
-        __iso_memset(zone->user_pages_start, 0x0, ZONE_USER_SIZE);
-
 #if MEMORY_TAGGING
-        /* Clear the memory tags */
+    /* If the zone is tagged then unmap the page holding the tags */
+    if(zone->tagged == true) {
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
-        uint8_t *_mtp = (zone->user_pages_start - g_page_size - s);
-        __iso_memset(_mtp, 0x0, s);
-        mprotect_pages(_mtp, s, PROT_NONE);
+        void *_mtp = (zone->user_pages_start - s - g_page_size);
+        munmap(_mtp, g_page_size + s);
         zone->tagged = false;
+    }
 #endif
 
-#if NEVER_REUSE_ZONES || FUZZ_MODE
-        /* This will waste memory because we will never
-         * unmap these pages, even in the destructor */
-        mprotect_pages(zone->bitmap_start, zone->bitmap_size, PROT_NONE);
-        mprotect_pages(zone->user_pages_start, ZONE_USER_SIZE, PROT_NONE);
+    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
+    munmap(zone->bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
+    munmap(zone->user_pages_start - g_page_size, (ZONE_USER_SIZE + g_page_size * 2));
 
-        /* Make this zone unusable */
-        __iso_memset(zone, 0x0, sizeof(iso_alloc_zone_t));
-        zone->is_full = true;
-#else
-        /* Flip the zone to internally managed */
-        zone->internal = true;
-        zone->is_full = false;
-
-        fixup_next_sz_index(zone, -1);
-
-        /* Reusing private zones has the potential for introducing
-         * zone-use-after-free patterns. So we bootstrap the zone
-         * from scratch here */
-        create_canary_chunks(zone);
-
-        fill_free_bit_slot_cache(zone);
-
-        /* Prime the next_free_bit_slot member */
-        get_next_free_bit_slot(zone);
-
-        MASK_ZONE_PTRS(zone);
-#endif
-        /* If we are destroying the zone lets give the memory
-         * back to the OS. It will still be available if we
-         * try to use it */
-        madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
-#if !__APPLE__
-        madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
-#else
-        /* we allow the system to better track user_pages_start here
-         * see MADV_FREE_REUSE note */
-        while(madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
-        }
-#endif
-        POISON_ZONE(zone);
-    } else {
-        /* The only time we ever destroy an internally managed
-         * zone is from the destructor so its safe unmap pages */
-        _unmap_zone(zone);
-
-        if(replace == true) {
-            _iso_new_zone(zone->chunk_size, true, zone->index);
-        }
+    if(replace == true) {
+        _iso_new_zone(zone->chunk_size, true, zone->index);
     }
 }
 
@@ -513,7 +455,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     create_guard_page(bitmap_pages_guard_above);
 
     /* Bitmap pages are accessed often and usually in sequential order */
+#if !__APPLE__
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
+#else
+    /* on macOs, in order to get a more accurate accounting via the task_info api,
+     * we need to use the MADV_FREE_REUSE/MADV_FREE_REUSABLE duo instead which
+     * albeit happening in rare occasions might not succeed on device business
+     * thus EAGAIN is the only acceptable retry flow. */
+    while(madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_FREE_REUSE) && errno == EAGAIN) {
+    }
+#endif
 
     char *name = NULL;
 
@@ -559,8 +510,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         new_zone->user_pages_start = (p + g_page_size + tag_mapping_size + g_page_size);
         uint64_t *_mtp = p + g_page_size;
 
+        int64_t tms = tag_mapping_size / sizeof(uint64_t);
+
         /* Generate random tags */
-        for(uint64_t o = 0; o < tag_mapping_size / sizeof(uint64_t); o++) {
+        for(uint64_t o = 0; o < tms; o++) {
             _mtp[o] = rand_uint64();
         }
     } else {
@@ -620,9 +573,26 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     POISON_ZONE(new_zone);
 
+    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
+
     /* The lookup table is never used for private zones */
     if(LIKELY(internal == true)) {
-        fixup_next_sz_index(new_zone, new_zone->index);
+        /* If no other zones of this size exist then set the
+         * index in the zone lookup table to its index */
+        if(_root->zone_lookup_table[size] == 0) {
+            _root->zone_lookup_table[size] = new_zone->index;
+            new_zone->next_sz_index = 0;
+        } else {
+            /* If the index is < 0 then this is a brand new zone and
+             * not a replacement which means we need to add it to the
+             * zone_lookup_table. We prepend it to the start of the
+             * list ensuring it is checked first on alloc path */
+            if(index < 0) {
+                int32_t current_idx = _root->zone_lookup_table[size];
+                _root->zone_lookup_table[size] = new_zone->index;
+                new_zone->next_sz_index = current_idx;
+            }
+        }
     }
 
     MASK_ZONE_PTRS(new_zone);
@@ -633,46 +603,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     }
 
     return new_zone;
-}
-
-/* Appends a zone to the next_sz_index list for the size it manages */
-INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index) {
-    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = zone->index;
-    const size_t chunk_size = zone->chunk_size;
-
-    /* If no other zones of this size exist then set the
-     * index in the zone lookup table to its index */
-    if(_root->zone_lookup_table[chunk_size] == 0) {
-        _root->zone_lookup_table[chunk_size] = zone->index;
-    } else {
-        const size_t zones_used = _root->zones_used;
-        const size_t zi = _root->zone_lookup_table[chunk_size];
-
-        /* If this was a zone replacement then its next_sz_index
-         * is intact and we can leave it alone */
-        if(index < 0) {
-            /* Other zones exist that hold this size. We need to
-             * fixup the most recent ones next_sz_index member.
-             * We do this by walking the list using next_sz_index */
-            for(int32_t i = zi; i < zones_used;) {
-                iso_alloc_zone_t *zt = &_root->zones[i];
-
-                if(zt->chunk_size != chunk_size) {
-                    LOG_AND_ABORT("Inconsistent lookup table for zone[%d] chunk size %d (%d)", zt->index, zt->chunk_size, chunk_size);
-                }
-
-                /* Follow this zone's next_sz_index member */
-                if(zt->next_sz_index != 0) {
-                    i = zt->next_sz_index;
-                } else {
-                    /* If this zones next_sz_index is zero then set
-                     * it to the zone we just created and break */
-                    zt->next_sz_index = zone->index;
-                    break;
-                }
-            }
-        }
-    }
 }
 
 /* Pick a random index in the bitmap and start looking
@@ -708,8 +638,8 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
             return;
         }
 
-        bit_slot_t bts = bm[bm_idx];
-        bitmap_index_t bm_idx_shf = bm_idx << BITS_PER_QWORD_SHIFT;
+        const bit_slot_t bts = bm[bm_idx];
+        const bitmap_index_t bm_idx_shf = bm_idx << BITS_PER_QWORD_SHIFT;
 
         /* If the byte is 0 then its faster to add each
          * bitslot without checking each bit value */
@@ -718,7 +648,7 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
                 zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + z);
                 free_bit_slot_cache_index++;
 
-                if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+                if(UNLIKELY(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ)) {
                     zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
                     return;
                 }
@@ -729,7 +659,7 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
                     zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + j);
                     free_bit_slot_cache_index++;
 
-                    if(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+                    if(UNLIKELY(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ)) {
                         zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
                         return;
                     }

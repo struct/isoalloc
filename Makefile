@@ -10,8 +10,7 @@ CXX = clang++
 ## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
 ## NEVER_REUSE_ZONES - Tells IsoAlloc to unmap user and bitmap pages when destroying private zones
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0	\
-                 -DNEVER_REUSE_ZONES=0
+SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0
 
 ## Enable memory tagging support. This will generate a random
 ## 1 byte tag per addressable chunk of memory. These tags can

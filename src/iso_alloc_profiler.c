@@ -119,8 +119,9 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
 
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     uint32_t was_used = 0;
+    int64_t bms = zone->bitmap_size / sizeof(bitmap_index_t);
 
-    for(int64_t i = 0; i < zone->bitmap_size / sizeof(bitmap_index_t); i++) {
+    for(int64_t i = 0; i < bms; i++) {
         for(size_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
 
             if(bm[i] == 0) {
@@ -150,7 +151,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
                     in_use++;
 
                     if(profile == false) {
-                        LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %lu)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
+                        LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %d)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
                     }
                 }
             }
@@ -159,7 +160,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
 
     if(profile == false) {
         LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use (%d)", zone->index, zone->chunk_size, zone->chunk_count,
-            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100.0, in_use);
+            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100, in_use);
     }
 
     MASK_ZONE_PTRS(zone);
@@ -193,8 +194,8 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
         iso_alloc_zone_t *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d", zone->index, zone->chunk_size,
-            (ZONE_USER_SIZE / MEGABYTE_SIZE), zone->next_sz_index, zone->alloc_count);
+        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d, in use %d", zone->index, zone->chunk_size,
+            (ZONE_USER_SIZE / MEGABYTE_SIZE), zone->next_sz_index, zone->alloc_count, zone->af_count);
     }
 
     return (mem_usage / MEGABYTE_SIZE);

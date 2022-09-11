@@ -372,7 +372,6 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_free_quarantine(void *p);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
-INTERNAL_HIDDEN void _unmap_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
@@ -394,7 +393,6 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
-INTERNAL_HIDDEN void fixup_next_sz_index(iso_alloc_zone_t *zone, int32_t index);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
