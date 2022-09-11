@@ -348,12 +348,14 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
         /* If we are destroying the zone lets give the memory
          * back to the OS. It will still be available if we
          * try to use it */
-        madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
 #if !__APPLE__
+        madvise(zone->bitmap_start, zone->bitmap_size, MADV_DONTNEED);
         madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_DONTNEED);
 #else
         /* we allow the system to better track user_pages_start here
          * see MADV_FREE_REUSE note */
+        while(madvise(zone->bitmap_start, zone->bitmap_size, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
+        }
         while(madvise(zone->user_pages_start, ZONE_USER_SIZE, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
         }
 #endif
@@ -513,7 +515,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     create_guard_page(bitmap_pages_guard_above);
 
     /* Bitmap pages are accessed often and usually in sequential order */
+#if !__APPLE__
     madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
+#else
+    while(madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_FREE_REUSE) && errno == EAGAIN) {
+    }
+#endif
 
     char *name = NULL;
 
