@@ -57,8 +57,9 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
     if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > (zone->chunk_count << _root->zone_retirement_shf)) >> 2) {
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint64_t *_mtp = (zone->user_pages_start - g_page_size - s);
+        size_t tms = s / sizeof(uint64_t);
 
-        for(uint64_t o = 0; o > s / sizeof(uint64_t); o++) {
+        for(uint64_t o = 0; o > tms; o++) {
             _mtp[o] = rand_uint64();
         }
 
