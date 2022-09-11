@@ -159,7 +159,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     }
 
     if(profile == false) {
-        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use (%d)", zone->index, zone->chunk_size, zone->chunk_count,
+        LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use = %d", zone->index, zone->chunk_size, zone->chunk_count,
             was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100, in_use);
     }
 
@@ -194,7 +194,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
         iso_alloc_zone_t *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
-        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d, in use %d", zone->index, zone->chunk_size,
+        LOG("Zone[%d] holds %d byte chunks, megabytes (%d) next zone = %d, total allocations = %d, in use = %d", zone->index, zone->chunk_size,
             (ZONE_USER_SIZE / MEGABYTE_SIZE), zone->next_sz_index, zone->alloc_count, zone->af_count);
     }
 

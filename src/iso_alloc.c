@@ -582,16 +582,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         if(_root->zone_lookup_table[size] == 0) {
             _root->zone_lookup_table[size] = new_zone->index;
             new_zone->next_sz_index = 0;
-        } else {
+        } else if(index < 0) {
             /* If the index is < 0 then this is a brand new zone and
              * not a replacement which means we need to add it to the
              * zone_lookup_table. We prepend it to the start of the
              * list ensuring it is checked first on alloc path */
-            if(index < 0) {
-                int32_t current_idx = _root->zone_lookup_table[size];
-                _root->zone_lookup_table[size] = new_zone->index;
-                new_zone->next_sz_index = current_idx;
-            }
+            int32_t current_idx = _root->zone_lookup_table[size];
+            _root->zone_lookup_table[size] = new_zone->index;
+            new_zone->next_sz_index = current_idx;
         }
     }
 
