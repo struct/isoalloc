@@ -16,6 +16,8 @@ Contributing to IsoAlloc is a pretty standard process of forking the repo, makin
 
 `make cpp_library` - Build a release version of the library with C++ support
 
+Repeat the steps above using gcc/g++ as your compiler. e.g. `make tests CC=gcc CXX=g++`
+
 Compile a debug version of the library with `make cpp_library_debug` and then run a basic test using `LD_PRELOAD` and another binary.
 
 If you're making changes that are handled differently between Clang and GCC then please run the tests above but also set the `CC` and `CXX` environment variables approriately.

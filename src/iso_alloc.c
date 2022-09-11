@@ -9,6 +9,12 @@
 #endif
 
 #if THREAD_SUPPORT
+
+#if USE_SPINLOCK
+atomic_flag root_busy_flag;
+#else
+pthread_mutex_t root_busy_mutex;
+#endif
 /* We cannot initialize this on thread creation so
  * we can't mmap them somewhere with guard pages but
  * they are thread local storage so their location
@@ -227,7 +233,7 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
     iso_alloc_initialize_global_root();
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
-    pthread_mutex_init(&_root->root_busy_mutex, NULL);
+    pthread_mutex_init(&root_busy_mutex, NULL);
     pthread_mutex_init(&_root->big_zone_busy_mutex, NULL);
 #if ALLOC_SANITY
     pthread_mutex_init(&sane_cache_mutex, NULL);

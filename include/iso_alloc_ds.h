@@ -89,10 +89,8 @@ typedef struct {
     size_t zones_size;
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
-    atomic_flag root_busy_flag;
     atomic_flag big_zone_busy_flag;
 #else
-    pthread_mutex_t root_busy_mutex;
     pthread_mutex_t big_zone_busy_mutex;
 #endif
 #endif

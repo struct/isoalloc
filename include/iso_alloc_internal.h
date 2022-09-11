@@ -284,12 +284,13 @@ extern uint32_t g_page_size_shift;
 
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
+extern atomic_flag root_busy_flag;
 #define LOCK_ROOT() \
     do {            \
-    } while(atomic_flag_test_and_set(&_root->root_busy_flag));
+    } while(atomic_flag_test_and_set(&root_busy_flag));
 
 #define UNLOCK_ROOT() \
-    atomic_flag_clear(&_root->root_busy_flag);
+    atomic_flag_clear(&root_busy_flag);
 
 #define LOCK_BIG_ZONE() \
     do {                \
@@ -298,11 +299,12 @@ extern uint32_t g_page_size_shift;
 #define UNLOCK_BIG_ZONE() \
     atomic_flag_clear(&_root->big_zone_busy_flag);
 #else
+extern pthread_mutex_t root_busy_mutex;
 #define LOCK_ROOT() \
-    pthread_mutex_lock(&_root->root_busy_mutex);
+    pthread_mutex_lock(&root_busy_mutex);
 
 #define UNLOCK_ROOT() \
-    pthread_mutex_unlock(&_root->root_busy_mutex);
+    pthread_mutex_unlock(&root_busy_mutex);
 
 #define LOCK_BIG_ZONE() \
     pthread_mutex_lock(&_root->big_zone_busy_mutex);

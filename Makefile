@@ -374,8 +374,8 @@ cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
 	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
 	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
-	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/cxx_tests
-	LD_LIBRARY_PATH=$(BUILD_DIR)/ LD_PRELOAD=$(BUILD_DIR)/$(LIBNAME) $(BUILD_DIR)/tagged_ptr_test
+	LD_LIBRARY_PATH=$(BUILD_DIR)/ $(BUILD_DIR)/cxx_tests
+	LD_LIBRARY_PATH=$(BUILD_DIR)/ $(BUILD_DIR)/tagged_ptr_test
 
 install:
 	cp -pR build/$(LIBNAME) /usr/lib/
