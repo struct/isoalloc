@@ -87,6 +87,16 @@ typedef struct {
     iso_alloc_big_zone_t *big_zone_head;
     iso_alloc_zone_t *zones;
     size_t zones_size;
+#if THREAD_SUPPORT
+#if USE_SPINLOCK
+    atomic_flag big_zone_busy_flag;
+#else
+    pthread_mutex_t big_zone_busy_mutex;
+#endif
+#endif
+#if NO_ZERO_ALLOCATIONS
+    void *zero_alloc_page;
+#endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 typedef struct {
