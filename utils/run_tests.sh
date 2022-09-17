@@ -11,12 +11,6 @@ $(ulimit -c 0)
 
 export LD_LIBRARY_PATH=build/
 
-#if [[ $OSTYPE == 'darwin'* ]]; then
-#    export DYLD_INSERT_LIBRARIES=build/libisoalloc.dylib
-#else
-#    export LD_PRELOAD=build/libisoalloc.so
-#fi
-
 for t in "${tests[@]}"; do
     echo -n "Running $t test"
     echo "Running $t test" >> test_output.txt 2>&1
