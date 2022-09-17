@@ -970,9 +970,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bit
 /* Does not require the root is locked */
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
     _tzc *tzc = zone_cache;
+    size_t _zone_cache_count = zone_cache_count;
 
     /* Don't cache this zone if it was recently cached */
-    if(zone_cache_count != 0 && tzc[zone_cache_count - 1].zone == zone) {
+    if(_zone_cache_count != 0 && tzc[_zone_cache_count - 1].zone == zone) {
         return;
     }
 
@@ -980,15 +981,17 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
         return;
     }
 
-    if(zone_cache_count < ZONE_CACHE_SZ) {
-        tzc[zone_cache_count].zone = zone;
-        tzc[zone_cache_count].chunk_size = zone->chunk_size;
-        zone_cache_count++;
+    if(_zone_cache_count < ZONE_CACHE_SZ) {
+        tzc[_zone_cache_count].zone = zone;
+        tzc[_zone_cache_count].chunk_size = zone->chunk_size;
+        _zone_cache_count++;
     } else {
-        zone_cache_count = 0;
-        tzc[zone_cache_count].zone = zone;
-        tzc[zone_cache_count].chunk_size = zone->chunk_size;
+        _zone_cache_count = 0;
+        tzc[_zone_cache_count].zone = zone;
+        tzc[_zone_cache_count].chunk_size = zone->chunk_size;
     }
+
+    zone_cache_count = _zone_cache_count;
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
