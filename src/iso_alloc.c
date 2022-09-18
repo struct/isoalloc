@@ -661,7 +661,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     /* Shuffle the free bit slot cache */
     if(free_bit_slots_index > 1) {
         for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
-            free_bit_slot_t j = ((free_bit_slot_t) rand_uint64() * i) >> sizeof(free_bit_slot_t);
+            free_bit_slot_t j = ((free_bit_slot_t) rand_uint64() * i) >> FREE_LIST_SHF;
             bit_slot_t t = zone->free_bit_slots[j];
             zone->free_bit_slots[j] = zone->free_bit_slots[i];
             zone->free_bit_slots[i] = t;

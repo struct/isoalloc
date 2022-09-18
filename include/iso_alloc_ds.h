@@ -17,8 +17,10 @@ typedef uint16_t chunk_lookup_table_t;
 
 #if ZONE_FREE_LIST_SZ > 255
 typedef uint16_t free_bit_slot_t;
+#define FREE_LIST_SHF 16
 #else
 typedef uint8_t free_bit_slot_t;
+#define FREE_LIST_SHF 8
 #endif
 
 typedef struct {
