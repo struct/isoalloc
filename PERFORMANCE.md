@@ -41,9 +41,9 @@ If necessary you can adjust the value of `HUGE_PAGE_SZ` in `conf.h` to reflect t
 
 There are a few important caches and memoization techniques used in IsoAlloc. These significantly improve the performance of alloc/free hot paths and keep the design as simple as possible.
 
-### Zone Freelist Cache
+### Zone Free List
 
-Each zone contains an array of bitslots that represent free chunks in that zone. The allocation hot path searches this cache first in the hopes that the zone has a free chunk available that fits the allocation request. Allocating chunks from this cache is a lot faster than iterating through a zones bitmap for a free bitslot. This cache is refilled whenever it is low. Free'd chunks are added to this cache after they've been in the quarantine.
+Each zone contains an array of bitslots that represent free chunks in that zone. The allocation hot path searches this list first for a free chunk that can satisfy the allocation request. Allocating chunks from this list is a lot faster than iterating through a zones bitmap for a free bitslot. This cache is refilled whenever it is low. Free'd chunks are added to this list after they've been in the quarantine.
 
 ### Chunk to Zone Lookup
 

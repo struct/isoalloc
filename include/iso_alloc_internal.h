@@ -349,7 +349,7 @@ INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
