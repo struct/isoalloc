@@ -556,7 +556,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     /* When we create a new zone its an opportunity to
      * populate our free list cache with random entries */
-    fill_free_bit_slot_cache(new_zone);
+    fill_free_bit_slots(new_zone);
 
     /* Prime the next_free_bit_slot member */
     get_next_free_bit_slot(new_zone);
@@ -603,7 +603,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
  * slot cache with only chunks towards the start of the
  * user mapping. Theres no guarantee this function will
  * find any free slots. */
-INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
 
     /* This gives us an arbitrary spot in the bitmap to
@@ -618,16 +618,15 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
         bm_idx = ((uint32_t) rand_uint64() & (zone->max_bitmap_idx - 1));
     }
 
-    __iso_memset(zone->free_bit_slot_cache, BAD_BIT_SLOT, sizeof(zone->free_bit_slot_cache));
-    zone->free_bit_slot_cache_usable = 0;
-    uint8_t free_bit_slot_cache_index;
+    __iso_memset(zone->free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
+    zone->free_bit_slots_usable = 0;
+    free_bit_slot_t free_bit_slots_index;
 
-    for(free_bit_slot_cache_index = 0; free_bit_slot_cache_index < BIT_SLOT_CACHE_SZ; bm_idx++) {
+    for(free_bit_slots_index = 0; free_bit_slots_index < ZONE_FREE_LIST_SZ; bm_idx++) {
         /* Don't index outside of the bitmap or
          * we will return inaccurate bit slots */
         if(UNLIKELY(bm_idx >= zone->max_bitmap_idx)) {
-            zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
-            return;
+            break;
         }
 
         const bit_slot_t bts = bm[bm_idx];
@@ -637,83 +636,81 @@ INTERNAL_HIDDEN void fill_free_bit_slot_cache(iso_alloc_zone_t *zone) {
          * bitslot without checking each bit value */
         if(bts == 0x0) {
             for(uint64_t z = 0; z < BITS_PER_QWORD; z += BITS_PER_CHUNK) {
-                zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + z);
-                free_bit_slot_cache_index++;
+                zone->free_bit_slots[free_bit_slots_index] = (bm_idx_shf + z);
+                free_bit_slots_index++;
 
-                if(UNLIKELY(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ)) {
-                    zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
-                    return;
+                if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
+                    break;
                 }
             }
         } else {
             for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
                 if((GET_BIT(bts, j)) == 0) {
-                    zone->free_bit_slot_cache[free_bit_slot_cache_index] = (bm_idx_shf + j);
-                    free_bit_slot_cache_index++;
+                    zone->free_bit_slots[free_bit_slots_index] = (bm_idx_shf + j);
+                    free_bit_slots_index++;
 
-                    if(UNLIKELY(free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ)) {
-                        zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
-                        return;
+                    if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
+                        break;
                     }
                 }
             }
         }
     }
 
-#if SHUFFLE_BIT_SLOT_CACHE
+#if SHUFFLE_FREE_BIT_SLOTS
     /* Shuffle the free bit slot cache */
-    if(free_bit_slot_cache_index > 1) {
-        for(uint8_t i = free_bit_slot_cache_index - 1; i > 0; i--) {
-            uint8_t j = (uint8_t) (rand_uint64() % (i + 1));
-            bit_slot_t t = zone->free_bit_slot_cache[j];
-            zone->free_bit_slot_cache[j] = zone->free_bit_slot_cache[i];
-            zone->free_bit_slot_cache[i] = t;
+    if(free_bit_slots_index > 1) {
+        for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
+            free_bit_slot_t j = ((free_bit_slot_t) rand_uint64() * i) >> FREE_LIST_SHF;
+            bit_slot_t t = zone->free_bit_slots[j];
+            zone->free_bit_slots[j] = zone->free_bit_slots[i];
+            zone->free_bit_slots[i] = t;
         }
     }
 #endif
 
-    zone->free_bit_slot_cache_index = free_bit_slot_cache_index;
+    zone->free_bit_slots_index = free_bit_slots_index;
 }
 
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot) {
-#if VERIFY_BIT_SLOT_CACHE
+#if VERIFY_FREE_BIT_SLOTS
     /* The cache is sorted at creation time but once we start
      * free'ing chunks we add bit_slots to it in an unpredictable
      * order. So we can't search the cache with something like
      * a binary search. This brute force search shouldn't incur
      * too much of a performance penalty as we only search starting
-     * at the free_bit_slot_cache_usable index which is updated
+     * at the free_bit_slots_usable index which is updated
      * everytime we call get_next_free_bit_slot(). We do this in
      * order to detect any corruption of the cache that attempts
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks. The _iso_alloc() path also does
      * a check on the bitmap itself before handing out any chunks */
-    const int32_t max_cache_slots = (BIT_SLOT_CACHE_SZ >> 3);
+    const int32_t max_cache_slots = (ZONE_FREE_LIST_SZ >> 3);
 
-    for(int32_t i = zone->free_bit_slot_cache_usable; i < max_cache_slots; i++) {
-        if(zone->free_bit_slot_cache[i] == bit_slot) {
+    for(int32_t i = zone->free_bit_slots_usable; i < max_cache_slots; i++) {
+        if(zone->free_bit_slots[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %lu in cache", zone->index, bit_slot);
         }
     }
 #endif
 
-    if(zone->free_bit_slot_cache_index >= BIT_SLOT_CACHE_SZ) {
+    if(zone->free_bit_slots_index >= ZONE_FREE_LIST_SZ) {
         return;
     }
 
-    zone->free_bit_slot_cache[zone->free_bit_slot_cache_index] = bit_slot;
-    zone->free_bit_slot_cache_index++;
+    zone->free_bit_slots[zone->free_bit_slots_index] = bit_slot;
+    zone->free_bit_slots_index++;
     zone->is_full = false;
 }
 
 INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
-    if(zone->free_bit_slot_cache_usable >= BIT_SLOT_CACHE_SZ ||
-       zone->free_bit_slot_cache_usable > zone->free_bit_slot_cache_index) {
+    if(zone->free_bit_slots_usable >= ZONE_FREE_LIST_SZ ||
+       zone->free_bit_slots_usable > zone->free_bit_slots_index) {
         return BAD_BIT_SLOT;
     }
 
-    zone->next_free_bit_slot = zone->free_bit_slot_cache[zone->free_bit_slot_cache_usable];
-    zone->free_bit_slot_cache[zone->free_bit_slot_cache_usable++] = BAD_BIT_SLOT;
+    zone->next_free_bit_slot = zone->free_bit_slots[zone->free_bit_slots_usable];
+    zone->free_bit_slots[zone->free_bit_slots_usable++] = BAD_BIT_SLOT;
     return zone->next_free_bit_slot;
 }
 
@@ -792,8 +789,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
     /* If the cache for this zone is empty we should
      * refill it to make future allocations faster
      * for all threads */
-    if(zone->free_bit_slot_cache_usable >= zone->free_bit_slot_cache_index) {
-        fill_free_bit_slot_cache(zone);
+    if(zone->free_bit_slots_usable >= zone->free_bit_slots_index) {
+        fill_free_bit_slots(zone);
     }
 
     bit_slot_t bit_slot = get_next_free_bit_slot(zone);

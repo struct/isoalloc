@@ -7,7 +7,7 @@ LOCAL_CFLAGS := -DTHREAD_SUPPORT=1 -pthread						\
 	-pedantic -Wno-pointer-arith -Wno-gnu-zero-variadic-macro-arguments		\
 	-Wno-format-pedantic -DMALLOC_HOOK=1 -fvisibility=hidden -std=c11		\
 	-DALLOC_SANITY=0 -DUNINIT_READ_SANITY=0 -DCPU_PIN=0 -DEXPERIMENTAL=0		\
-	-DUAF_PTR_PAGE=0 -DVERIFY_BIT_SLOT_CACHE=0 -DNAMED_MAPPINGS=1 -fPIC		\
+	-DUAF_PTR_PAGE=0 -DVERIFY_FREE_BIT_SLOTS=0 -DNAMED_MAPPINGS=1 -fPIC		\
 	-shared -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1 -DUSE_MLOCK=1 		\
 	-DMEMORY_TAGGING=0 -DSCHED_GETCPU -g -ggdb3 -fno-omit-frame-pointer
 

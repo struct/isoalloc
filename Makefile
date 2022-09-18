@@ -139,11 +139,11 @@ UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 ## entries which might lead to IsoAlloc handing out an in-use
 ## chunk to a caller. This is a slow search that has a small
 ## performance penalty
-VERIFY_BIT_SLOT_CACHE = -DVERIFY_BIT_SLOT_CACHE=0
+VERIFY_FREE_BIT_SLOTS = -DVERIFY_FREE_BIT_SLOTS=0
 
 ## Shuffles the free bit slot cache upon creation.
 ## This leads to a 3-4x performance slow down!
-SHUFFLE_BIT_SLOT_CACHE = -DSHUFFLE_BIT_SLOT_CACHE=0
+SHUFFLE_FREE_BIT_SLOTS = -DSHUFFLE_FREE_BIT_SLOTS=0
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
@@ -232,8 +232,8 @@ BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
-	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_BIT_SLOT_CACHE) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
-	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_BIT_SLOT_CACHE) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
+	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
+	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_FREE_BIT_SLOTS) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
@@ -302,6 +302,7 @@ cpp_library_debug: clean c_library_objects_debug
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
 	@echo "make tests"
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/chunk_entropy.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/chunk_entropy $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)

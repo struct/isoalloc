@@ -73,13 +73,13 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * Enable `FUZZ_MODE` in the Makefile to verify all zones upon alloc/free, and never reuse private zones.
 * When `CPU_PIN` is enabled allocation from a zone will be restricted to the CPU core that created it.
 * When `UAF_PTR_PAGE` is enabled calls to `iso_free` will be sampled to search for dangling references.
-* Enable `VERIFY_BIT_SLOT_CACHE` to verify there are no duplicates in the bit slot cache upon free.
+* Enable `VERIFY_FREE_BIT_SLOTS` to verify there are no duplicates in the bit slot cache upon free.
 * When `ALLOC_SANITY` is enabled a percentage of allocations will be sampled to detect UAF/overflows, see above.
 * Randomized hints are passed to `mmap` to ensure contiguous page ranges are not allocated.
 * When `ABORT_ON_NULL` is enabled IsoAlloc will abort instead of returning `NULL`.
 * By default `NO_ZERO_ALLOCATIONS` will return a pointer to a page marked `PROT_NONE` for all `0` sized allocations.
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
-* When `SHUFFLE_BIT_SLOT_CACHE` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
+* When `SHUFFLE_FREE_BIT_SLOTS` is enabled IsoAlloc will shuffle the bit slot cache upon creation (3-4x perf hit)
 * Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`.
 * `MEMORY_TAGGING` When enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/tagged_ptr_test.cpp) for an example of how to use it.
 * `MEMCPY_SANITY` and `MEMSET_SANITY` Configures the allocator will hook all calls to `memcpy`/`memset` and check for out of bounds r/w operations when either src or dst points to a chunk allocated by IsoAlloc

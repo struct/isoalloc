@@ -5,38 +5,44 @@
 
 /* This header contains the core data structures,
  * caches, and typedef used by the allocator */
+#define ZONE_FREE_LIST_SZ 255
+#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
+#define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
+#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
 typedef int64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
 typedef uint16_t zone_lookup_table_t;
 typedef uint16_t chunk_lookup_table_t;
 
-#define BIT_SLOT_CACHE_SZ 255
-#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
-#define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
-#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
+#if ZONE_FREE_LIST_SZ > 255
+typedef uint16_t free_bit_slot_t;
+#define FREE_LIST_SHF 16
+#else
+typedef uint8_t free_bit_slot_t;
+#define FREE_LIST_SHF 8
+#endif
 
 typedef struct {
-    void *user_pages_start;     /* Start of the pages backing this zone */
-    void *bitmap_start;         /* Start of the bitmap */
-    int64_t next_free_bit_slot; /* The last bit slot returned by get_next_free_bit_slot */
-    /* These indexes must be bumped to uint16_t if BIT_SLOT_CACHE_SZ >= MAX_UINT8 */
-    uint8_t free_bit_slot_cache_index;                 /* Tracks how many entries in the cache are filled */
-    uint8_t free_bit_slot_cache_usable;                /* The oldest members of the free cache are served first */
-    bit_slot_t free_bit_slot_cache[BIT_SLOT_CACHE_SZ]; /* A cache of bit slots that point to freed chunks */
-    uint64_t canary_secret;                            /* Each zone has its own canary secret */
-    uint64_t pointer_mask;                             /* Each zone has its own pointer protection secret */
-    uint32_t chunk_size;                               /* Size of chunks managed by this zone */
-    uint32_t bitmap_size;                              /* Size of the bitmap in bytes */
-    bitmap_index_t max_bitmap_idx;                     /* Max bitmap index for this bitmap */
-    bool internal;                                     /* Zones can be managed by iso_alloc or private */
-    bool is_full;                                      /* Flags whether this zone is full to avoid bit slot searches */
-    uint16_t index;                                    /* Zone index */
-    uint16_t next_sz_index;                            /* What is the index of the next zone of this size */
-    uint32_t alloc_count;                              /* Total number of lifetime allocations */
-    uint32_t af_count;                                 /* Increment/Decrement with each alloc/free operation */
-    uint32_t chunk_count;                              /* Total number of chunks in this zone */
-    uint8_t chunk_size_pow2;                           /* Computed by _log2(chunk_size) at zone creation */
+    void *user_pages_start;                       /* Start of the pages backing this zone */
+    void *bitmap_start;                           /* Start of the bitmap */
+    int64_t next_free_bit_slot;                   /* The last bit slot returned by get_next_free_bit_slot */
+    free_bit_slot_t free_bit_slots_index;         /* Tracks how many entries in the cache are filled */
+    free_bit_slot_t free_bit_slots_usable;        /* The oldest members of the free cache are served first */
+    bit_slot_t free_bit_slots[ZONE_FREE_LIST_SZ]; /* A cache of bit slots that point to freed chunks */
+    uint64_t canary_secret;                       /* Each zone has its own canary secret */
+    uint64_t pointer_mask;                        /* Each zone has its own pointer protection secret */
+    uint32_t chunk_size;                          /* Size of chunks managed by this zone */
+    uint32_t bitmap_size;                         /* Size of the bitmap in bytes */
+    bitmap_index_t max_bitmap_idx;                /* Max bitmap index for this bitmap */
+    bool internal;                                /* Zones can be managed by iso_alloc or private */
+    bool is_full;                                 /* Flags whether this zone is full to avoid bit slot searches */
+    uint16_t index;                               /* Zone index */
+    uint16_t next_sz_index;                       /* What is the index of the next zone of this size */
+    uint32_t alloc_count;                         /* Total number of lifetime allocations */
+    uint32_t af_count;                            /* Increment/Decrement with each alloc/free operation */
+    uint32_t chunk_count;                         /* Total number of chunks in this zone */
+    uint8_t chunk_size_pow2;                      /* Computed by _log2(chunk_size) at zone creation */
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif
