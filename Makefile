@@ -187,12 +187,6 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 OS_FLAGS = -framework Security
 LIBNAME = libisoalloc.dylib
-ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
-CFLAGS += -D_FORTIFY_SOURCE=0
-endif
-ifeq ($(MEMSET_SANITY), -DMEMSET_SANITY=1)
-CFLAGS += -D_FORTIFY_SOURCE=0
-endif
 endif
 
 ifeq ($(UNAME), Linux)
