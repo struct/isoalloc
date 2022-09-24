@@ -6,15 +6,23 @@
 #include "iso_alloc_util.h"
 
 #if MEMCPY_SANITY
+#if __APPLE__
 #undef memcpy
+#define memcpy(dest, src, n) _iso_alloc_memcpy(dest, src, n)
+#else
 EXTERNAL_API void *memcpy(void *restrict dest, const void *restrict src, size_t n) {
     return _iso_alloc_memcpy(dest, src, n);
 }
 #endif
+#endif
 
 #if MEMSET_SANITY
+#if __APPLE__
 #undef memset
+#define memset(dest, b, n) _iso_alloc_memset(dest, b, n)
+#else
 EXTERNAL_API void *memset(void *dest, int b, size_t n) {
     return _iso_alloc_memset(dest, b, n);
 }
+#endif
 #endif
