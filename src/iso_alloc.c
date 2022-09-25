@@ -1007,6 +1007,14 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
 
     void *p = _iso_alloc(NULL, sz);
 
+#if NO_ZERO_ALLOCATIONS
+    /* Without this check we would immediately segfault in
+     * the call to __iso_memset() to zeroize the chunk */
+    if(UNLIKELY(sz == 0)) {
+        return p;
+    }
+#endif
+
     __iso_memset(p, 0x0, sz);
     return p;
 }
