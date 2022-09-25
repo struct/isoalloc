@@ -240,13 +240,11 @@ assert(sizeof(size_t) >= 64)
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
+#if MEMORY_TAGGING
 #define TAGGED_PTR_MASK 0x00ffffffffffffff
 #define IS_TAGGED_PTR_MASK 0xff00000000000000
 #define UNTAGGED_BITS 56
-
-/* A uint64_t of bitslots below this value will
- * have at least 1 single free bit slot */
-#define ALLOCATED_BITSLOTS 0x5555555555555555
+#endif
 
 #define MEGABYTE_SIZE 1048576
 #define KILOBYTE_SIZE 1024
