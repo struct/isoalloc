@@ -20,7 +20,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone)
     return leaks;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void) {
     LOCK_ROOT();
     uint64_t mem_usage = __iso_alloc_mem_usage();
     mem_usage += _iso_alloc_big_zone_mem_usage();
@@ -28,7 +28,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage() {
     return mem_usage;
 }
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage() {
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void) {
     LOCK_BIG_ZONE();
     uint64_t mem_usage = __iso_alloc_big_zone_mem_usage();
     UNLOCK_BIG_ZONE();
@@ -43,7 +43,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
 }
 
 #if DEBUG && MEM_USAGE
-INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
+INTERNAL_HIDDEN size_t _iso_alloc_print_stats(void) {
     struct rusage _rusage = {0};
 
     int32_t ret = getrusage(RUSAGE_SELF, &_rusage);
@@ -63,7 +63,7 @@ INTERNAL_HIDDEN size_t _iso_alloc_print_stats() {
 }
 #endif
 
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks() {
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void) {
     uint64_t total_leaks = 0;
     uint64_t big_leaks = 0;
 
@@ -187,7 +187,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
+INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void) {
     uint64_t mem_usage = 0;
 
     for(uint32_t i = 0; i < _root->zones_used; i++) {
@@ -201,7 +201,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage() {
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage() {
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(void) {
     uint64_t mem_usage = 0;
     iso_alloc_big_zone_t *big = _root->big_zone_head;
 
@@ -244,7 +244,7 @@ INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out) {
     return sz;
 }
 
-INTERNAL_HIDDEN void _iso_alloc_reset_traces() {
+INTERNAL_HIDDEN void _iso_alloc_reset_traces(void) {
     LOCK_ROOT();
     __iso_memset(_alloc_bts, 0x0, sizeof(_alloc_bts));
     __iso_memset(_free_bts, 0x0, sizeof(_free_bts));
@@ -260,7 +260,7 @@ INTERNAL_HIDDEN void _iso_alloc_reset_traces() {
         return hash;                                        \
     }
 
-INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash() {
+INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(void) {
     uint64_t hash = 0;
     UPDATE_BT_HASH(1, hash);
     UPDATE_BT_HASH(2, hash);
@@ -435,7 +435,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
     }
 }
 
-INTERNAL_HIDDEN void _iso_free_profile() {
+INTERNAL_HIDDEN void _iso_free_profile(void) {
     _free_count++;
 
     /* Don't run the profiler on every allocation */
@@ -469,7 +469,7 @@ INTERNAL_HIDDEN void _iso_free_profile() {
     }
 }
 
-INTERNAL_HIDDEN void _initialize_profiler() {
+INTERNAL_HIDDEN void _initialize_profiler(void) {
     /* We don't need thread safety for this file descriptor
      * as long as we guarantee to never use it if the root
      * is not locked */

@@ -316,7 +316,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
     return zone;
 }
 
-INTERNAL_HIDDEN INLINE void clear_zone_cache() {
+INTERNAL_HIDDEN INLINE void clear_zone_cache(void) {
 #if THREAD_SUPPORT
     __iso_memset(zone_cache, 0x0, sizeof(zone_cache));
 #else
@@ -1495,7 +1495,7 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN void flush_caches() {
+INTERNAL_HIDDEN void flush_caches(void) {
     /* The thread zone cache can be invalidated
      * and does not require a lock */
     clear_zone_cache();
@@ -1505,7 +1505,7 @@ INTERNAL_HIDDEN void flush_caches() {
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN INLINE void flush_chunk_quarantine() {
+INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void) {
     /* Free all the thread quarantined chunks */
     size_t chunk_quarantine_count = _root->chunk_quarantine_count;
 

@@ -378,13 +378,13 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone)
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage();
-INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage();
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void);
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(void);
 INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN uint64_t rand_uint64(void);
 INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN size_t _iso_alloc_print_stats();
+INTERNAL_HIDDEN size_t _iso_alloc_print_stats(void);
 INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
