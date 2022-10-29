@@ -89,7 +89,7 @@ void *allocate(void *_type) {
     return OK;
 }
 
-void run_test_threads() {
+void run_test_threads(void) {
 #if THREAD_SUPPORT
     pthread_t t;
     pthread_t tt;

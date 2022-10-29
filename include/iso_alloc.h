@@ -38,8 +38,8 @@ extern "C" {
 
 /* See https://github.com/struct/isoalloc/blob/master/README.md#api for
  * detailed information on how to use these functions */
-EXTERNAL_API void iso_alloc_initialize();
-EXTERNAL_API void iso_alloc_destroy();
+EXTERNAL_API void iso_alloc_initialize(void);
+EXTERNAL_API void iso_alloc_destroy(void);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size);
 EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size);
@@ -62,16 +62,16 @@ EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle
 EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size);
 EXTERNAL_API NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone);
 EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone);
-EXTERNAL_API void iso_alloc_protect_root();
-EXTERNAL_API void iso_alloc_unprotect_root();
+EXTERNAL_API void iso_alloc_protect_root(void);
+EXTERNAL_API void iso_alloc_unprotect_root(void);
 EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone);
-EXTERNAL_API uint64_t iso_alloc_detect_leaks();
+EXTERNAL_API uint64_t iso_alloc_detect_leaks(void);
 EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone);
-EXTERNAL_API uint64_t iso_alloc_mem_usage();
-EXTERNAL_API void iso_verify_zones();
+EXTERNAL_API uint64_t iso_alloc_mem_usage(void);
+EXTERNAL_API void iso_verify_zones(void);
 EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone);
 EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name);
-EXTERNAL_API void iso_flush_caches();
+EXTERNAL_API void iso_flush_caches(void);
 
 #if HEAP_PROFILER
 #define BACKTRACE_DEPTH 8
@@ -100,7 +100,7 @@ typedef struct {
 
 EXTERNAL_API size_t iso_get_alloc_traces(iso_alloc_traces_t *traces_out);
 EXTERNAL_API size_t iso_get_free_traces(iso_free_traces_t *traces_out);
-EXTERNAL_API void iso_alloc_reset_traces();
+EXTERNAL_API void iso_alloc_reset_traces(void);
 #endif
 
 #if EXPERIMENTAL

@@ -10,11 +10,11 @@
 #include "iso_alloc_profiler.h"
 #endif
 
-EXTERNAL_API void iso_alloc_initialize() {
+EXTERNAL_API void iso_alloc_initialize(void) {
     _iso_alloc_initialize();
 }
 
-EXTERNAL_API void iso_alloc_destroy() {
+EXTERNAL_API void iso_alloc_destroy(void) {
     _iso_alloc_destroy();
 }
 
@@ -236,11 +236,11 @@ EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name
     return name_mapping(_zone->user_pages_start, ZONE_USER_SIZE, name);
 }
 
-EXTERNAL_API void iso_alloc_protect_root() {
+EXTERNAL_API void iso_alloc_protect_root(void) {
     _iso_alloc_protect_root();
 }
 
-EXTERNAL_API void iso_alloc_unprotect_root() {
+EXTERNAL_API void iso_alloc_unprotect_root(void) {
     _iso_alloc_unprotect_root();
 }
 
@@ -254,7 +254,7 @@ EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     return _iso_alloc_detect_leaks_in_zone(zone);
 }
 
-EXTERNAL_API uint64_t iso_alloc_detect_leaks() {
+EXTERNAL_API uint64_t iso_alloc_detect_leaks(void) {
     return _iso_alloc_detect_leaks();
 }
 
@@ -268,11 +268,11 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     return _iso_alloc_zone_mem_usage(zone);
 }
 
-EXTERNAL_API uint64_t iso_alloc_mem_usage() {
+EXTERNAL_API uint64_t iso_alloc_mem_usage(void) {
     return _iso_alloc_mem_usage();
 }
 
-EXTERNAL_API void iso_verify_zones() {
+EXTERNAL_API void iso_verify_zones(void) {
     verify_all_zones();
 }
 
@@ -286,7 +286,7 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     verify_zone(zone);
 }
 
-EXTERNAL_API void iso_flush_caches() {
+EXTERNAL_API void iso_flush_caches(void) {
     flush_caches();
 }
 
@@ -299,7 +299,7 @@ EXTERNAL_API size_t iso_get_free_traces(iso_free_traces_t *traces_out) {
     return _iso_get_free_traces(traces_out);
 }
 
-EXTERNAL_API void iso_alloc_reset_traces() {
+EXTERNAL_API void iso_alloc_reset_traces(void) {
     _iso_alloc_reset_traces();
 }
 #endif
