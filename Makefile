@@ -64,7 +64,7 @@ STARTUP_MEM_USAGE = -DSMALL_MEM_STARTUP=0
 ## sometimes improve performance. If you're using
 ## IsoAlloc for small short lived programs you probably
 ## want to disable this. This is ignored on MacOS
-PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
+PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=0
 
 ## Enable some functionality that like IsoAlloc internals
 ## for tests that need to verify security properties
@@ -150,7 +150,7 @@ SHUFFLE_FREE_BIT_SLOTS = -DSHUFFLE_FREE_BIT_SLOTS=0
 EXPERIMENTAL = -DEXPERIMENTAL=0
 
 ## These control log, memory leak, and memory usage code
-## In a release build you probably want them all to be 0
+## In a release build they are all set to 0
 DEBUG_LOG_FLAGS = -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1
 
 ## On Android we use prctl to name mappings so they are

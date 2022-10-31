@@ -70,6 +70,12 @@ assert(sizeof(size_t) >= 64)
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
 #endif
 
+#ifndef MADV_FREE
+#define FREE_OR_DONTNEED MADV_DONTNEED
+#else
+#define FREE_OR_DONTNEED MADV_FREE
+#endif
+
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 

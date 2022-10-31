@@ -39,6 +39,13 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
 }
 #endif
 
+INTERNAL_HIDDEN INLINE void darwin_reuse(void *p, size_t size) {
+#if __APPLE__
+    while(madvise(p, size, MADV_FREE_REUSE) && errno == EAGAIN) {
+    }
+#endif
+}
+
 INTERNAL_HIDDEN void *create_guard_page(void *p) {
     if(p == NULL) {
         p = mmap_rw_pages(g_page_size, false, NULL);
@@ -48,16 +55,39 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
         }
     }
 
-    /* Use g_page_size here because we could be
-     * calling this while we setup the root */
     mprotect_pages(p, g_page_size, PROT_NONE);
-    madvise(p, g_page_size, MADV_DONTNEED);
     name_mapping(p, g_page_size, GUARD_PAGE_NAME);
     return p;
 }
 
+/* Assumes p is page aligned and surrounded by guard pages */
+INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
+    munmap(p - g_page_size, size + (g_page_size << 1));
+}
+
+/* Assumes size for guard pages is NOT accounted for.
+ * Returns a pointer to first RW page */
+INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
+    size_t sz = ROUND_UP_PAGE(size);
+    void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
+
+    create_guard_page(p);
+    create_guard_page(p + (g_page_size + sz));
+    return (p + g_page_size);
+}
+
+/* All pages are mapped as if we will never need
+ * them. This is to ensure RSS stays managable */
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name) {
-    return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
+    void *p = mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
+
+    madvise(p, size, FREE_OR_DONTNEED);
+
+#if __APPLE__
+    while(madvise(p, size, MADV_FREE_REUSABLE) && errno == EAGAIN) {
+    }
+#endif
+    return p;
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
@@ -102,7 +132,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
 
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");
-        return NULL;
     }
 
 #if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
