@@ -66,7 +66,8 @@ INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
 }
 
 /* Assumes size for guard pages is NOT accounted for.
- * Returns a pointer to first RW page */
+ * Returns a pointer to a contiguous set of RW pages
+ * with guard pages mapped on top and bottom. */
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
     size_t sz = ROUND_UP_PAGE(size);
     void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
