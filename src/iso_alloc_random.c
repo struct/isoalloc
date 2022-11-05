@@ -22,8 +22,9 @@
 #endif
 
 
-/* Adapted from Daniel Lemire (@lemire) wyhash which can be found at
- * https://github.com/lemire/testingRNG/blob/master/source/wyhash.h */
+/* Adapted from Daniel Lemire (@lemire). The code can be found at
+ * https://github.com/lemire/testingRNG/blob/master/source/wyhash.h
+ * This is adapted from wyhash from @wangyi-fudan */
 INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed) {
     *seed += 0x60bee2bee120fc15;
     __uint128_t tmp = (__uint128_t)*seed * 0xa3b195354a39b70d;
