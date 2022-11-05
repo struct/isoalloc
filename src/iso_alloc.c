@@ -591,10 +591,14 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
      * leads to a less predictable free list */
     bitmap_index_t bm_idx = 0;
 
+    /* This requires a syscall, we only want to call it
+     * once in this function but we can reuse it safely */
+    uint64_t _r = rand_uint64();
+
     /* The largest zone->max_bitmap_idx we will ever
      * have is 8192 for SMALLEST_CHUNK_SZ (16) */
     if(zone->max_bitmap_idx > ALIGNMENT) {
-        bm_idx = ((uint32_t) rand_uint64() & (zone->max_bitmap_idx - 1));
+        bm_idx = ((uint32_t) _r & (zone->max_bitmap_idx - 1));
     }
 
     __iso_memset(zone->free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
@@ -636,11 +640,14 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
         }
     }
 
-#if SHUFFLE_FREE_BIT_SLOTS
-    /* Shuffle the free bit slot cache */
-    if(free_bit_slots_index > 1) {
+#if RANDOMIZE_FREELIST
+    static_assert(MIN_RAND_FREELIST >= 2, "MIN_RAND_FREELIST should be at least 2");
+
+    /* Randomize the list of free bitslots */
+    if(free_bit_slots_index > MIN_RAND_FREELIST) {
         for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
-            free_bit_slot_t j = ((free_bit_slot_t) rand_uint64() * i) >> FREE_LIST_SHF;
+            _r = us_rand_uint64(&_r);
+            free_bit_slot_t j = ((free_bit_slot_t) _r * i) >> FREE_LIST_SHF;
             bit_slot_t t = zone->free_bit_slots[j];
             zone->free_bit_slots[j] = zone->free_bit_slots[i];
             zone->free_bit_slots[i] = t;
@@ -1799,7 +1806,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
         uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
         size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
 
-        big = (iso_alloc_big_zone_t *) ((void*)big + ((random_offset * s) >> 32));
+        big = (iso_alloc_big_zone_t *) ((void *) big + ((random_offset * s) >> 32));
         big->free = false;
         big->size = size;
         big->next = NULL;

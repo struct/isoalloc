@@ -141,9 +141,10 @@ UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 ## performance penalty
 VERIFY_FREE_BIT_SLOTS = -DVERIFY_FREE_BIT_SLOTS=0
 
-## Shuffles the free bit slot cache upon creation.
-## This leads to a 3-4x performance slow down!
-SHUFFLE_FREE_BIT_SLOTS = -DSHUFFLE_FREE_BIT_SLOTS=0
+## Randomizes the free bit slot list upon creation. This can
+## impact perf. You can control the minimum size of the list
+## to be randomized with MIN_RAND_FREELIST in conf.h
+RANDOMIZE_FREELIST = -DRANDOMIZE_FREELIST=1
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
@@ -233,7 +234,7 @@ endif
 CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
-	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(SHUFFLE_FREE_BIT_SLOTS) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
+	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
@@ -302,7 +303,7 @@ cpp_library_debug: clean c_library_objects_debug
 ## Build a debug version of the unit test
 tests: clean library_debug_unit_tests
 	@echo "make tests"
-	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/chunk_entropy.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/chunk_entropy $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/rand_freelist.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/rand_freelist $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)

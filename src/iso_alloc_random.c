@@ -21,7 +21,19 @@
 #error "unknown OS"
 #endif
 
-INTERNAL_HIDDEN uint64_t rand_uint64(void) {
+
+/* Adapted from Daniel Lemire (@lemire). The code can be found at
+ * https://github.com/lemire/testingRNG/blob/master/source/wyhash.h
+ * This is adapted from wyhash from @wangyi-fudan */
+INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed) {
+    *seed += 0x60bee2bee120fc15;
+    __uint128_t tmp = (__uint128_t)*seed * 0xa3b195354a39b70d;
+    uint64_t m1 = (tmp >> 64) ^ tmp;
+    tmp = (__uint128_t)m1 * 0x1b03738712fad5c9;
+    return (tmp >> 64) ^ tmp;
+}
+
+INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void) {
     uint64_t val = 0;
     int ret = 0;
 
