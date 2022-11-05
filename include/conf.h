@@ -20,6 +20,11 @@
  * chunk count by this value, e.g. (65535 >> 7 = 511) */
 #define CANARY_COUNT_DIV 7
 
+/* The minimum number of free bit slots needed in the
+ * cache in order to randomize it. RANDOMIZE_FREELIST
+ * must be enabled for this to be used */
+#define MIN_RAND_FREELIST 4
+
 /* If you're compiling for Android and want custom names
  * for internal mappings that are viewable from procfs
  * (i.e. /proc/pid/maps) you can modify those names here */
