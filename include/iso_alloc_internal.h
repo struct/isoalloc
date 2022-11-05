@@ -70,6 +70,12 @@ assert(sizeof(size_t) >= 64)
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
 #endif
 
+#ifndef MADV_FREE
+#define FREE_OR_DONTNEED MADV_DONTNEED
+#else
+#define FREE_OR_DONTNEED MADV_FREE
+#endif
+
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 
@@ -236,7 +242,7 @@ assert(sizeof(size_t) >= 64)
 #define WASTED_SZ_MULTIPLIER 8
 #define WASTED_SZ_MULTIPLIER_SHIFT 3
 
-#define BIG_ZONE_META_DATA_PAGE_COUNT 3
+#define BIG_ZONE_META_DATA_PAGE_COUNT 1
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 

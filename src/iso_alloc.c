@@ -154,6 +154,11 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
 
     r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + sizeof(iso_alloc_root) + g_page_size));
     create_guard_page(r->guard_above);
+
+#if __APPLE__
+    while(madvise(r, ROUND_UP_PAGE(sizeof(iso_alloc_root)), MADV_FREE_REUSE) && errno == EAGAIN) {
+    }
+#endif
     return r;
 }
 
@@ -179,36 +184,44 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
 
     /* Allocate memory with guard pages to hold zone data */
-    void *p = mmap_rw_pages(_root->zones_size, false, NULL);
-    create_guard_page(p);
-    create_guard_page((void *) (uintptr_t) (p + _root->zones_size) - g_page_size);
+    _root->zones = mmap_guarded_rw_pages(_root->zones_size, false, NULL);
 
-    _root->zones = (void *) (p + g_page_size);
-    name_mapping(p, _root->zones_size, "isoalloc zone metadata");
+#if __APPLE__
+    darwin_reuse(_root->zones, g_page_size);
+#endif
+
+    name_mapping(_root->zones, _root->zones_size, "isoalloc zone metadata");
     MLOCK(_root->zones, _root->zones_size);
 
     size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
-    _root->chunk_quarantine = mmap_rw_pages(c + (g_page_size * 2), true, NULL);
-    create_guard_page(_root->chunk_quarantine);
-    _root->chunk_quarantine = _root->chunk_quarantine + (g_page_size / sizeof(uintptr_t));
-    create_guard_page((void *) _root->chunk_quarantine + c);
+    _root->chunk_quarantine = mmap_guarded_rw_pages(c, true, NULL);
+#if __APPLE__
+    darwin_reuse(_root->chunk_quarantine, c);
+#endif
     MLOCK(_root->chunk_quarantine, c);
 
 #if !THREAD_SUPPORT
     size_t z = ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc));
-    zone_cache = mmap_rw_pages(z + (g_page_size + 2), true, NULL);
-    create_guard_page(zone_cache);
+    zone_cache = mmap_guarded_rw_pages(z, true, NULL);
     zone_cache = ((void *) zone_cache) + g_page_size;
-    create_guard_page((void *) zone_cache + z);
+#if __APPLE__
+    darwin_reuse(zone_cache, z);
+#endif
     MLOCK(zone_cache, z);
 #endif
 
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
-    _root->zone_lookup_table = mmap_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
+    _root->zone_lookup_table = mmap_guarded_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
+#if __APPLE__
+    darwin_reuse(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+#endif
     MLOCK(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
 
-    _root->chunk_lookup_table = mmap_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
+    _root->chunk_lookup_table = mmap_guarded_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
+#if __APPLE__
+    darwin_reuse(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+#endif
     MLOCK(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
     for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
@@ -438,27 +451,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     /* All of the following fields are immutable
      * and should not change once they are set */
-    void *p = mmap_rw_pages(new_zone->bitmap_size + (g_page_size << 1), true, ZONE_BITMAP_NAME);
-
-    void *bitmap_pages_guard_below = p;
-    new_zone->bitmap_start = (p + g_page_size);
-
-    void *bitmap_pages_guard_above = (void *) ROUND_UP_PAGE((uintptr_t) p + (new_zone->bitmap_size + g_page_size));
-
-    create_guard_page(bitmap_pages_guard_below);
-    create_guard_page(bitmap_pages_guard_above);
-
-    /* Bitmap pages are accessed often and usually in sequential order */
-#if !__APPLE__
-    madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_WILLNEED);
-#else
-    /* on macOs, in order to get a more accurate accounting via the task_info api,
-     * we need to use the MADV_FREE_REUSE/MADV_FREE_REUSABLE duo instead which
-     * albeit happening in rare occasions might not succeed on device business
-     * thus EAGAIN is the only acceptable retry flow. */
-    while(madvise(new_zone->bitmap_start, new_zone->bitmap_size, MADV_FREE_REUSE) && errno == EAGAIN) {
-    }
-#endif
+    new_zone->bitmap_start = mmap_guarded_rw_pages(new_zone->bitmap_size, true, ZONE_BITMAP_NAME);
 
     char *name = NULL;
 
@@ -484,10 +477,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         tag_mapping_size = 0;
     }
 #endif
-    /* All user pages use MAP_POPULATE. This might seem like we are asking
-     * the kernel to commit a lot of memory for us that we may never use
-     * but when we call create_canary_chunks() that will happen anyway */
-    p = mmap_rw_pages(total_size, false, name);
+    void *p = mmap_rw_pages(total_size, false, name);
 
 #if __ANDROID__ && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
@@ -530,17 +520,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 #endif
 
     create_guard_page(user_pages_guard_above);
-
-#if !__APPLE__
-    madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_WILLNEED);
-#else
-    /* on macOs, in order to get a more accurate accounting via the task_info api,
-     * we need to use the MADV_FREE_REUSE/MADV_FREE_REUSABLE duo instead which
-     * albeit happening in rare occasions might not succeed on device business
-     * thus EAGAIN is the only acceptable retry flow. */
-    while(madvise(new_zone->user_pages_start, ZONE_USER_SIZE, MADV_FREE_REUSE) && errno == EAGAIN) {
-    }
-#endif
 
     /* We created a new zone, we did not replace a retired one */
     if(index > 0) {
@@ -1705,10 +1684,10 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
 
-#if !__APPLE__
-    madvise(big_zone->user_pages_start, big_zone->size, MADV_DONTNEED);
-#else
-    while(madvise(big_zone->user_pages_start, big_zone->size, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) {
+    madvise(big_zone->user_pages_start, big_zone->size, FREE_OR_DONTNEED);
+
+#if __APPLE__
+    while(madvise(big_zone->user_pages_start, big_zone->size, MADV_FREE_REUSE) == -1 && errno == EAGAIN) {
     }
 #endif
 
@@ -1801,7 +1780,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     if(big == NULL) {
         /* User data is allocated separately from big zone meta
          * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_rw_pages((g_page_size << BIG_ZONE_USER_PAGE_COUNT_SHIFT) + size, false, BIG_ZONE_UD_NAME);
+        void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
 
         if(user_pages == NULL) {
             UNLOCK_BIG_ZONE();
@@ -1811,19 +1790,15 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
             return NULL;
         }
 
-        void *p = mmap_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
-
-        /* The first page before meta data is a guard page */
-        create_guard_page(p);
+        /* We only need a single page for big zone meta data */
+        big = (iso_alloc_big_zone_t *) mmap_guarded_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
-        big = (iso_alloc_big_zone_t *) (p + g_page_size);
-        madvise(big, g_page_size, MADV_WILLNEED);
         uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
         size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
 
-        big = (iso_alloc_big_zone_t *) ((p + g_page_size) + ((random_offset * s) >> 32));
+        big = (iso_alloc_big_zone_t *) ((void*)big + ((random_offset * s) >> 32));
         big->free = false;
         big->size = size;
         big->next = NULL;
@@ -1835,21 +1810,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
         if(_root->big_zone_head == NULL) {
             _root->big_zone_head = MASK_BIG_ZONE_NEXT(big);
         }
-
-        /* Create the guard page after the meta data */
-        void *next_gp = (p + (g_page_size << 1));
-        create_guard_page(next_gp);
-
-        /* The first page is a guard page */
-        create_guard_page(user_pages);
-
-        /* Tell the kernel we want to access this big zone allocation */
-        user_pages += g_page_size;
-        madvise(user_pages, size, MADV_WILLNEED);
-
-        /* The last page beyond user data is a guard page */
-        void *last_gp = (user_pages + size);
-        create_guard_page(last_gp);
 
         /* Save a pointer to the user pages */
         big->user_pages_start = user_pages;
@@ -1990,22 +1950,21 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #if ISO_DTOR_CLEANUP
         /* Free the user pages first */
-        void *up = big_zone->user_pages_start - g_page_size;
-        munmap(up, (g_page_size << 1) + big_zone->size);
+        unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
 
         /* Free the meta data */
-        munmap(big_zone - g_page_size, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
+        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
 #endif
         big_zone = big;
     }
 
 #if ISO_DTOR_CLEANUP
+    unmap_guarded_pages(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
+    unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+    unmap_guarded_pages(_root->chunk_quarantine, ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)));
+    unmap_guarded_pages(zone_cache, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)));
     munmap(_root->guard_below, g_page_size);
     munmap(_root->guard_above, g_page_size);
-    munmap(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
-    munmap(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
-    munmap(_root->chunk_quarantine - (g_page_size / sizeof(uintptr_t)), ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)) + (g_page_size * 2));
-    munmap(zone_cache - g_page_size, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)) + g_page_size * 2);
     munmap(_root, sizeof(iso_alloc_root));
 #endif
     UNLOCK_ROOT();
