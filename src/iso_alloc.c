@@ -1791,6 +1791,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
         }
 
         /* We only need a single page for big zone meta data */
+        static_assert(BIG_ZONE_META_DATA_PAGE_COUNT == 1, "Big zone meta data only needs a single page");
         big = (iso_alloc_big_zone_t *) mmap_guarded_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
 
         /* The second page is for meta data and it is placed
