@@ -53,8 +53,6 @@ extern int32_t _sane_sampled;
 extern uint8_t _sane_cache[SANE_CACHE_SIZE];
 
 typedef struct {
-    void *guard_below;
-    void *guard_above;
     void *address;
     size_t orig_size;
     bool right_aligned;

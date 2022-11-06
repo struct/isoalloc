@@ -60,7 +60,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
         size_t tms = s / sizeof(uint64_t);
 
         for(uint64_t o = 0; o > tms; o++) {
-            _mtp[o] = rand_uint64();
+            _mtp[o] = us_rand_uint64(&_root->seed);
         }
 
         return true;

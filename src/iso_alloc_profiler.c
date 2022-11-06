@@ -376,7 +376,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
     _alloc_count++;
 
     /* Don't run the profiler on every allocation */
-    if(LIKELY((rand_uint64() % PROFILER_ODDS) != 1)) {
+    if(LIKELY((us_rand_uint64(&_root->seed) % PROFILER_ODDS) != 1)) {
         return;
     }
 
@@ -439,7 +439,7 @@ INTERNAL_HIDDEN void _iso_free_profile(void) {
     _free_count++;
 
     /* Don't run the profiler on every allocation */
-    if(LIKELY((rand_uint64() % PROFILER_ODDS) != 1)) {
+    if(LIKELY((us_rand_uint64(&_root->seed) % PROFILER_ODDS) != 1)) {
         return;
     }
 

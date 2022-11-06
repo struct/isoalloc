@@ -138,28 +138,18 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
 
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     void *p = NULL;
-    iso_alloc_root *r;
 
-    size_t _root_size = sizeof(iso_alloc_root) + (g_page_size << 1);
-
-    p = (void *) mmap_rw_pages(_root_size, true, ROOT_NAME);
+    p = (void *) mmap_guarded_rw_pages(sizeof(iso_alloc_root), true, ROOT_NAME);
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for root");
     }
 
-    r = (iso_alloc_root *) (p + g_page_size);
-    r->guard_below = p;
-    create_guard_page(r->guard_below);
-
-    r->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + sizeof(iso_alloc_root) + g_page_size));
-    create_guard_page(r->guard_above);
-
 #if __APPLE__
-    while(madvise(r, ROUND_UP_PAGE(sizeof(iso_alloc_root)), MADV_FREE_REUSE) && errno == EAGAIN) {
+    while(madvise(p, ROUND_UP_PAGE(sizeof(iso_alloc_root)), MADV_FREE_REUSE) && errno == EAGAIN) {
     }
 #endif
-    return r;
+    return (iso_alloc_root *) p;
 }
 
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
@@ -230,9 +220,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
         }
     }
 
+    _root->seed = rand_uint64();
+    /* Handle masks may be leaked via iso_alloc_new_zone */
     _root->zone_handle_mask = rand_uint64();
-    _root->big_zone_next_mask = rand_uint64();
-    _root->big_zone_canary_secret = rand_uint64();
+    _root->big_zone_next_mask = us_rand_uint64(&_root->seed);
+    _root->big_zone_canary_secret = us_rand_uint64(&_root->seed);
 }
 
 INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
@@ -266,7 +258,7 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
 #endif
 
 #if ALLOC_SANITY
-    _sanity_canary = rand_uint64();
+    _sanity_canary = us_rand_uint64(&_root->seed);
 #endif
 }
 
@@ -364,12 +356,12 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     /* This function is only ever called during zone
      * initialization so we don't need to check the
      * current state of any chunks, they're all free.
-     * It's possible the call to rand_uint64() here will
+     * It's possible the call to rand() here will
      * return the same index twice, we can live with
      * that collision as canary chunks only provide a
      * small security property anyway */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((rand_uint64() % (max_bitmap_idx)));
+        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((us_rand_uint64(&_root->seed) % (max_bitmap_idx)));
 
         if(0 > bm_idx) {
             bm_idx = 0;
@@ -400,6 +392,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
         return NULL;
     }
+
+    /* This is a good time to refresh the root rng seed */
+    _root->seed = rand_uint64();
 
     /* In order for our bitmap to be a power of 2
      * the size we allocate also needs to be. We
@@ -493,12 +488,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         create_guard_page(p + g_page_size + tag_mapping_size);
         new_zone->user_pages_start = (p + g_page_size + tag_mapping_size + g_page_size);
         uint64_t *_mtp = p + g_page_size;
-
         int64_t tms = tag_mapping_size / sizeof(uint64_t);
 
         /* Generate random tags */
         for(uint64_t o = 0; o < tms; o++) {
-            _mtp[o] = rand_uint64();
+            _mtp[o] = us_rand_uint64(&_root->seed);
         }
     } else {
         new_zone->user_pages_start = (p + g_page_size);
@@ -528,8 +522,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         new_zone->index = _root->zones_used;
     }
 
-    new_zone->canary_secret = rand_uint64();
-    new_zone->pointer_mask = rand_uint64();
+    new_zone->canary_secret = us_rand_uint64(&_root->seed);
+    new_zone->pointer_mask = us_rand_uint64(&_root->seed);
 
     create_canary_chunks(new_zone);
 
@@ -591,14 +585,10 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
      * leads to a less predictable free list */
     bitmap_index_t bm_idx = 0;
 
-    /* This requires a syscall, we only want to call it
-     * once in this function but we can reuse it safely */
-    uint64_t _r = rand_uint64();
-
     /* The largest zone->max_bitmap_idx we will ever
      * have is 8192 for SMALLEST_CHUNK_SZ (16) */
     if(zone->max_bitmap_idx > ALIGNMENT) {
-        bm_idx = ((uint32_t) _r & (zone->max_bitmap_idx - 1));
+        bm_idx = ((uint32_t) us_rand_uint64(&_root->seed) & (zone->max_bitmap_idx - 1));
     }
 
     __iso_memset(zone->free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
@@ -646,8 +636,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     /* Randomize the list of free bitslots */
     if(free_bit_slots_index > MIN_RAND_FREELIST) {
         for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
-            _r = us_rand_uint64(&_r);
-            free_bit_slot_t j = ((free_bit_slot_t) _r * i) >> FREE_LIST_SHF;
+            free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
             bit_slot_t t = zone->free_bit_slots[j];
             zone->free_bit_slots[j] = zone->free_bit_slots[i];
             zone->free_bit_slots[i] = t;
@@ -1657,14 +1646,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
                 _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
                 /* Generate and write a new tag for this chunk */
-                uint8_t mem_tag = (uint8_t) rand_uint64();
-                *_mtp = mem_tag;
+                *_mtp = (uint8_t) us_rand_uint64(&_root->seed);
             }
         }
 #endif
 
 #if UAF_PTR_PAGE
-        if(UNLIKELY((rand_uint64() % UAF_PTR_PAGE_ODDS) == 1)) {
+        if(UNLIKELY((us_rand_uint64(&_root->seed) % UAF_PTR_PAGE_ODDS) == 1)) {
             _iso_alloc_ptr_search(p, true);
         }
 #endif
@@ -1803,7 +1791,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
         /* The second page is for meta data and it is placed
          * at a random offset from the start of the page */
-        uint32_t random_offset = ALIGN_SZ_DOWN(rand_uint64());
+        uint32_t random_offset = ALIGN_SZ_DOWN(us_rand_uint64(&_root->seed));
         size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
 
         big = (iso_alloc_big_zone_t *) ((void *) big + ((random_offset * s) >> 32));
@@ -1971,9 +1959,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_quarantine, ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)));
     unmap_guarded_pages(zone_cache, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)));
-    munmap(_root->guard_below, g_page_size);
-    munmap(_root->guard_above, g_page_size);
-    munmap(_root, sizeof(iso_alloc_root));
+    unmap_guarded_pages(_root, sizeof(iso_alloc_root));
 #endif
     UNLOCK_ROOT();
 }

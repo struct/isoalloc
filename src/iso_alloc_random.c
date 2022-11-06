@@ -21,15 +21,24 @@
 #error "unknown OS"
 #endif
 
-
 /* Adapted from Daniel Lemire (@lemire). The code can be found at
  * https://github.com/lemire/testingRNG/blob/master/source/wyhash.h
- * This is adapted from wyhash from @wangyi-fudan */
+ * Which is adapted from wyhash from @wangyi-fudan
+ *
+ * This is not suitable for anything cryptographic. We use it in
+ * IsoAlloc for generating pointer masks, shuffling arrays etc,
+ * and the initial seed is refreshed with rand_uint64() each time
+ * we create a new zone.
+ *
+ * The magic values below are just random 64 bit primes. These values
+ * are combined with our seed and then run through the mum function.
+ * See the original wyhash paper for more details.
+ * https://github.com/wangyi-fudan/wyhash/ */
 INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed) {
-    *seed += 0x60bee2bee120fc15;
-    __uint128_t tmp = (__uint128_t)*seed * 0xa3b195354a39b70d;
+    *seed += 0x5d6447c8df9375b5;
+    __uint128_t tmp = (__uint128_t) *seed * 0x3c5829f2fb3c3eef;
     uint64_t m1 = (tmp >> 64) ^ tmp;
-    tmp = (__uint128_t)m1 * 0x1b03738712fad5c9;
+    tmp = (__uint128_t) m1 * 0x4f38e4ccc1b0ea59;
     return (tmp >> 64) ^ tmp;
 }
 

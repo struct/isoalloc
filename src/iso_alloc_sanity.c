@@ -190,10 +190,7 @@ INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p) {
 
     if(sane_alloc != NULL) {
         check_sanity_canary(sane_alloc);
-
-        munmap(sane_alloc->guard_below, g_page_size);
-        munmap(sane_alloc->guard_above, g_page_size);
-        munmap(sane_alloc->address, g_page_size);
+        unmap_guarded_pages(sane_alloc->address, g_page_size);
         memset(sane_alloc, 0x0, sizeof(_sane_allocation_t));
         _sane_cache[SANE_CACHE_IDX(p)]--;
         _sane_sampled--;
@@ -207,9 +204,9 @@ INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p) {
 
 INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
 #if UNINIT_READ_SANITY
-    if(_page_fault_thread == 0 || LIKELY((rand_uint64() % SANITY_SAMPLE_ODDS) != 1)) {
+    if(_page_fault_thread == 0 || LIKELY((us_rand_uint64(&_root->seed) % SANITY_SAMPLE_ODDS) != 1)) {
 #else
-    if(LIKELY((rand_uint64() % SANITY_SAMPLE_ODDS) != 1)) {
+    if(LIKELY((us_rand_uint64(&_root->seed) % SANITY_SAMPLE_ODDS) != 1)) {
 #endif
         return NULL;
     }
@@ -233,21 +230,14 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
     }
 
     sane_alloc->orig_size = size;
-    void *p = mmap_rw_pages(g_page_size * 3, false, SAMPLED_ALLOC_NAME);
+    void *p = mmap_guarded_rw_pages(g_page_size, false, SAMPLED_ALLOC_NAME);
 
     if(p == NULL) {
         LOG_AND_ABORT("Cannot allocate pages for sampled allocation");
     }
 
-    sane_alloc->guard_below = p;
-    create_guard_page(sane_alloc->guard_below);
-    sane_alloc->guard_above = (void *) ROUND_UP_PAGE((uintptr_t) (p + (g_page_size * 2)));
-    create_guard_page(sane_alloc->guard_above);
-
-    p = (p + g_page_size);
-
     /* We may right align the mapping to catch overflows */
-    if(rand_uint64() % 1 == 1) {
+    if((us_rand_uint64(&_root->seed) % 2) == 1) {
         p = (p + g_page_size) - sane_alloc->orig_size;
         sane_alloc->right_aligned = true;
         sane_alloc->address = (void *) ROUND_DOWN_PAGE((uintptr_t) p);
