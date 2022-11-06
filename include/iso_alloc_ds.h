@@ -70,8 +70,6 @@ typedef struct iso_alloc_big_zone_t {
  * that hold chunks containing caller data */
 typedef struct {
     uint16_t zones_used;
-    void *guard_below;
-    void *guard_above;
     uint32_t zone_retirement_shf;
     uintptr_t *chunk_quarantine;
     size_t chunk_quarantine_count;
@@ -93,6 +91,7 @@ typedef struct {
     iso_alloc_big_zone_t *big_zone_head;
     iso_alloc_zone_t *zones;
     size_t zones_size;
+    uint64_t seed;
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
     atomic_flag big_zone_busy_flag;

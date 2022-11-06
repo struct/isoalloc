@@ -24,7 +24,8 @@ int allocate(size_t array_size, size_t allocation_size) {
         void *p = iso_alloc_from_zone(zone);
 
         if(p == NULL) {
-            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations from zone with %d total chunks", allocation_size, alloc_count, total_chunks);
+            LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations from zone with %d total chunks",
+                          allocation_size, alloc_count, total_chunks);
         }
 
         alloc_count++;

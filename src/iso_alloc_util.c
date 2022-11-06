@@ -77,18 +77,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool pop
     return (p + g_page_size);
 }
 
-/* All pages are mapped as if we will never need
- * them. This is to ensure RSS stays managable */
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name) {
-    void *p = mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
-
-    madvise(p, size, FREE_OR_DONTNEED);
-
-#if __APPLE__
-    while(madvise(p, size, MADV_FREE_REUSABLE) && errno == EAGAIN) {
-    }
-#endif
-    return p;
+    return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
@@ -138,6 +128,15 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
 #if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
     if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
         madvise(p, size, MADV_HUGEPAGE);
+    }
+#endif
+
+    /* All pages are mapped as if we will never need
+     * them. This is to ensure RSS stays managable */
+    madvise(p, size, FREE_OR_DONTNEED);
+
+#if __APPLE__
+    while(madvise(p, size, MADV_FREE_REUSABLE) && errno == EAGAIN) {
     }
 #endif
 
