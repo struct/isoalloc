@@ -9,10 +9,24 @@
 
 #include <new>
 
+#if !ABORT_ON_NULL
+#define NEW_EXCEPT noexcept(false)
+
+void iso_cpp_handler() {
+    throw std::bad_alloc();
+}
+
+extern "C" __attribute__((constructor(FIRST_CTOR+1))) void iso_cpp(void) {
+    std::set_new_handler(iso_cpp_handler);
+}
+#else
+#define NEW_EXCEPT
+#endif
+
 // These hooks override the basic new/delete
 // operators to use the iso_alloc API
 
-EXTERNAL_API void *operator new(size_t size) {
+EXTERNAL_API void *operator new(size_t size) NEW_EXCEPT {
     return iso_alloc(size);
 }
 
@@ -20,7 +34,7 @@ EXTERNAL_API void operator delete(void *p) noexcept {
     iso_free(p);
 }
 
-EXTERNAL_API void *operator new[](size_t size) {
+EXTERNAL_API void *operator new[](size_t size) NEW_EXCEPT {
     return iso_alloc(size);
 }
 
