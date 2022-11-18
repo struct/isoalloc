@@ -2,6 +2,8 @@
  * Copyright 2022 - chris.rohlf@gmail.com */
 
 #include <memory>
+#include <array>
+#include <thread>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
@@ -78,19 +80,30 @@ int main(int argc, char *argv[]) {
     char *a = (char *) iso_alloc(100);
     iso_free(a);
     auto d = std::make_unique<Derived>(100);
+    constexpr size_t array_sizeslen = sizeof(array_sizes) / sizeof(uint32_t);
 
-    for(size_t i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
+    for(size_t i = 0; i < array_sizeslen; i++) {
         for(size_t z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
             allocate(array_sizes[i], allocation_sizes[z]);
         }
     }
 
-    for(size_t i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
+    for(size_t i = 0; i < array_sizeslen; i++) {
         allocate(array_sizes[i], 0);
         Base *b = new Base();
         delete b;
         auto d = std::make_unique<Derived>(i);
     }
+
+#ifndef __APPLE__
+    for(size_t i = 0; i < 4; i++) {
+	std::array<std::thread, 4> t;
+	for (size_t z = 0; z < 4; z ++) {
+		t[i] = std::thread(allocate, array_sizes[i], allocation_sizes[z]);
+		t[i].join();
+	}
+    }
+#endif
 
     iso_verify_zones();
 
