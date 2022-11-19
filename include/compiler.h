@@ -37,3 +37,11 @@
 #define __SANITIZE_MEMORY__ 1
 #endif
 #endif
+
+#if defined(__SANITIZE_ADDRESS__)
+static_assert(ENABLE_ASAN == 1, "ENABLE_ASAN should be 1 to enable asan instead");
+#endif
+
+#if defined(__SANITIZE_MEMORY__)
+static_assert(ENABLE_MSAN == 1, "ENABLE_MSAN should be 1 to enable msan instead");
+#endif
