@@ -28,3 +28,12 @@
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
+#if __clang__
+#if __has_feature(address_sanitizer)
+#define __SANITIZE_ADDRESS__ 1
+#endif
+#if __has_feature(memory_sanitizer)
+#define __SANITIZE_MEMORY__ 1
+#endif
+#endif
