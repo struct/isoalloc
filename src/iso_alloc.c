@@ -1374,7 +1374,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
-    const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
+    const uint64_t chunk_offset = (uint64_t)(p - UNMASK_USER_PTR(zone));
     const size_t chunk_number = (chunk_offset >> zone->chunk_size_pow2);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
@@ -1642,7 +1642,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
                 /* We only need to refresh this single tag */
                 void *user_pages_start = UNMASK_USER_PTR(zone);
                 uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-                uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+                uint64_t chunk_offset = (uint64_t)(p - user_pages_start);
                 _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
                 /* Generate and write a new tag for this chunk */
