@@ -385,6 +385,9 @@ install:
 format:
 	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
+format-ci:
+	clang-format --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
+
 clean:
 	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core* iso_alloc_profiler.data
 	rm -rf android/libs android/obj

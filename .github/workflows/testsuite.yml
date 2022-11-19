@@ -49,6 +49,12 @@ jobs:
       - run: sudo apt install clang-12
       - run: make tests
       - run: make cpp_tests
+  testsuite-clang12-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt install clang-12 clang-format
+      - run: make format-ci
   testsuite-clang12-perf:
     runs-on: ubuntu-latest
     steps:
