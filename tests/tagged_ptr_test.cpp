@@ -100,18 +100,21 @@ int main(int argc, char *argv[]) {
             abort();
         }
 
+#if ENABLE_ASAN
+        // If you need to make ASAN happy this ugly code will work
+        // because it invokes the destructor manually and then calls
+        // the appropriate IsoAlloc free function
+        d->~Derived();
+        iso_free_from_zone(d, _zone_handle);
+#else
         // Tools like AddressSanitizer will throw an error
         // here because it doesn't think the underlying chunk was
         // allocated with malloc() because we used placement new
         // but IsoAlloc properly handles the iso_free() call
         // invoked from operator delete
-        delete d;
 
-        // If you need to make ASAN happy this ugly code will work
-        // because it invokes the destructor manually and then calls
-        // the appropriate IsoAlloc free function
-        // d->~Derived();
-        // iso_free_from_zone(d, _zone_handle);
+        delete d;
+#endif
     }
 
     // Destroy the private zone we created
