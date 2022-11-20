@@ -16,7 +16,7 @@ void iso_cpp_handler() {
     throw std::bad_alloc();
 }
 
-extern "C" __attribute__((constructor(FIRST_CTOR+1))) void iso_cpp(void) {
+extern "C" __attribute__((constructor(FIRST_CTOR + 1))) void iso_cpp(void) {
     std::set_new_handler(iso_cpp_handler);
 }
 #else

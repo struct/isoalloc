@@ -97,11 +97,11 @@ int main(int argc, char *argv[]) {
 
 #ifndef __APPLE__
     for(size_t i = 0; i < 4; i++) {
-	std::array<std::thread, 4> t;
-	for (size_t z = 0; z < 4; z ++) {
-		t[i] = std::thread(allocate, array_sizes[i], allocation_sizes[z]);
-		t[i].join();
-	}
+        std::array<std::thread, 4> t;
+        for(size_t z = 0; z < 4; z++) {
+            t[i] = std::thread(allocate, array_sizes[i], allocation_sizes[z]);
+            t[i].join();
+        }
     }
 #endif
 
