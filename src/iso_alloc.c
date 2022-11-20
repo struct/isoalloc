@@ -137,7 +137,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
 #endif
 
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
-    void *p = NULL;
+    iso_alloc_root *p = NULL;
 
     p = (void *) mmap_guarded_rw_pages(sizeof(iso_alloc_root), true, ROOT_NAME);
 
@@ -146,10 +146,10 @@ INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     }
 
 #if __APPLE__
-    while(madvise(p, ROUND_UP_PAGE(sizeof(iso_alloc_root)), MADV_FREE_REUSE) && errno == EAGAIN) {
+    while(madvise((void *) p, ROUND_UP_PAGE(sizeof(iso_alloc_root)), MADV_FREE_REUSE) && errno == EAGAIN) {
     }
 #endif
-    return (iso_alloc_root *) p;
+    return p;
 }
 
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
@@ -356,10 +356,10 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     /* This function is only ever called during zone
      * initialization so we don't need to check the
      * current state of any chunks, they're all free.
-     * It's possible the call to rand() here will
-     * return the same index twice, we can live with
-     * that collision as canary chunks only provide a
-     * small security property anyway */
+     * It's possible the call to us_rand_uint64() here
+     * will return the same index twice. We can live
+     * with that collision as canary chunks only provide
+     * a small probabilistic security guarantee */
     for(uint64_t i = 0; i < canary_count; i++) {
         bitmap_index_t bm_idx = ALIGN_SZ_DOWN((us_rand_uint64(&_root->seed) % (max_bitmap_idx)));
 
@@ -393,7 +393,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         return NULL;
     }
 
-    /* This is a good time to refresh the root rng seed */
+    /* This is a good time to refresh the root rng seed
+     * because we will soon create memory tags, canary
+     * chunks, and other uses of us_rand_uint64 */
     _root->seed = rand_uint64();
 
     /* In order for our bitmap to be a power of 2
