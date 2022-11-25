@@ -2,6 +2,8 @@
 
 IsoAlloc supports a software only memory tagging model that is very similar to Chromes [MTECheckedPtr](https://docs.google.com/document/d/1ph7iOorkGqTuETFZp-xvHV4L2rYootuz1ThzAAoGe30/edit?usp=sharing). This technique for pointer protection is inspired by ARM's upcoming Memory Tagging Extension (MTE) due in ARM v8.5-A. ARM MTE is a comprehensive hardware based solution for detecting memory safety issues in release builds of software with very little overhead. ARM MTE uses the Top Byte Ignore (TBI) feature to transparently tag pointers with metadata or a 'tag'. With ARM MTE this tag is mostly transparently checked and removed in hardware. The feature implemented here in IsoAlloc is conceptually very similar except that tagging and untagging of pointers happens in software.
 
+You can read more details about this feature [here](https://struct.github.io/pointer_tagging.html).
+
 Note that this feature is experimental, off by default, and the APIs are subject to change!
 
 ## Overview

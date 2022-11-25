@@ -184,6 +184,8 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone)` - Untags a pointer from a private zone if `MEMORY_TAGGING` is enabled.
 
+`uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone)` - Retrieves the 1 byte tag for an untagged pointer if `MEMORY_TAGGING` is enabled.
+
 `void iso_alloc_protect_root()` - Temporarily protects the `iso_alloc` root structure by marking it unreadable.
 
 `void iso_alloc_unprotect_root()` - Undoes the operation performed by `iso_alloc_protect_root`.
