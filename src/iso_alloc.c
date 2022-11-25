@@ -490,7 +490,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         create_guard_page(p + g_page_size + tag_mapping_size);
         new_zone->user_pages_start = (p + g_page_size + tag_mapping_size + g_page_size);
         uint64_t *_mtp = p + g_page_size;
-        int64_t tms = tag_mapping_size / sizeof(uint64_t);
+        /* (>> 3) == sizeof(uint64_t) == 8 */
+        uint64_t tms = tag_mapping_size >> 3;
 
         /* Generate random tags */
         for(uint64_t o = 0; o < tms; o++) {
@@ -587,9 +588,18 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
      * leads to a less predictable free list */
     bitmap_index_t bm_idx = 0;
 
+    /* Refresh the random seed for wyrand. This only
+     * requires a single syscall to getrandom() */
+    _root->seed = rand_uint64();
+
     /* The largest zone->max_bitmap_idx we will ever
-     * have is 8192 for SMALLEST_CHUNK_SZ (16) */
-    if(zone->max_bitmap_idx > ALIGNMENT) {
+     * have is 8192 for SMALLEST_CHUNK_SZ (16). The
+     * smallest zone->max_bitmap_idx is 1 when chunk
+     * size is SMALL_SZ_MAX because the bitmap_size
+     * is only 8 bytes. If our max bitmap index is
+     * small then it won't provide enough search
+     * space for a random list to be of value */
+    if(zone->max_bitmap_idx > MIN_BITMAP_IDX) {
         bm_idx = ((uint32_t) us_rand_uint64(&_root->seed) & (zone->max_bitmap_idx - 1));
     }
 
