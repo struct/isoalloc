@@ -76,6 +76,8 @@ assert(sizeof(size_t) >= 64)
 #define FREE_OR_DONTNEED MADV_FREE
 #endif
 
+static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
+
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 
@@ -238,6 +240,8 @@ assert(sizeof(size_t) >= 64)
 
 /* Cap our big zones at 4GB of memory */
 #define BIG_SZ_MAX 4294967296
+
+#define MIN_BITMAP_IDX 8
 
 #define WASTED_SZ_MULTIPLIER 8
 #define WASTED_SZ_MULTIPLIER_SHIFT 3

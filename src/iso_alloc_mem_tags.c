@@ -3,9 +3,15 @@
 
 #include "iso_alloc_internal.h"
 
+/* Returns a tag for a pointer p, which must be untagged
+ * when passed to this function */
 INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
     void *user_pages_start = UNMASK_USER_PTR(zone);
+
+    if(user_pages_start > p || (user_pages_start + ZONE_USER_SIZE) < p) {
+        LOG_AND_ABORT("Cannot get tag for pointer %p with wrong zone %d %p - %p", p, zone->index, user_pages_start, user_pages_start + ZONE_USER_SIZE);
+    }
 
     uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
     const uint64_t chunk_offset = (uint64_t)(p - user_pages_start);
