@@ -178,6 +178,8 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void *iso_alloc_from_zone_tagged(iso_alloc_zone_handle *zone)` - Same as `iso_alloc_from_zone` but returns a tagged pointer if `MEMORY_TAGGING` is enabled.
 
+`void iso_alloc_verify_ptr_tag(void *p, iso_alloc_zone_handle *zone)` - Verifies the tag for a pointer is correct, aborts if not. Requires `MEMORY_TAGGING`.
+
 `void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone)` - Destroy a zone created with `iso_alloc_from_zone`.
 
 `void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone)` - Tags a pointer from a private zone if `MEMORY_TAGGING` is enabled.
