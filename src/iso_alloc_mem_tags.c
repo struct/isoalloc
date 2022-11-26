@@ -28,6 +28,22 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
 #endif
 }
 
+INTERNAL_HIDDEN void _iso_alloc_verify_tag(void *p, iso_alloc_zone_t *zone) {
+#if MEMORY_TAGGING
+    if(UNLIKELY(p == NULL || zone == NULL)) {
+        return;
+    }
+
+    void *untagged_p = (void *) ((uintptr_t) p & TAGGED_PTR_MASK);
+    const uint64_t tag = _iso_alloc_get_mem_tag(untagged_p, zone);
+
+    if(tag != ((uintptr_t) p & IS_TAGGED_PTR_MASK)) {
+        LOG_AND_ABORT("Pointer %p has wrong tag %x, expected %x", p, ((uintptr_t) p & IS_TAGGED_PTR_MASK), tag);
+    }
+#endif
+    return;
+}
+
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
     if(UNLIKELY(p == NULL || zone == NULL)) {

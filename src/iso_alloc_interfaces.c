@@ -201,6 +201,16 @@ EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle
     return _untag_ptr(p, zone);
 }
 
+EXTERNAL_API void iso_alloc_verify_ptr_tag(void *p, iso_alloc_zone_handle *zone) {
+    if(zone == NULL) {
+        return;
+    }
+
+    UNMASK_ZONE_HANDLE(zone);
+    _iso_alloc_verify_tag(p, zone);
+    return;
+}
+
 EXTERNAL_API NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone) {
     if(zone == NULL || p == NULL) {
         return 0;
