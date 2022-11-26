@@ -19,17 +19,24 @@ int main(int argc, char *argv[]) {
         abort();
     }
 
+    /* Allocate a chunk, and assign a tagged pointer to p */
     void *p = iso_alloc_from_zone_tagged(_zone_handle);
-    void *up = iso_alloc_untag_ptr(p, _zone_handle);
-    iso_free_from_zone(up, _zone_handle);
-    iso_flush_caches();
-    /* The free() path will have changed the tag for this pointer */
-    iso_alloc_verify_ptr_tag(p, _zone_handle);
-    iso_alloc_destroy_zone(_zone_handle);
 
-#if !MEMORY_TAGGING
-    return -1;
-#endif
+    /* Remove the tag from the pointer */
+    void *up = iso_alloc_untag_ptr(p, _zone_handle);
+
+    /* Free the underlying chunk with the untagged pointer */
+    iso_free_from_zone(up, _zone_handle);
+
+    /* Flush all caches includes the delayed free list. When
+     * the chunk is free'd its tag will be changed */
+    iso_flush_caches();
+
+    /* Verify the tag on our stale tagged pointer. This should
+     * abort because the tag was changed during free() */
+    iso_alloc_verify_ptr_tag(p, _zone_handle);
+
+    iso_alloc_destroy_zone(_zone_handle);
 
     return 0;
 }
