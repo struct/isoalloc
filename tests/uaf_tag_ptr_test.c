@@ -6,6 +6,10 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
+#if !MEMORY_TAGGING
+#error "This test intended to be run with -DMEMORY_TAGGING=1"
+#endif
+
 #define SIZE 256
 
 int main(int argc, char *argv[]) {
@@ -26,11 +30,19 @@ int main(int argc, char *argv[]) {
      * result in a bad pointer */
     memset(p, 0x41, SIZE);
 
-    iso_alloc_destroy_zone(_zone_handle);
-
-#if !MEMORY_TAGGING
-    return -1;
+#if __aarch64__
+    /* aarch64 systems with TBI enabled will succeed in
+     * using the tagged pointer p. If p is still tagged
+     * we abort here */
+    if((uintptr_t) p & IS_TAGGED_PTR_MASK) {
+        LOG_AND_ABORT("Write to tagged ptr %p succeeded. TBI may be enabled", p);
+    }
+#else
+    if((uintptr_t) p & IS_TAGGED_PTR_MASK) {
+        LOG_AND_ABORT("Write to tagged ptr %p succeeded on x86_64 ?!", p);
+    }
 #endif
 
+    iso_alloc_destroy_zone(_zone_handle);
     return 0;
 }

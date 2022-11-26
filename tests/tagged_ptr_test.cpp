@@ -1,14 +1,15 @@
 // iso_alloc tagged_ptr_test.cpp
 // Copyright 2022 - chris.rohlf@gmail.com
 
-// This test should successfully run with or
-// without MEMORY_TAGGING support
-
 #include <memory>
 #include <iostream>
 #include <ostream>
 #include <string.h>
 #include "iso_alloc.h"
+
+#if !MEMORY_TAGGING
+#error "This test intended to be run with -DMEMORY_TAGGING=1"
+#endif
 
 iso_alloc_zone_handle *_zone_handle;
 constexpr uint32_t _str_size = 32;

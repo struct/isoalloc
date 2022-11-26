@@ -1,13 +1,13 @@
 /* iso_alloc tagged_ptr_test.c
  * Copyright 2022 - chris.rohlf@gmail.com */
-
-/* This test should successfully run with or
- * without MEMORY_TAGGING support */
-
 #include <stdio.h>
 #include <string.h>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
+
+#if !MEMORY_TAGGING
+#error "This test intended to be run with -DMEMORY_TAGGING=1"
+#endif
 
 #define SIZE 256
 
