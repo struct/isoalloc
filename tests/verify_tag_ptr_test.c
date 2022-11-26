@@ -19,15 +19,8 @@ int main(int argc, char *argv[]) {
     void *up = iso_alloc_untag_ptr(p, _zone_handle);
     iso_free_from_zone(up, _zone_handle);
     iso_flush_caches();
+    /* The free() path will have changed the tag for this pointer */
     iso_alloc_verify_ptr_tag(p, _zone_handle);
-
-    p = iso_alloc_untag_ptr(p, _zone_handle);
-
-    /* This should crash on systems without TBI as p is
-     * already free and the untagging operation should
-     * result in a bad pointer */
-    memset(p, 0x41, SIZE);
-
     iso_alloc_destroy_zone(_zone_handle);
 
 #if !MEMORY_TAGGING
