@@ -3,7 +3,7 @@
 # examples of code that should crash
 $(echo '' > test_output.txt)
 
-tests=("tests" "big_tests" "interfaces_test" "thread_tests" "tagged_ptr_test" "pool_test"
+tests=("tests" "big_tests" "interfaces_test" "thread_tests" "pool_test"
        "rand_freelist")
 failure=0
 succeeded=0
@@ -31,8 +31,7 @@ done
 
 fail_tests=("double_free" "big_double_free" "heap_overflow" "heap_underflow"
             "leaks_test" "wild_free" "unaligned_free" "incorrect_chunk_size_multiple"
-            "big_canary_test" "zero_alloc" "sized_free" "bad_tag_ptr_test"
-            "verify_tag_ptr_test")
+            "big_canary_test" "zero_alloc" "sized_free")
 
 for t in "${fail_tests[@]}"; do
     echo -n "Running $t test"

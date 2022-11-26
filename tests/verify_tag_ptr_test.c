@@ -6,6 +6,10 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
+#if !MEMORY_TAGGING
+#error "This test intended to be run with -DMEMORY_TAGGING=1"
+#endif
+
 #define SIZE 256
 
 int main(int argc, char *argv[]) {

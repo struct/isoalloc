@@ -99,6 +99,8 @@ The Makefile targets are very simple:
 
 `make tests` - Builds and runs all tests
 
+`make tagging_tests` - Builds and runs the memory tagging tests
+
 `make libc_sanity_tests` - Builds the memcpy/memset libc hook sanity tests
 
 `make perf_tests` - Builds and runs a simple performance test that uses gprof. Linux only
