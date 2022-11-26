@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 $(echo '' > tagging_test_output.txt)
 
-tests=("tagged_ptr_test")
+tests=("tagged_ptr_test" "tagged_ptr_test_cpp")
 failure=0
 succeeded=0
 

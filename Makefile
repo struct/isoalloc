@@ -324,11 +324,12 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/pool_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/pool_test $(LDFLAGS)
 	utils/run_tests.sh
 
-tagging_tests: clean library_debug_unit_tests
+tagging_tests: clean cpp_library_debug
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bad_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bad_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/verify_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/verify_tag_ptr_test $(LDFLAGS)
+	$(CXX) -DMEMORY_TAGGING=1 $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test_cpp $(LDFLAGS)
 	utils/run_tagging_tests.sh
 
 init_test: clean library_debug_unit_tests
@@ -380,9 +381,7 @@ endif
 cpp_tests: clean cpp_library_debug
 	@echo "make cpp_tests"
 	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/cxx_tests $(LDFLAGS)
-	$(CXX) $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	LD_LIBRARY_PATH=$(BUILD_DIR)/ $(BUILD_DIR)/cxx_tests
-	LD_LIBRARY_PATH=$(BUILD_DIR)/ $(BUILD_DIR)/tagged_ptr_test
 
 install:
 	cp -pR build/$(LIBNAME) /usr/lib/
