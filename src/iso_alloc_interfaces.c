@@ -10,49 +10,49 @@
 #include "iso_alloc_profiler.h"
 #endif
 
-EXTERNAL_API void iso_alloc_initialize(void) {
+EXTERNAL_API FLATTEN void iso_alloc_initialize(void) {
     _iso_alloc_initialize();
 }
 
-EXTERNAL_API void iso_alloc_destroy(void) {
+EXTERNAL_API FLATTEN void iso_alloc_destroy(void) {
     _iso_alloc_destroy();
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size) {
+EXTERNAL_API NO_DISCARD FLATTEN MALLOC_ATTR ALLOC_SIZE ASSUME_ALIGNED void *iso_alloc(size_t size) {
     return _iso_alloc(NULL, size);
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size) {
+EXTERNAL_API NO_DISCARD FLATTEN MALLOC_ATTR CALLOC_SIZE ASSUME_ALIGNED void *iso_calloc(size_t nmemb, size_t size) {
     return _iso_calloc(nmemb, size);
 }
 
-EXTERNAL_API void iso_free(void *p) {
+EXTERNAL_API FLATTEN void iso_free(void *p) {
     _iso_free(p, false);
 }
 
-EXTERNAL_API void iso_free_size(void *p, size_t size) {
+EXTERNAL_API FLATTEN void iso_free_size(void *p, size_t size) {
     _iso_free_size(p, size);
 }
 
-EXTERNAL_API void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN void iso_free_from_zone(void *p, iso_alloc_zone_handle *zone) {
     UNMASK_ZONE_HANDLE(zone);
     _iso_free_from_zone(p, zone, false);
 }
 
-EXTERNAL_API void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN void iso_free_from_zone_permanently(void *p, iso_alloc_zone_handle *zone) {
     UNMASK_ZONE_HANDLE(zone);
     _iso_free_from_zone(p, zone, true);
 }
 
-EXTERNAL_API void iso_free_permanently(void *p) {
+EXTERNAL_API FLATTEN void iso_free_permanently(void *p) {
     _iso_free(p, true);
 }
 
-EXTERNAL_API size_t iso_chunksz(void *p) {
+EXTERNAL_API FLATTEN size_t iso_chunksz(void *p) {
     return _iso_chunk_size(p);
 }
 
-EXTERNAL_API NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone) {
     UNMASK_ZONE_HANDLE(zone);
     iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
     size_t canaries = 0;
@@ -63,7 +63,7 @@ EXTERNAL_API NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone)
     return (_zone->chunk_count - canaries);
 }
 
-EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size) {
+EXTERNAL_API FLATTEN NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, size_t size) {
     if(size == 0) {
         iso_free(p);
         return NULL;
@@ -94,7 +94,7 @@ EXTERNAL_API NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(void *p, s
     return r;
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size) {
+EXTERNAL_API FLATTEN NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size) {
     unsigned int res;
 
     if(__builtin_umul_overflow(nmemb, size, &res)) {
@@ -104,11 +104,11 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallo
     return iso_realloc(p, nmemb * size);
 }
 
-EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str) {
+EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str) {
     return iso_strdup_from_zone(NULL, str);
 }
 
-EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) {
+EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone_handle *zone, const char *str) {
     if(str == NULL) {
         return NULL;
     }
@@ -129,11 +129,11 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_alloc_zone
     return p;
 }
 
-EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup(const char *str, size_t n) {
+EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strndup(const char *str, size_t n) {
     return iso_strndup_from_zone(NULL, str, n);
 }
 
-EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) {
+EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zone_handle *zone, const char *str, size_t n) {
     if(str == NULL) {
         return NULL;
     }
@@ -160,7 +160,7 @@ EXTERNAL_API NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_alloc_zon
     return p;
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR ASSUME_ALIGNED void *iso_alloc_from_zone(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD MALLOC_ATTR ASSUME_ALIGNED void *iso_alloc_from_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }
@@ -171,7 +171,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR ASSUME_ALIGNED void *iso_alloc_from_zone(iso
     return _iso_alloc(zone, _zone->chunk_size);
 }
 
-EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }
@@ -183,7 +183,7 @@ EXTERNAL_API NO_DISCARD MALLOC_ATTR void *iso_alloc_from_zone_tagged(iso_alloc_z
     return _tag_ptr(p, zone);
 }
 
-EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }
@@ -192,7 +192,7 @@ EXTERNAL_API NO_DISCARD void *iso_alloc_tag_ptr(void *p, iso_alloc_zone_handle *
     return _tag_ptr(p, zone);
 }
 
-EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return NULL;
     }
@@ -201,7 +201,7 @@ EXTERNAL_API NO_DISCARD void *iso_alloc_untag_ptr(void *p, iso_alloc_zone_handle
     return _untag_ptr(p, zone);
 }
 
-EXTERNAL_API void iso_alloc_verify_ptr_tag(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN void iso_alloc_verify_ptr_tag(void *p, iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return;
     }
@@ -211,7 +211,7 @@ EXTERNAL_API void iso_alloc_verify_ptr_tag(void *p, iso_alloc_zone_handle *zone)
     return;
 }
 
-EXTERNAL_API NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone) {
     if(zone == NULL || p == NULL) {
         return 0;
     }
@@ -220,7 +220,7 @@ EXTERNAL_API NO_DISCARD uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_ha
     return _iso_alloc_get_mem_tag(p, zone);
 }
 
-EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return;
     }
@@ -229,13 +229,13 @@ EXTERNAL_API void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
     _iso_alloc_destroy_zone(zone);
 }
 
-EXTERNAL_API NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
+EXTERNAL_API FLATTEN NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     iso_alloc_zone_handle *zone = (iso_alloc_zone_handle *) iso_new_zone(size, false);
     UNMASK_ZONE_HANDLE(zone);
     return zone;
 }
 
-EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name) {
+EXTERNAL_API FLATTEN int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name) {
     if(zone == NULL) {
         return 0;
     } else {
@@ -246,15 +246,15 @@ EXTERNAL_API int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, char *name
     return name_mapping(_zone->user_pages_start, ZONE_USER_SIZE, name);
 }
 
-EXTERNAL_API void iso_alloc_protect_root(void) {
+EXTERNAL_API FLATTEN void iso_alloc_protect_root(void) {
     _iso_alloc_protect_root();
 }
 
-EXTERNAL_API void iso_alloc_unprotect_root(void) {
+EXTERNAL_API FLATTEN void iso_alloc_unprotect_root(void) {
     _iso_alloc_unprotect_root();
 }
 
-EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
@@ -264,11 +264,11 @@ EXTERNAL_API uint64_t iso_alloc_detect_zone_leaks(iso_alloc_zone_handle *zone) {
     return _iso_alloc_detect_leaks_in_zone(zone);
 }
 
-EXTERNAL_API uint64_t iso_alloc_detect_leaks(void) {
+EXTERNAL_API FLATTEN uint64_t iso_alloc_detect_leaks(void) {
     return _iso_alloc_detect_leaks();
 }
 
-EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return 0;
     } else {
@@ -278,15 +278,15 @@ EXTERNAL_API uint64_t iso_alloc_zone_mem_usage(iso_alloc_zone_handle *zone) {
     return _iso_alloc_zone_mem_usage(zone);
 }
 
-EXTERNAL_API uint64_t iso_alloc_mem_usage(void) {
+EXTERNAL_API FLATTEN uint64_t iso_alloc_mem_usage(void) {
     return _iso_alloc_mem_usage();
 }
 
-EXTERNAL_API void iso_verify_zones(void) {
+EXTERNAL_API FLATTEN void iso_verify_zones(void) {
     verify_all_zones();
 }
 
-EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
+EXTERNAL_API FLATTEN void iso_verify_zone(iso_alloc_zone_handle *zone) {
     if(zone == NULL) {
         return;
     } else {
@@ -296,26 +296,26 @@ EXTERNAL_API void iso_verify_zone(iso_alloc_zone_handle *zone) {
     verify_zone(zone);
 }
 
-EXTERNAL_API void iso_flush_caches(void) {
+EXTERNAL_API FLATTEN void iso_flush_caches(void) {
     flush_caches();
 }
 
 #if HEAP_PROFILER
-EXTERNAL_API size_t iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
+EXTERNAL_API FLATTEN size_t iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
     return _iso_get_alloc_traces(traces_out);
 }
 
-EXTERNAL_API size_t iso_get_free_traces(iso_free_traces_t *traces_out) {
+EXTERNAL_API FLATTEN size_t iso_get_free_traces(iso_free_traces_t *traces_out) {
     return _iso_get_free_traces(traces_out);
 }
 
-EXTERNAL_API void iso_alloc_reset_traces(void) {
+EXTERNAL_API FLATTEN void iso_alloc_reset_traces(void) {
     _iso_alloc_reset_traces();
 }
 #endif
 
 #if EXPERIMENTAL
-EXTERNAL_API void iso_alloc_search_stack(void *p) {
+EXTERNAL_API FLATTEN void iso_alloc_search_stack(void *p) {
     _iso_alloc_search_stack(p);
 }
 #endif
