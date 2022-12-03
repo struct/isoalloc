@@ -17,6 +17,8 @@
 #include <sys/random.h>
 #elif __NetBSD__
 #include <stdlib.h>
+#elif __sun
+#include <sys/random.h>
 #else
 #error "unknown OS"
 #endif
@@ -55,7 +57,7 @@ INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void) {
     ret = syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __APPLE__
     ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
-#elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__
+#elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__ || __sun
     ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __NetBSD__
     /* Temporary solution until NetBSD 10 released with getrandom support */

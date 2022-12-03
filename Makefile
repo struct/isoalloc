@@ -183,6 +183,8 @@ AUTO_CTOR_DTOR = -DAUTO_CTOR_DTOR=1
 ## that call free will segfault
 ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 
+LTO = -flto
+
 LIBNAME = libisoalloc.so
 
 UNAME := $(shell uname)
@@ -223,6 +225,16 @@ STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 HUGE_PAGES =
 endif
 
+ifeq ($(UNAME), SunOS)
+STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
+# this platform is both 32 and 64 bits
+# we have to be explicit
+CFLAGS += -m64
+CXXFLAGS += -m64
+LTO =
+HUGE_PAGES =
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
@@ -237,7 +249,7 @@ CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR)
-CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
+CXXFLAGS += $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
 PERF_FLAGS = -pg -DPERF_TEST_BUILD=1
@@ -247,7 +259,7 @@ C_SRCS = $(SRC_DIR)/*.c
 CXX_SRCS = $(SRC_DIR)/*.cpp
 ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
-LDFLAGS = -L$(BUILD_DIR) -lisoalloc -flto
+LDFLAGS = -L$(BUILD_DIR) -lisoalloc $(LTO)
 
 all: tests
 
