@@ -26,43 +26,43 @@ extern "C" __attribute__((constructor(FIRST_CTOR + 1))) void iso_cpp(void) {
 // These hooks override the basic new/delete
 // operators to use the iso_alloc API
 
-EXTERNAL_API void *operator new(size_t size) NEW_EXCEPT {
+EXTERNAL_API FLATTEN void *operator new(size_t size) NEW_EXCEPT {
     return iso_alloc(size);
 }
 
-EXTERNAL_API void operator delete(void *p) noexcept {
+EXTERNAL_API FLATTEN void operator delete(void *p) noexcept {
     iso_free(p);
 }
 
-EXTERNAL_API void *operator new[](size_t size) NEW_EXCEPT {
+EXTERNAL_API FLATTEN void *operator new[](size_t size) NEW_EXCEPT {
     return iso_alloc(size);
 }
 
-EXTERNAL_API void operator delete[](void *p) noexcept {
+EXTERNAL_API FLATTEN void operator delete[](void *p) noexcept {
     iso_free(p);
 }
 
-EXTERNAL_API void *operator new(size_t size, const std::nothrow_t &) noexcept {
+EXTERNAL_API FLATTEN void *operator new(size_t size, const std::nothrow_t &) noexcept {
     return iso_alloc(size);
 }
 
-EXTERNAL_API void *operator new[](size_t size, const std::nothrow_t &) noexcept {
+EXTERNAL_API FLATTEN void *operator new[](size_t size, const std::nothrow_t &) noexcept {
     return iso_alloc(size);
 }
 
-void operator delete(void *ptr, size_t size) noexcept {
+FLATTEN void operator delete(void *ptr, size_t size) noexcept {
     return iso_free_size(ptr, size);
 }
 
-void operator delete[](void *ptr, size_t size) noexcept {
+FLATTEN void operator delete[](void *ptr, size_t size) noexcept {
     return iso_free_size(ptr, size);
 }
 
-EXTERNAL_API void operator delete(void *ptr, const std::nothrow_t &) noexcept {
+EXTERNAL_API FLATTEN void operator delete(void *ptr, const std::nothrow_t &) noexcept {
     return iso_free(ptr);
 }
 
-EXTERNAL_API void operator delete[](void *ptr, const std::nothrow_t &) noexcept {
+EXTERNAL_API FLATTEN void operator delete[](void *ptr, const std::nothrow_t &) noexcept {
     return iso_free(ptr);
 }
 
