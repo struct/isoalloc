@@ -14,7 +14,8 @@ SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISAB
 
 ## Enable memory tagging support. This will generate a random
 ## 1 byte tag per addressable chunk of memory. These tags can
-## be retrieved and verified
+## be retrieved and verified. This feature will likely interfere
+## with ARM MTE and PAC. See MEMORY_TAGGING.md for more information
 MEMORY_TAGGING = -DMEMORY_TAGGING=0
 
 ## Enable abort() when isoalloc can't gather enough entropy.

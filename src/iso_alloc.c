@@ -1464,13 +1464,13 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 }
 
 INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool permanent) {
-    if(p == NULL) {
+    if(p == NULL || zone == NULL) {
         return;
     }
 
 #if MEMORY_TAGGING
     /* Its possible that we were passed a tagged pointer */
-    if(UNLIKELY(zone != NULL && zone->tagged == true && ((uintptr_t) p & IS_TAGGED_PTR_MASK) != 0)) {
+    if(UNLIKELY(zone->tagged == true && ((uintptr_t) p & IS_TAGGED_PTR_MASK) != 0)) {
         /* If the untagging results in a bad pointer we
          * will catch it in the free path and abort */
         p = _untag_ptr(p, zone);
