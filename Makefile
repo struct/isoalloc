@@ -208,6 +208,8 @@ ifeq ($(UNAME), FreeBSD)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 ## Using spinlocks to avoid recursive locks contentions with calloc
 USE_SPINLOCK = -DUSE_SPINLOCK=1
+## Causing zero allocations to fail with this check otherwise
+NO_ZERO_ALLOCATIONS =
 ## Once FreeBSD 13.1 becomes the minimal non EOL version
 ## it can be enabled
 ## SCHED_GETCPU = -DSCHED_GETCPU
