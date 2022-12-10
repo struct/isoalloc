@@ -253,12 +253,27 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
     _root->zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
 #endif
 
+#if UAF_PTR_PAGE
+    _root->uaf_ptr_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
+#endif
+
 #if ALLOC_SANITY && UNINIT_READ_SANITY
     _iso_alloc_setup_userfaultfd();
 #endif
 
 #if ALLOC_SANITY
     _sanity_canary = us_rand_uint64(&_root->seed);
+#endif
+
+#if SIGNAL_HANDLER
+    struct sigaction sa;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NODEFER | SA_SIGINFO;
+    sa.sa_sigaction = &handle_signal;
+
+    if(sigaction(SIGSEGV, &sa, NULL) == ERR) {
+        LOG("Could not register signal handler");
+    }
 #endif
 }
 
@@ -1907,6 +1922,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #if NO_ZERO_ALLOCATIONS
     munmap(_root->zero_alloc_page, g_page_size);
+#endif
+
+#if UAF_PTR_PAGE
+    munmap(_root->uaf_ptr_page, g_page_size);
 #endif
 
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)

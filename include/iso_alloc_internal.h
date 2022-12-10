@@ -38,6 +38,7 @@ assert(sizeof(size_t) >= 64)
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 
@@ -327,10 +328,6 @@ extern pthread_mutex_t root_busy_mutex;
 #define UNLOCK_BIG_ZONE()
 #endif
 
-#if NO_ZERO_ALLOCATIONS
-extern void *_zero_alloc_page;
-#endif
-
 /* The global root */
 extern iso_alloc_root *_root;
 
@@ -401,6 +398,10 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
+
+#if SIGNAL_HANDLER
+INTERNAL_HIDDEN void handle_signal(int sig, siginfo_t *si, void *ctx);
+#endif
 
 #if EXPERIMENTAL
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);

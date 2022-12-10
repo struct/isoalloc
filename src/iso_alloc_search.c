@@ -25,7 +25,7 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
                     return search;
                 } else {
 #if UAF_PTR_PAGE
-                    *(uint64_t *) search = UAF_PTR_PAGE_ADDR;
+                    *(uint64_t *) search = (uint64_t)(_root->uaf_ptr_page);
                     return search;
 #endif
                 }

@@ -45,7 +45,6 @@
  * magic value that is written */
 #if UAF_PTR_PAGE
 #define UAF_PTR_PAGE_ODDS 1000000
-#define UAF_PTR_PAGE_ADDR 0xFF41414142434445
 #endif
 
 /* Zones can be retired after a certain number of
