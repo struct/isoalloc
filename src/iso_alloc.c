@@ -193,7 +193,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 #if !THREAD_SUPPORT
     size_t z = ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc));
     zone_cache = mmap_guarded_rw_pages(z, true, NULL);
-    zone_cache = ((void *) zone_cache) + g_page_size;
 #if __APPLE__
     darwin_reuse(zone_cache, z);
 #endif
