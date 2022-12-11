@@ -160,7 +160,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
 
     if(profile == false) {
         LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use = %d", zone->index, zone->chunk_size, zone->chunk_count,
-            was_used, (int32_t)((float) was_used / zone->chunk_count) * 100, in_use);
+            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100, in_use);
     }
 
     MASK_ZONE_PTRS(zone);
@@ -172,7 +172,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
      * in use and previously used by this zone */
     if(profile == true) {
         uint64_t total = (in_use + was_used);
-        return (uint64_t)((float) (total / zone->chunk_count) * 100.0);
+        return (uint64_t) ((float) (total / zone->chunk_count) * 100.0);
     }
 #endif
     return in_use;
@@ -395,7 +395,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
             used = _iso_alloc_zone_leak_detector(zone, true);
         }
 
-        used = (int32_t)((float) (used / zone->chunk_count) * 100.0);
+        used = (int32_t) ((float) (used / zone->chunk_count) * 100.0);
 
         if(used > CHUNK_USAGE_THRESHOLD) {
             _zone_profiler_map[zone->chunk_size].count++;

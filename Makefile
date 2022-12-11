@@ -187,7 +187,7 @@ ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 ## Register a signal handler for SIGSEGV that inspects si_addr
 ## for an address managed by IsoAlloc. Optionally used when
 ## UAF_PTR_PAGE is enabled for better crash handling
-SIGNAL_HANDLER = -DSIGNAL_HANDLER=1
+SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this
@@ -411,10 +411,10 @@ install:
 	cp -pR build/$(LIBNAME) /usr/lib/
 
 format:
-	clang-format $(SRC_DIR)/*.* tests/*.* include/*.h -i
+	clang-format-12 $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 format-ci:
-	clang-format --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
+	clang-format-12 --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
 	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core* iso_alloc_profiler.data

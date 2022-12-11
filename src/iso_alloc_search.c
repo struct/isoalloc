@@ -25,7 +25,7 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
                     return search;
                 } else {
 #if UAF_PTR_PAGE
-                    *(uint64_t *) search = (uint64_t)(_root->uaf_ptr_page);
+                    *(uint64_t *) search = (uint64_t) (_root->uaf_ptr_page);
                     return search;
 #endif
                 }
@@ -82,7 +82,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
                 LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
             }
 
-            uint64_t chunk_offset = (uint64_t)(p - (uint64_t *) zone->user_pages_start);
+            uint64_t chunk_offset = (uint64_t) (p - (uint64_t *) zone->user_pages_start);
             LOG("zone[%d] user_pages_start=%p value=%p %lu %d", zone->index, zone->user_pages_start, p, chunk_offset, zone->chunk_size);
 
             /* Ensure the pointer is a multiple of chunk size */

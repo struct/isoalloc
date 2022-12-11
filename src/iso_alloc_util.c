@@ -190,5 +190,5 @@ INTERNAL_HIDDEN uint32_t _log2(uint32_t v) {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
-    return _log_table[(uint32_t)(v * 0x07C4ACDD) >> 27];
+    return _log_table[(uint32_t) (v * 0x07C4ACDD) >> 27];
 }
