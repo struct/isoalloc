@@ -46,7 +46,7 @@ SANITIZER_SUPPORT = $(ENABLE_ASAN) $(ENABLE_MSAN) $(ENABLE_UBSAN) $(ENABLE_TSAN)
 ## You can safely disable it here if you know your
 ## program does not require concurrent access
 ## to the IsoAlloc APIs
-THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
+#THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 
 ## By default IsoAlloc uses a pthread mutex to synchronize
 ## thread safe access to the root structure. By enabling this
@@ -191,7 +191,7 @@ SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this
-ARM_TBI = 0
+#ARM_TBI = -DARM_TBI=1
 
 LTO = -flto
 
@@ -258,7 +258,7 @@ CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
-	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER)
+	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) $(ARM_TBI)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE

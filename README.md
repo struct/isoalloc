@@ -84,6 +84,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * `MEMORY_TAGGING` When enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/tagged_ptr_test.cpp) for an example of how to use it.
 * `MEMCPY_SANITY` and `MEMSET_SANITY` Configures the allocator will hook all calls to `memcpy`/`memset` and check for out of bounds r/w operations when either src or dst points to a chunk allocated by IsoAlloc
 * `STRONG_SIZE_ISOLATION` Enables a policy that enforces stronger memory isolation by size
+* `SIGNAL_HANDLER` IsoAlloc will install a signal handler for SIGSEGV to inspect crashes related to `UAF_PTR_PAGE`
 
 ## Building
 

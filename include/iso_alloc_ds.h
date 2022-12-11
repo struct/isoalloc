@@ -81,7 +81,7 @@ typedef struct {
     zone_lookup_table_t *zone_lookup_table;
     /* The chunk to zone lookup table provides a high hit
      * rate cache for finding which zone owns a user chunk.
-     * It works by mapping the MSB of the chunk addressq
+     * It works by mapping the MSB of the chunk address
      * to a zone index. Misses are gracefully handled and
      * more common with a higher RSS and more mappings. */
     chunk_lookup_table_t *chunk_lookup_table;

@@ -1167,6 +1167,12 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
         populate_zone_cache(zone);
 
+#if ARM_TBI
+        if(LIKELY(zone->index < 255)) {
+            p = (void *) (((uint64_t) zone->index << UNTAGGED_BITS) | (uintptr_t) p);
+        }
+#endif
+
         return p;
     } else {
         /* It's safe to unlock the root at this point because
@@ -1237,8 +1243,25 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
-    iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
-    void *user_pages_start = UNMASK_USER_PTR(zone);
+    iso_alloc_zone_t *zone = NULL;
+    void *user_pages_start = NULL;
+
+#if ARM_TBI
+    uint8_t tag = (uint8_t) __builtin_bswap64((uint64_t) ((uintptr_t) p & IS_TAGGED_PTR_MASK));
+
+    if(tag != 0) {
+        zone = &_root->zones[tag];
+        user_pages_start = UNMASK_USER_PTR(zone);
+        p = (void *) ((uintptr_t) p & TAGGED_PTR_MASK);
+
+        if(LIKELY(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p)) {
+            return zone;
+        }
+    }
+#endif
+
+    zone = search_chunk_lookup_table(p);
+    user_pages_start = UNMASK_USER_PTR(zone);
 
     /* The chunk_lookup_table has a high hit rate. Most
      * calls to this function will return here. */
@@ -1647,6 +1670,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
     if(LIKELY(zone == NULL)) {
         zone = iso_find_zone_range(p);
     }
+
+#if ARM_TBI
+    if(((uintptr_t) p & IS_TAGGED_PTR_MASK) != 0) {
+        p = (void *) ((uintptr_t) p & TAGGED_PTR_MASK);
+    }
+#endif
 
     if(LIKELY(zone != NULL)) {
         iso_free_chunk_from_zone(zone, p, permanent);
