@@ -13,7 +13,7 @@
 #if USE_SPINLOCK
 atomic_flag root_busy_flag;
 #else
-pthread_mutex_t root_busy_mutex;
+ pthread_mutex_t root_busy_mutex;
 #endif
 /* We cannot initialize this on thread creation so
  * we can't mmap them somewhere with guard pages but
