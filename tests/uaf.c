@@ -26,7 +26,8 @@ int main(int argc, char *argv[]) {
 
     /* Dereference a pointer that should have been
      * detected and overwritten with UAF_PTR_PAGE */
-    fprintf(stdout, "Dereferencing test->str @ %p. Fault address will be %lx\n", test->str, UAF_PTR_PAGE_ADDR);
+    iso_alloc_root *root = _get_root();
+    fprintf(stdout, "Dereferencing test->str @ %p. Fault address will be %p\n", test->str, root->uaf_ptr_page);
     fprintf(stdout, "[%s]\n", test->str);
     iso_free_permanently(test);
 

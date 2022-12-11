@@ -102,6 +102,9 @@ typedef struct {
 #if NO_ZERO_ALLOCATIONS
     void *zero_alloc_page;
 #endif
+#if UAF_PTR_PAGE
+    void *uaf_ptr_page;
+#endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 typedef struct {

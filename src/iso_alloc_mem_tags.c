@@ -14,7 +14,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
     }
 
     uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-    const uint64_t chunk_offset = (uint64_t)(p - user_pages_start);
+    const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
 
     /* Ensure the pointer is a multiple of chunk size */
     if(UNLIKELY((chunk_offset & (zone->chunk_size - 1)) != 0)) {

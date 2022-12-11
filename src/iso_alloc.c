@@ -253,12 +253,27 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
     _root->zero_alloc_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
 #endif
 
+#if UAF_PTR_PAGE
+    _root->uaf_ptr_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
+#endif
+
 #if ALLOC_SANITY && UNINIT_READ_SANITY
     _iso_alloc_setup_userfaultfd();
 #endif
 
 #if ALLOC_SANITY
     _sanity_canary = us_rand_uint64(&_root->seed);
+#endif
+
+#if SIGNAL_HANDLER
+    struct sigaction sa;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NODEFER | SA_SIGINFO;
+    sa.sa_sigaction = &handle_signal;
+
+    if(sigaction(SIGSEGV, &sa, NULL) == ERR) {
+        LOG("Could not register signal handler");
+    }
 #endif
 }
 
@@ -1386,7 +1401,7 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
         LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
     }
 
-    const uint64_t chunk_offset = (uint64_t)(p - UNMASK_USER_PTR(zone));
+    const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
     const size_t chunk_number = (chunk_offset >> zone->chunk_size_pow2);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
@@ -1654,7 +1669,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
                 /* We only need to refresh this single tag */
                 void *user_pages_start = UNMASK_USER_PTR(zone);
                 uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-                uint64_t chunk_offset = (uint64_t)(p - user_pages_start);
+                uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
                 _mtp += (chunk_offset >> zone->chunk_size_pow2);
 
                 /* Generate and write a new tag for this chunk */
@@ -1907,6 +1922,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #if NO_ZERO_ALLOCATIONS
     munmap(_root->zero_alloc_page, g_page_size);
+#endif
+
+#if UAF_PTR_PAGE
+    munmap(_root->uaf_ptr_page, g_page_size);
 #endif
 
 #if DEBUG && (LEAK_DETECTOR || MEM_USAGE)
