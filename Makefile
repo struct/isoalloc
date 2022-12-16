@@ -181,7 +181,7 @@ AUTO_CTOR_DTOR = -DAUTO_CTOR_DTOR=1
 ## Unmap user and bitmap in the destructor. You probably
 ## don't want this as theres no guarantee the IsoAlloc
 ## destructor will be called last and other destructors
-## that call free will segfault
+## may reference objects within these pages
 ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 
 ## Register a signal handler for SIGSEGV that inspects si_addr

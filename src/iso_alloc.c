@@ -1989,9 +1989,20 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_quarantine, ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)));
     unmap_guarded_pages(zone_cache, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)));
+
+#if THREAD_SUPPORT && !USE_SPINLOCK
+    UNLOCK_BIG_ZONE();
+    pthread_mutex_destroy(&_root->big_zone_busy_mutex);
+#endif
+
     unmap_guarded_pages(_root, sizeof(iso_alloc_root));
 #endif
     UNLOCK_ROOT();
+
+#if ISO_DTOR_CLEANUP && THREAD_SUPPORT && !USE_SPINLOCK
+    pthread_mutex_destroy(&sane_cache_mutex);
+    pthread_mutex_destroy(&root_busy_mutex);
+#endif
 }
 
 #if UNIT_TESTING
