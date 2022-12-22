@@ -66,5 +66,37 @@ EXTERNAL_API FLATTEN void operator delete[](void *ptr, const std::nothrow_t &) n
     return iso_free(ptr);
 }
 
+EXTERNAL_API FLATTEN void *operator new(size_t size, std::align_val_t val) NEW_EXCEPT {
+    return iso_alloc(size);
+}
+
+EXTERNAL_API FLATTEN void *operator new[](size_t size, std::align_val_t val) NEW_EXCEPT {
+    return iso_alloc(size);
+}
+
+EXTERNAL_API FLATTEN void operator delete(void *p, std::align_val_t val) noexcept {
+    iso_free(p);
+}
+
+EXTERNAL_API FLATTEN void operator delete[](void *p, std::align_val_t val) noexcept {
+    iso_free(p);
+}
+
+EXTERNAL_API FLATTEN void *operator new(size_t size, std::align_val_t val, std::nothrow_t &) noexcept {
+    return iso_alloc(size);
+}
+
+EXTERNAL_API FLATTEN void *operator new[](size_t size, std::align_val_t val, std::nothrow_t &) noexcept {
+    return iso_alloc(size);
+}
+
+EXTERNAL_API FLATTEN void operator delete(void *p, std::align_val_t val, std::nothrow_t &) noexcept {
+    iso_free(p);
+}
+
+EXTERNAL_API FLATTEN void operator delete[](void *p, std::align_val_t val, std::nothrow_t &) noexcept {
+    iso_free(p);
+}
+
 #endif
 #endif
