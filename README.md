@@ -12,7 +12,7 @@ IsoAlloc is designed and [tested](https://github.com/struct/isoalloc/actions) fo
 
 At a high level IsoAlloc creates zones which are used to manage regions of memory that hold individual allocations of a specific size. If you are familiar with the implementation of arenas in other heap allocators then the concepts here will be familiar to you.
 
-![Design of IsoAlloc schema](/misc/isoalloc_design.svg)
+![Design of IsoAlloc schema](/misc/isoalloc_design.png)
 
 There is one `iso_alloc_root` structure which contains a pointer to a fixed number of `iso_alloc_zone` structures. These `iso_alloc_zone` structures are referred to as *zones*. Zones point to user chunks and a bitmap that is used to manage those chunks. The translation between bitmap and user chunks is referred to as *bit slots*. The pages that back both the user chunks and the bitmap are allocated separately. The pointers that reference these in the zone meta data are masked in between allocation and free operations. The bitmap contains 2 bits of state per user chunk. The current bit value specification is as follows:
 
