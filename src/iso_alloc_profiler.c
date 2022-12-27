@@ -29,10 +29,16 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void) {
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void) {
-    LOCK_BIG_ZONE();
-    uint64_t mem_usage = __iso_alloc_big_zone_mem_usage();
-    UNLOCK_BIG_ZONE();
+    LOCK_BIG_ZONE_USED();
+    uint64_t mem_usage = __iso_alloc_big_zone_mem_usage(_root->big_zone_used);
+    UNLOCK_BIG_ZONE_USED();
+
+    LOCK_BIG_ZONE_FREE();
+    mem_usage += __iso_alloc_big_zone_mem_usage(_root->big_zone_free);
+    UNLOCK_BIG_ZONE_FREE();
+
     return mem_usage;
+
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
@@ -75,12 +81,12 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void) {
     }
 
     UNLOCK_ROOT();
-    LOCK_BIG_ZONE();
+    LOCK_BIG_ZONE_USED();
 
-    iso_alloc_big_zone_t *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = _root->big_zone_used;
 
     if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
     }
 
     while(big != NULL) {
@@ -96,7 +102,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void) {
         }
     }
 
-    UNLOCK_BIG_ZONE();
+    UNLOCK_BIG_ZONE_USED();
 
     LOG("Total leaked in big zones: bytes (%lu) megabytes (%lu)", big_leaks, (big_leaks / MEGABYTE_SIZE));
     return total_leaks + big_leaks;
@@ -201,17 +207,24 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void) {
     return (mem_usage / MEGABYTE_SIZE);
 }
 
-INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(void) {
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(iso_alloc_big_zone_t *head) {
     uint64_t mem_usage = 0;
-    iso_alloc_big_zone_t *big = _root->big_zone_head;
+    iso_alloc_big_zone_t *big = head;
 
     if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
+        big = UNMASK_BIG_ZONE_NEXT(head);
     }
 
     while(big != NULL) {
-        LOG("Big Zone Total bytes (%lu), megabytes (%lu)", big->size, (big->size / MEGABYTE_SIZE));
-        mem_usage += big->size;
+        size_t total_size = big->size + (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT);
+        /* Meta data has 2 guard pages, user data has 2 guard pages */
+#if BIG_ZONE_META_DATA_GUARD
+        total_size += (g_page_size * 4);
+#else
+        total_size += (g_page_size * 2);
+#endif
+        LOG("Big Zone Total bytes mapped (%lu), megabytes (%lu)", big->size, (big->size / MEGABYTE_SIZE));
+        mem_usage += total_size;
         if(big->next != NULL) {
             big = UNMASK_BIG_ZONE_NEXT(big->next);
         } else {
@@ -219,9 +232,12 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(void) {
         }
     }
 
-    LOG("Total megabytes allocated (%lu)", (mem_usage / MEGABYTE_SIZE));
-
-    return (mem_usage / MEGABYTE_SIZE);
+    if(mem_usage != 0) {
+        LOG("Total megabytes allocated (%lu)", (mem_usage / MEGABYTE_SIZE));
+        return (mem_usage / MEGABYTE_SIZE);
+    } else {
+        return 0;
+    }
 }
 
 #if HEAP_PROFILER

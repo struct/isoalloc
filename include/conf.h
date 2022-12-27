@@ -83,6 +83,23 @@
  * more information on this value. Max is 65335 */
 #define MAX_ZONES 8192
 
+/* Anything above this size will need to go through the
+ * big zone path. Maximum value here is 131072 due to how
+ * we construct the zone bitmap. You can think of this
+ * value as roughly equivalent to M_MMAP_THRESHOLD. Valid
+ * values for SMALL_SZ_MAX are powers of 2 through 131072 */
+#define SMALL_SZ_MAX 65536
+
+/* Big zones are for any chunk bigger than SMALL_SZ_MAX.
+ * We reuse them when possible but not if the reuse
+ * would exceed this value */
+#define BIG_ZONE_WASTE 4096
+
+/* The maximum number of big zone free list entries.
+ * We want to limit the number of these because they
+ * are often backed by a large number of pages */
+#define BIG_ZONE_MAX_FREE_LIST 32
+
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is 4mb (ZONE_USER_SIZE)
  * so ZONE_8192 would hold less chunks than ZONE_128 */

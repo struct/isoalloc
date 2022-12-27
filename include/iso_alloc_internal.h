@@ -64,6 +64,7 @@ assert(sizeof(size_t) >= 64)
 #include "iso_alloc_sanity.h"
 #include "iso_alloc_util.h"
 #include "iso_alloc_ds.h"
+#include "iso_alloc_profiler.h"
 #include "compiler.h"
 #include "conf.h"
 
@@ -76,8 +77,6 @@ assert(sizeof(size_t) >= 64)
 #else
 #define FREE_OR_DONTNEED MADV_FREE
 #endif
-
-static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
 
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
@@ -225,20 +224,6 @@ static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be 
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
     ((iso_alloc_big_zone_t *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
 
-/* Each user allocation zone we make is 4mb in size.
- * With MAX_ZONES at 8192 this means we top out at
- * about 32~ gb of heap. If you adjust this then
- * you need to make sure that SMALL_SZ_MAX is correctly
- * adjusted or you will calculate chunks outside of
- * the zone user memory! */
-#define ZONE_USER_SIZE 4194304
-
-/* This is the largest divisor of ZONE_USER_SIZE we can
- * get from (BITS_PER_QWORD/BITS_PER_CHUNK). Anything
- * above this size will need to go through the big
- * mapping code path */
-#define SMALL_SZ_MAX 131072
-
 /* Cap our big zones at 4GB of memory */
 #define BIG_SZ_MAX 4294967296
 
@@ -255,6 +240,7 @@ static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be 
 #define TAGGED_PTR_MASK 0x00ffffffffffffff
 #define IS_TAGGED_PTR_MASK 0xff00000000000000
 #define UNTAGGED_BITS 56
+#define MEM_TAG_SIZE 1
 #endif
 
 #define MEGABYTE_SIZE 1048576
@@ -285,11 +271,16 @@ extern uint32_t g_page_size_shift;
  * specific size request. */
 #define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
-#define MEM_TAG_SIZE 1
+/* Each user allocation zone we make is 4mb in size.
+ * With MAX_ZONES at 8192 this means we top out at
+ * about 32~ gb of heap. If you adjust this then
+ * you need to make sure that SMALL_SZ_MAX is correctly
+ * adjusted or you will calculate chunks outside of
+ * the zone user memory! */
+#define ZONE_USER_SIZE 4194304
 
-#if SMALLEST_CHUNK_SZ < ZONE_8
-#error "Smallest chunk size is 8 bytes, 16 is recommended!"
-#endif
+static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
+static_assert(SMALL_SZ_MAX <= 131072, "SMALL_SZ_MAX is too big, cannot exceed 131072");
 
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
@@ -301,12 +292,20 @@ extern atomic_flag root_busy_flag;
 #define UNLOCK_ROOT() \
     atomic_flag_clear(&root_busy_flag);
 
-#define LOCK_BIG_ZONE() \
+#define LOCK_BIG_ZONE_FREE() \
     do {                \
-    } while(atomic_flag_test_and_set(&_root->big_zone_busy_flag));
+    } while(atomic_flag_test_and_set(&_root->big_zone_free_flag));
 
-#define UNLOCK_BIG_ZONE() \
-    atomic_flag_clear(&_root->big_zone_busy_flag);
+#define UNLOCK_BIG_ZONE_FREE() \
+    atomic_flag_clear(&_root->big_zone_free_flag);
+
+#define LOCK_BIG_ZONE_USED() \
+    do {                \
+    } while(atomic_flag_test_and_set(&_root->big_zone_used_flag));
+
+#define UNLOCK_BIG_ZONE_USED() \
+    atomic_flag_clear(&_root->big_zone_used_flag);
+
 #else
 extern pthread_mutex_t root_busy_mutex;
 #define LOCK_ROOT() \
@@ -315,17 +314,28 @@ extern pthread_mutex_t root_busy_mutex;
 #define UNLOCK_ROOT() \
     pthread_mutex_unlock(&root_busy_mutex);
 
-#define LOCK_BIG_ZONE() \
-    pthread_mutex_lock(&_root->big_zone_busy_mutex);
+#define LOCK_BIG_ZONE_FREE() \
+    pthread_mutex_lock(&_root->big_zone_free_mutex);
 
-#define UNLOCK_BIG_ZONE() \
-    pthread_mutex_unlock(&_root->big_zone_busy_mutex);
+#define UNLOCK_BIG_ZONE_FREE() \
+    pthread_mutex_unlock(&_root->big_zone_free_mutex);
+
+#define LOCK_BIG_ZONE_USED() \
+    pthread_mutex_lock(&_root->big_zone_used_mutex);
+
+#define UNLOCK_BIG_ZONE_USED() \
+    pthread_mutex_unlock(&_root->big_zone_used_mutex);
+
 #endif
 #else
 #define LOCK_ROOT()
 #define UNLOCK_ROOT()
 #define LOCK_BIG_ZONE()
 #define UNLOCK_BIG_ZONE()
+#define LOCK_BIG_ZONE_FREE()
+#define UNLOCK_BIG_ZONE_FREE()
+#define LOCK_BIG_ZONE_USED()
+#define UNLOCK_BIG_ZONE_USED()
 #endif
 
 /* The global root */
@@ -339,6 +349,7 @@ INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
+INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove);
 INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
@@ -373,22 +384,15 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 INTERNAL_HIDDEN void _iso_alloc_protect_root(void);
 INTERNAL_HIDDEN void _iso_free_quarantine(void *p);
 INTERNAL_HIDDEN void _iso_alloc_unprotect_root(void);
+INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison);
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile);
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
-INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void);
-INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(void);
-INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
-INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
 INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed);
 INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void);
 INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);

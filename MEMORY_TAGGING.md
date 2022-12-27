@@ -8,7 +8,7 @@ Note that this feature is experimental, off by default, and the APIs are subject
 
 ## Overview
 
-We can't achieve the granularity provided by ARM MTE in software alone but we can implement a pointer protection mechanism by generating 1 byte of meta data per chunk managed by a private IsoAlloc zone, adding that tag to the pointer, and verifying it before dereferencing it. This feature is enabled or disabled with `MEMORY_TAGGING` in the `Makefile`.
+We can't achieve the granularity provided by ARM MTE in software alone but we can implement a pointer protection mechanism by generating 1 byte of meta data per chunk managed by a private IsoAlloc zone, adding that tag to the pointer, and verifying it before dereferencing it. This feature is enabled or disabled with `MEMORY_TAGGING` in the Makefile.
 
 This 1 byte tag will be added to the LSB of the pointer returned by calling `iso_alloc_from_zone_tagged`. IsoAlloc also provides a C API for tagging and untagging pointers retrieved by `iso_alloc_from_zone`. These functions are `iso_alloc_tag_ptr` and `iso_alloc_untag_ptr`.
 

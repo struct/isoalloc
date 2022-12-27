@@ -12,31 +12,19 @@
 static const uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                             ZONE_256, ZONE_512, ZONE_1024,
                                             ZONE_2048, ZONE_4096, ZONE_8192,
-                                            SMALL_SZ_MAX / 4, SMALL_SZ_MAX / 2,
-                                            SMALL_SZ_MAX - 1, SMALL_SZ_MAX};
+                                            SMALL_SZ_MAX+1};
 
-static const uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
-
-/* Parameters for controlling probability of leaking a chunk.
- * This will add up very quickly with the speed of allocations.
- * This should exercise all code including new internally
- * managed zone allocation. Eventually we get OOM and SIGKILL */
-#define LEAK_K 1000
-#define LEAK_V 8
+static const uint32_t array_sizes[] = {16, 32, 64, 128, 256};
 
 static __thread iso_alloc_zone_handle *private_zone;
-#define NEW_ZONE_K 1000
-#define NEW_ZONE_V 1
-
-#define DESTROY_ZONE_K 1000
-#define DESTROY_ZONE_V 8
 
 #define MAYBE_VALIDATE_ZONES() \
     if((rand() % 10) == 1) {   \
         iso_verify_zones();    \
     }
 
-int reallocate(size_t array_size, size_t allocation_size) {
+int64_t reallocate(size_t array_size, size_t allocation_size) {
+    uint64_t allocs = 0;
     void *p[array_size];
     memset(p, 0x0, array_size);
 
@@ -46,8 +34,10 @@ int reallocate(size_t array_size, size_t allocation_size) {
         }
 
         void *d = iso_alloc(allocation_size / 2);
+        allocs++;
         memset(d, 0x0, allocation_size / 2);
         p[i] = iso_realloc(d, allocation_size);
+        allocs++;
 
         if(p[i] == NULL) {
             LOG_AND_ABORT("Failed to allocate %ld bytes", allocation_size);
@@ -64,15 +54,14 @@ int reallocate(size_t array_size, size_t allocation_size) {
 
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
-        if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
-            iso_free(p[i]);
-        }
+        iso_free(p[i]);
     }
 
-    return OK;
+    return allocs;
 }
 
-int callocate(size_t array_size, size_t allocation_size) {
+int64_t callocate(size_t array_size, size_t allocation_size) {
+    uint64_t allocs = 0;
     void *p[array_size];
     memset(p, 0x0, array_size);
 
@@ -82,6 +71,7 @@ int callocate(size_t array_size, size_t allocation_size) {
         }
 
         p[i] = iso_calloc(1, allocation_size);
+        allocs++;
 
         if(p[i] == NULL) {
             LOG_AND_ABORT("Failed to allocate %ld bytes", allocation_size);
@@ -98,15 +88,14 @@ int callocate(size_t array_size, size_t allocation_size) {
 
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
-        if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
-            iso_free(p[i]);
-        }
+        iso_free(p[i]);
     }
 
-    return OK;
+    return allocs;
 }
 
-int allocate(size_t array_size, size_t allocation_size) {
+int64_t allocate(size_t array_size, size_t allocation_size) {
+    uint64_t allocs = 0;
     void *p[array_size];
     memset(p, 0x0, array_size);
 
@@ -133,8 +122,10 @@ int allocate(size_t array_size, size_t allocation_size) {
 
         if(rand() % 100 == 1 && private_zone != NULL && allocation_size < SMALL_SZ_MAX) {
             p[i] = iso_alloc_from_zone(private_zone);
+            allocs++;
         } else {
             p[i] = iso_alloc(allocation_size);
+            allocs++;
         }
 
         if(p[i] == NULL) {
@@ -152,7 +143,8 @@ int allocate(size_t array_size, size_t allocation_size) {
 
     /* Free the remaining allocations */
     for(int i = 0; i < array_size; i++) {
-        if(p[i] != NULL && ((rand() % LEAK_K) > LEAK_V)) {
+        /* Occasionally leak chunks */
+        if((rand() % 100) == 1) {
             iso_free(p[i]);
         }
     }
@@ -162,44 +154,45 @@ int allocate(size_t array_size, size_t allocation_size) {
         private_zone = NULL;
     }
 
-    return OK;
+    return allocs;
 }
 
 void *start() {
+    uint64_t total_allocations = 0;
     uint64_t loop = 1;
 
     while(1) {
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
             for(int z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
-                allocate(array_sizes[i], allocation_sizes[z]);
+                total_allocations += allocate(array_sizes[i], allocation_sizes[z]);
             }
         }
 
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
-            allocate(array_sizes[i], 0);
+            total_allocations += allocate(array_sizes[i], 0);
         }
 
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
             for(int z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
-                callocate(array_sizes[i], allocation_sizes[z]);
+                total_allocations += callocate(array_sizes[i], allocation_sizes[z]);
             }
         }
 
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
-            callocate(array_sizes[i], 0);
+            total_allocations += callocate(array_sizes[i], 0);
         }
 
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
             for(int z = 0; z < sizeof(allocation_sizes) / sizeof(uint32_t); z++) {
-                reallocate(array_sizes[i], allocation_sizes[z]);
+                total_allocations += reallocate(array_sizes[i], allocation_sizes[z]);
             }
         }
 
         for(int i = 0; i < sizeof(array_sizes) / sizeof(uint32_t); i++) {
-            reallocate(array_sizes[i], 0);
+            total_allocations += reallocate(array_sizes[i], 0);
         }
 
-        LOG("Thread ID (%d) looped %d times", pthread_self(), loop++);
+        LOG("Thread ID (%d) looped %d times. Total allocations: %ld", pthread_self(), loop++, total_allocations);
     }
 }
 

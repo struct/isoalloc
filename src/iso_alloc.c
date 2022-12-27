@@ -68,6 +68,36 @@ INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
     UNLOCK_ROOT();
 }
 
+INTERNAL_HIDDEN void _verify_big_zone_list(iso_alloc_big_zone_t *head) {
+    iso_alloc_big_zone_t *big = head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(head);
+    }
+
+    while(big != NULL) {
+        check_big_canary(big);
+
+        if(big->size < SMALL_SZ_MAX) {
+            LOG_AND_ABORT("Big zone size is too small %d", big->size);
+        }
+
+        if(big->size > BIG_SZ_MAX) {
+            LOG_AND_ABORT("Big zone size is too big %d", big->size);
+        }
+
+        if(big->user_pages_start == NULL) {
+            LOG_AND_ABORT("Big zone %p has NULL user pages", big);
+        }
+
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            break;
+        }
+    }
+}
+
 INTERNAL_HIDDEN void _verify_all_zones(void) {
     const size_t zones_used = _root->zones_used;
 
@@ -81,25 +111,9 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
         _verify_zone(zone);
     }
 
-    LOCK_BIG_ZONE();
-    /* No need to lock big zone here since the
-     * root should be locked by our caller */
-    iso_alloc_big_zone_t *big = _root->big_zone_head;
-
-    if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
-    }
-
-    while(big != NULL) {
-        check_big_canary(big);
-
-        if(big->next != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(big->next);
-        } else {
-            break;
-        }
-    }
-    UNLOCK_BIG_ZONE();
+    /* Root is locked already */
+    _verify_big_zone_list(_root->big_zone_used);
+    _verify_big_zone_list(_root->big_zone_free);
 }
 
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
@@ -201,7 +215,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
-    _root->zone_lookup_table = mmap_guarded_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
+    _root->zone_lookup_table = mmap_guarded_rw_pages(ALIGN_SZ_UP(ZONE_LOOKUP_TABLE_SZ), true, NULL);
 #if __APPLE__
     darwin_reuse(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
 #endif
@@ -238,7 +252,8 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
     pthread_mutex_init(&root_busy_mutex, NULL);
-    pthread_mutex_init(&_root->big_zone_busy_mutex, NULL);
+    pthread_mutex_init(&_root->big_zone_free_mutex, NULL);
+    pthread_mutex_init(&_root->big_zone_used_mutex, NULL);
 #if ALLOC_SANITY
     pthread_mutex_init(&sane_cache_mutex, NULL);
 #endif
@@ -412,6 +427,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
      * chunks, and other uses of us_rand_uint64 */
     _root->seed = rand_uint64();
 
+    /* Minimum chunk size */
+    if(size < SMALLEST_CHUNK_SZ) {
+        size = SMALLEST_CHUNK_SZ;
+    }
+
     /* In order for our bitmap to be a power of 2
      * the size we allocate also needs to be. We
      * want our bitmap to be a power of 2 because
@@ -420,11 +440,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
      * whenever we need more bitslots */
     if((is_pow2(size)) != true) {
         size = next_pow2(size);
-    }
-
-    /* Minimum chunk size */
-    if(size < SMALLEST_CHUNK_SZ) {
-        size = SMALLEST_CHUNK_SZ;
     }
 
     iso_alloc_zone_t *new_zone = NULL;
@@ -563,16 +578,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     if(LIKELY(internal == true)) {
         /* If no other zones of this size exist then set the
          * index in the zone lookup table to its index */
-        if(_root->zone_lookup_table[size] == 0) {
-            _root->zone_lookup_table[size] = new_zone->index;
+        if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
+            _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = 0;
         } else if(index < 0) {
             /* If the index is < 0 then this is a brand new zone and
              * not a replacement which means we need to add it to the
              * zone_lookup_table. We prepend it to the start of the
              * list ensuring it is checked first on alloc path */
-            int32_t current_idx = _root->zone_lookup_table[size];
-            _root->zone_lookup_table[size] = new_zone->index;
+            int32_t current_idx = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
+            _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = current_idx;
         }
     }
@@ -842,7 +857,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
      * want 1) to waste memory and 2) weaken our
      * isolation primitives */
     while(size <= ZONE_1024) {
-        if(_root->zone_lookup_table[size] == 0) {
+        if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
             size = next_pow2(size);
         } else {
             break;
@@ -851,8 +866,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
 #endif
 
     /* Fast path via lookup table */
-    if(_root->zone_lookup_table[size] != 0) {
-        i = _root->zone_lookup_table[size];
+    if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] != 0) {
+        i = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
 
         for(; i < zones_used;) {
             iso_alloc_zone_t *zone = &_root->zones[i];
@@ -1173,7 +1188,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
 
         if(UNLIKELY(zone != NULL)) {
-            LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone", size, SMALL_SZ_MAX);
+            LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone (%d)", size, SMALL_SZ_MAX, zone->chunk_size);
         }
 
         return _iso_big_alloc(size);
@@ -1272,41 +1287,6 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
     return NULL;
 }
 
-INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p) {
-    LOCK_BIG_ZONE();
-
-    /* Its possible we are trying to unmap a big allocation */
-    iso_alloc_big_zone_t *big_zone = _root->big_zone_head;
-
-    if(big_zone != NULL) {
-        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
-    }
-
-    while(big_zone != NULL) {
-        check_big_canary(big_zone);
-
-        /* Only a free of the exact address is valid */
-        if(p == big_zone->user_pages_start) {
-            UNLOCK_BIG_ZONE();
-            return big_zone;
-        }
-
-        if(UNLIKELY(p > big_zone->user_pages_start && p < (big_zone->user_pages_start + big_zone->size))) {
-            LOG_AND_ABORT("Invalid free of big zone allocation at 0x%p in mapping 0x%p", p, big_zone->user_pages_start);
-        }
-
-        if(big_zone->next != NULL) {
-            big_zone = UNMASK_BIG_ZONE_NEXT(big_zone->next);
-        } else {
-            big_zone = NULL;
-            break;
-        }
-    }
-
-    UNLOCK_BIG_ZONE();
-    return NULL;
-}
-
 /* Checking canaries under ASAN mode is not trivial. ASAN
  * provides a strong guarantee that these chunks haven't
  * been modified in some way */
@@ -1395,11 +1375,6 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p) 
 #endif
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
-    /* Ensure the pointer is properly aligned */
-    if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
-        LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
-    }
-
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
     const size_t chunk_number = (chunk_offset >> zone->chunk_size_pow2);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
@@ -1523,6 +1498,12 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         return;
     }
 
+    /* All pointers to chunks should be 8 byte aligned.
+     * This is true whether its big zone or not */
+    if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
+        LOG_AND_ABORT("Chunk at 0x%p is not %d byte aligned", p, ALIGNMENT);
+    }
+
 #if NO_ZERO_ALLOCATIONS
     if(UNLIKELY(p == _root->zero_alloc_page)) {
         return;
@@ -1585,10 +1566,14 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
 #endif
 
     if(UNLIKELY(size > SMALL_SZ_MAX)) {
-        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
 
         if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
+        }
+
+        if(UNLIKELY(big_zone->size < size)) {
+            LOG_AND_ABORT("Invalid big zone size (expected %d, got %d) for chunk 0x%p", big_zone->size, size, p);
         }
 
         iso_free_big_zone(big_zone, false);
@@ -1684,7 +1669,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
 #endif
         return zone;
     } else {
-        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
 
         if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
@@ -1695,8 +1680,59 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
     }
 }
 
+/* Finds a big zone in the used list and optionally removes it */
+INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
+    LOCK_BIG_ZONE_USED();
+
+    if(_root->big_zone_used == NULL) {
+        LOG_AND_ABORT("There are no big zones allocated");
+    }
+
+    iso_alloc_big_zone_t *big_zone = _root->big_zone_used;
+    iso_alloc_big_zone_t *prev = NULL;
+
+    if(big_zone != NULL) {
+        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
+    }
+
+    while(big_zone != NULL) {
+        check_big_canary(big_zone);
+        /* Only an exact match of the address is valid */
+        if(p == big_zone->user_pages_start) {
+            if(remove == true && prev != NULL) {
+                prev->next = big_zone->next;
+            }
+
+            _root->big_zone_used_count--;
+
+            /* If this is our first iteration then we are returning the
+             * used list head. Set its new value to the next entry */
+            if(prev == NULL) {
+                _root->big_zone_used = big_zone->next;
+            }
+
+            UNLOCK_BIG_ZONE_USED();
+            return big_zone;
+        }
+
+        if(UNLIKELY(p > big_zone->user_pages_start && p < (big_zone->user_pages_start + big_zone->size))) {
+            LOG_AND_ABORT("Invalid free of big zone allocation at 0x%p in mapping 0x%p", p, big_zone->user_pages_start);
+        }
+
+        if(big_zone->next != NULL) {
+            prev = big_zone;
+            big_zone = UNMASK_BIG_ZONE_NEXT(big_zone->next);
+        } else {
+            UNLOCK_BIG_ZONE_USED();
+            return NULL;
+        }
+    }
+
+    UNLOCK_BIG_ZONE_USED();
+    return NULL;
+}
+
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent) {
-    LOCK_BIG_ZONE();
     if(UNLIKELY(big_zone->free == true)) {
         LOG_AND_ABORT("Double free of big zone 0x%p has been detected!", big_zone);
     }
@@ -1704,152 +1740,179 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 #if !ENABLE_ASAN && SANITIZE_CHUNKS
     __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
 #endif
-
-    madvise(big_zone->user_pages_start, big_zone->size, FREE_OR_DONTNEED);
-
-#if __APPLE__
-    while(madvise(big_zone->user_pages_start, big_zone->size, MADV_FREE_REUSE) == -1 && errno == EAGAIN) {
-    }
-#endif
-
     /* If this isn't a permanent free then all we need
      * to do is sanitize the mapping and mark it free.
-     * The pages backing the big zone can be reused. */
-    if(LIKELY(permanent == false)) {
+     * The pages that back the big zone can be reused
+     * if we aren't at max entries in the free list */
+    if(LIKELY(permanent == false) && _root->big_zone_free_count < BIG_ZONE_MAX_FREE_LIST) {
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
-    } else {
-        iso_alloc_big_zone_t *big = _root->big_zone_head;
+        dont_need_pages(big_zone->user_pages_start, big_zone->size);
 
-        if(big != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
-        }
+#if FUZZ_MODE
+        mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
+#endif
 
-        if(big == big_zone) {
-            _root->big_zone_head = NULL;
-        } else {
-            /* We need to remove this entry from the list */
-            while(big != NULL) {
-                check_big_canary(big);
+        LOCK_BIG_ZONE_FREE();
+        big_zone->next = _root->big_zone_free;
+        _root->big_zone_free = MASK_BIG_ZONE_NEXT(big_zone);
+        _root->big_zone_free_count++;
+        UNLOCK_BIG_ZONE_FREE();
+        return;
+    }
 
-                if(UNMASK_BIG_ZONE_NEXT(big->next) == big_zone) {
-                    big->next = UNMASK_BIG_ZONE_NEXT(big_zone->next);
-                    break;
-                }
-
-                if(big->next != NULL) {
-                    big = UNMASK_BIG_ZONE_NEXT(big->next);
-                } else {
-                    big = NULL;
-                }
-            }
-        }
-
-        if(UNLIKELY(big == NULL)) {
-            LOG_AND_ABORT("The big zone list has been corrupted, unable to find big zone 0x%p", big_zone);
-        }
+    /* Our zone is already removed from the list via find_big_zone() */
+    if(permanent == true) {
+        big_zone->free = true;
 
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
+        dont_need_pages(big_zone->user_pages_start, big_zone->size);
+
         __iso_memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
 
         /* Big zone meta data is at a random offset from its base page */
         mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), g_page_size, PROT_NONE);
-    }
+    } else {
+        /* Free the user pages first */
+        unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
 
-    UNLOCK_BIG_ZONE();
+#if BIG_ZONE_META_DATA_GUARD
+        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+#else
+        munmap(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+#endif
+    }
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     const size_t new_size = ROUND_UP_PAGE(size);
 
-    if(new_size < size || new_size > BIG_SZ_MAX) {
+    if(new_size < size || new_size > BIG_SZ_MAX || size <= SMALL_SZ_MAX) {
+#if ABORT_ON_NULL
         LOG_AND_ABORT("Cannot allocate a big zone of %ld bytes", new_size);
+#endif
+        LOG("Cannot allocate a big zone of %ld bytes", new_size);
+        return NULL;
     }
 
     size = new_size;
+    iso_alloc_big_zone_t *prev = NULL;
 
-    LOCK_BIG_ZONE();
+    LOCK_BIG_ZONE_FREE();
 
-    /* Let's first see if theres an existing set of
-     * pages that can satisfy this allocation request */
-    iso_alloc_big_zone_t *big = _root->big_zone_head;
-
-    if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
-    }
-
-    iso_alloc_big_zone_t *last_big = NULL;
-
-    while(big != NULL) {
-        check_big_canary(big);
-
-        if(big->free == true && big->size >= size) {
-            break;
+    /* There are two big zone lists, one for free chunks and a
+     * second for in-use chunks. We first need to check the list
+     * of free chunks to see if any can satisfy this request */
+    if(_root->big_zone_free != NULL) {
+        if(_root->big_zone_free_count <= 0) {
+            LOG_AND_ABORT("Big zone free list not NULL (%p) but count is %d", _root->big_zone_free, _root->big_zone_free_count);
         }
 
-        last_big = big;
+        iso_alloc_big_zone_t *big = _root->big_zone_free;
 
-        if(big->next != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(big->next);
-        } else {
-            big = NULL;
-            break;
+        /* Unmask the free list head pointer */
+        if(big != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_free);
         }
-    }
 
-    /* We need to setup a new set of pages */
-    if(big == NULL) {
-        /* User data is allocated separately from big zone meta
-         * data to prevent an attacker from targeting it */
-        void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+        /* Iterate the list looking for a zone we can use */
+        while(big != NULL) {
+            if(big->free == false) {
+                LOG_AND_ABORT("Corrupted big zone free list, %p is in use", big);
+            }
 
-        if(user_pages == NULL) {
-            UNLOCK_BIG_ZONE();
-#if ABORT_ON_NULL
-            LOG_AND_ABORT("isoalloc configured to abort on NULL");
+            /* Check the canary value */
+            check_big_canary(big);
+
+            /* We found a suitable big zone we can reuse */
+            if(big->size >= size && (big->size - size) <= BIG_ZONE_WASTE*2) {
+                big->free = false;
+                _root->big_zone_free_count--;
+                UNPOISON_BIG_ZONE(big);
+
+                /* Remove this node from the list */
+                if(big == UNMASK_BIG_ZONE_NEXT(_root->big_zone_free)) {
+                    _root->big_zone_free = big->next;
+                } else {
+                    prev->next = big->next;
+                }
+
+                /* It is safe to unlock the free list here because
+                 * we unlinked the zone we are about to return */
+                UNLOCK_BIG_ZONE_FREE();
+
+                LOCK_BIG_ZONE_USED();
+
+                /* Insert this big zone at the head of the used list */
+                big->next = _root->big_zone_used;
+                _root->big_zone_used = MASK_BIG_ZONE_NEXT(big);
+                _root->big_zone_used_count++;
+
+                UNLOCK_BIG_ZONE_USED();
+#if FUZZ_MODE
+                mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
 #endif
-            return NULL;
+                return big->user_pages_start;
+            }
+
+            prev = big;
+
+            if(big->next != NULL) {
+                big = UNMASK_BIG_ZONE_NEXT(big->next);
+            } else {
+                /* We've reached the end of the list */
+                break;
+            }
         }
-
-        /* We only need a single page for big zone meta data */
-        static_assert(BIG_ZONE_META_DATA_PAGE_COUNT == 1, "Big zone meta data only needs a single page");
-        big = (iso_alloc_big_zone_t *) mmap_guarded_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
-
-        /* The second page is for meta data and it is placed
-         * at a random offset from the start of the page */
-        uint32_t random_offset = ALIGN_SZ_DOWN(us_rand_uint64(&_root->seed));
-        size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
-
-        big = (iso_alloc_big_zone_t *) ((void *) big + ((random_offset * s) >> 32));
-        big->free = false;
-        big->size = size;
-        big->next = NULL;
-
-        if(last_big != NULL) {
-            last_big->next = MASK_BIG_ZONE_NEXT(big);
-        }
-
-        if(_root->big_zone_head == NULL) {
-            _root->big_zone_head = MASK_BIG_ZONE_NEXT(big);
-        }
-
-        /* Save a pointer to the user pages */
-        big->user_pages_start = user_pages;
-
-        /* The canaries prevents a linear overwrite of the big
-         * zone meta data structure from either direction */
-        big->canary_a = ((uint64_t) big ^ __builtin_bswap64((uint64_t) big->user_pages_start) ^ _root->big_zone_canary_secret);
-        big->canary_b = big->canary_a;
-
-        UNLOCK_BIG_ZONE();
-        return big->user_pages_start;
-    } else {
-        check_big_canary(big);
-        big->free = false;
-        UNPOISON_BIG_ZONE(big);
-        UNLOCK_BIG_ZONE();
-        return big->user_pages_start;
     }
+
+    UNLOCK_BIG_ZONE_FREE();
+
+    /* The free list contained no usable entries
+     * so we need to create a new one */
+    void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+
+    if(UNLIKELY(user_pages == NULL)) {
+#if ABORT_ON_NULL
+        LOG_AND_ABORT("IsoAlloc configured to abort on NULL");
+#endif
+        return NULL;
+    }
+
+    /* We only need a single page for big zone meta data */
+    static_assert(BIG_ZONE_META_DATA_PAGE_COUNT == 1, "Big zone meta data only needs a single page");
+#if BIG_ZONE_META_DATA_GUARD
+    iso_alloc_big_zone_t *new_big = (iso_alloc_big_zone_t *) mmap_guarded_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
+#else
+    iso_alloc_big_zone_t *new_big = (iso_alloc_big_zone_t *) mmap_rw_pages((g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT), false, BIG_ZONE_MD_NAME);
+#endif
+
+    /* The second page is for meta data and it is placed
+     * at a random offset from the start of the page */
+    uint32_t random_offset = ALIGN_SZ_DOWN(us_rand_uint64(&_root->seed));
+    size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
+    new_big = (iso_alloc_big_zone_t *) ((void *) new_big + ((random_offset * s) >> 32));
+    new_big->free = false;
+    new_big->size = size;
+    new_big->next = NULL;
+
+    /* Save a pointer to the user pages */
+    new_big->user_pages_start = user_pages;
+
+    /* The canaries prevents a linear overwrite of the big
+     * zone meta data structure from either direction */
+    new_big->canary_a = ((uint64_t) new_big ^ __builtin_bswap64((uint64_t) new_big->user_pages_start) ^ _root->big_zone_canary_secret);
+    new_big->canary_b = new_big->canary_a;
+
+    LOCK_BIG_ZONE_USED();
+
+    new_big->next = _root->big_zone_used;
+    _root->big_zone_used = MASK_BIG_ZONE_NEXT(new_big);
+    _root->big_zone_used_count++;
+
+    UNLOCK_BIG_ZONE_USED();
+
+    return new_big->user_pages_start;
 }
 
 /* Disable all use of iso_alloc by protecting the _root */
@@ -1895,7 +1958,7 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     if(UNLIKELY(zone == NULL)) {
         UNLOCK_ROOT();
-        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p);
+        iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, false);
 
         if(UNLIKELY(big_zone == NULL)) {
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
@@ -1906,6 +1969,35 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     UNLOCK_ROOT();
     return zone->chunk_size;
+}
+
+INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head) {
+    iso_alloc_big_zone_t *big_zone = head;
+    iso_alloc_big_zone_t *big = NULL;
+
+    if(big_zone != NULL) {
+        big_zone = UNMASK_BIG_ZONE_NEXT(head);
+    }
+
+    while(big_zone != NULL) {
+        check_big_canary(big_zone);
+
+        if(big_zone->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big_zone->next);
+        } else {
+            big = NULL;
+        }
+
+        /* Free the user pages first */
+        unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
+
+#if BIG_ZONE_META_DATA_GUARD
+        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+#else
+        munmap(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+#endif
+        big_zone = big;
+    }
 }
 
 INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
@@ -1958,31 +2050,13 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     munmap((void *) ((uintptr_t) _root->zones - g_page_size), _root->zones_size);
 #endif
 
-    iso_alloc_big_zone_t *big_zone = _root->big_zone_head;
-    iso_alloc_big_zone_t *big = NULL;
+    LOCK_BIG_ZONE_USED();
+    _free_big_zone_list(_root->big_zone_used);
+    UNLOCK_BIG_ZONE_USED();
 
-    if(big_zone != NULL) {
-        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_head);
-    }
-
-    while(big_zone != NULL) {
-        check_big_canary(big_zone);
-
-        if(big_zone->next != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(big_zone->next);
-        } else {
-            big = NULL;
-        }
-
-#if ISO_DTOR_CLEANUP
-        /* Free the user pages first */
-        unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
-
-        /* Free the meta data */
-        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
-#endif
-        big_zone = big;
-    }
+    LOCK_BIG_ZONE_FREE();
+    _free_big_zone_list(_root->big_zone_free);
+    UNLOCK_BIG_ZONE_FREE();
 
 #if ISO_DTOR_CLEANUP
     unmap_guarded_pages(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
@@ -1991,8 +2065,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     unmap_guarded_pages(zone_cache, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)));
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
-    UNLOCK_BIG_ZONE();
-    pthread_mutex_destroy(&_root->big_zone_busy_mutex);
+    UNLOCK_BIG_ZONE_FREE();
+    pthread_mutex_destroy(&_root->big_zone_free_mutex);
+    UNLOCK_BIG_ZONE_USED();
+    pthread_mutex_destroy(&_root->big_zone_used_mutex);
 #endif
 
     unmap_guarded_pages(_root, sizeof(iso_alloc_root));

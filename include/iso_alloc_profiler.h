@@ -52,3 +52,13 @@ INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out);
 INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out);
 INTERNAL_HIDDEN void _iso_alloc_reset_traces();
 #endif
+
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile);
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void);
+INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void);
+INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(iso_alloc_big_zone_t *head);
+INTERNAL_HIDDEN uint64_t _iso_alloc_mem_usage(void);
+INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void);
