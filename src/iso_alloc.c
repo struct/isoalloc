@@ -1749,7 +1749,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         big_zone->free = true;
         dont_need_pages(big_zone->user_pages_start, big_zone->size);
 
-#if FUZZ_MODE
+#if PROTECT_FREE_BIG_ZONES
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
 #endif
 
@@ -1849,7 +1849,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
                 _root->big_zone_used_count++;
 
                 UNLOCK_BIG_ZONE_USED();
-#if FUZZ_MODE
+#if PROTECT_FREE_BIG_ZONES
                 mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
 #endif
                 return big->user_pages_start;
