@@ -38,7 +38,6 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_big_zone_mem_usage(void) {
     UNLOCK_BIG_ZONE_FREE();
 
     return mem_usage;
-
 }
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {

@@ -1825,7 +1825,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
             check_big_canary(big);
 
             /* We found a suitable big zone we can reuse */
-            if(big->size >= size && (big->size - size) <= BIG_ZONE_WASTE*2) {
+            if(big->size >= size && (big->size - size) <= BIG_ZONE_WASTE * 2) {
                 big->free = false;
                 _root->big_zone_free_count--;
                 UNPOISON_BIG_ZONE(big);

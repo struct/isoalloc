@@ -293,14 +293,14 @@ extern atomic_flag root_busy_flag;
     atomic_flag_clear(&root_busy_flag);
 
 #define LOCK_BIG_ZONE_FREE() \
-    do {                \
+    do {                     \
     } while(atomic_flag_test_and_set(&_root->big_zone_free_flag));
 
 #define UNLOCK_BIG_ZONE_FREE() \
     atomic_flag_clear(&_root->big_zone_free_flag);
 
 #define LOCK_BIG_ZONE_USED() \
-    do {                \
+    do {                     \
     } while(atomic_flag_test_and_set(&_root->big_zone_used_flag));
 
 #define UNLOCK_BIG_ZONE_USED() \
