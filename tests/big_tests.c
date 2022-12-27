@@ -6,10 +6,10 @@
 
 int main(int argc, char *argv[]) {
 
-    void *p = iso_alloc(SMALL_SZ_MAX + 1);
+    void *p = iso_alloc(SMALL_SIZE_MAX + 1);
 
     if(p == NULL) {
-        LOG_AND_ABORT("Failed to allocate %d bytes", SMALL_SZ_MAX + 1);
+        LOG_AND_ABORT("Failed to allocate %d bytes", SMALL_SIZE_MAX + 1);
     }
 
     iso_free(p);

@@ -87,10 +87,10 @@
  * big zone path. Maximum value here is 131072 due to how
  * we construct the zone bitmap. You can think of this
  * value as roughly equivalent to M_MMAP_THRESHOLD. Valid
- * values for SMALL_SZ_MAX are powers of 2 through 131072 */
-#define SMALL_SZ_MAX 65536
+ * values for SMALL_SIZE_MAX are powers of 2 through 131072 */
+#define SMALL_SIZE_MAX i
 
-/* Big zones are for any chunk bigger than SMALL_SZ_MAX.
+/* Big zones are for any chunk bigger than SMALL_SIZE_MAX.
  * We reuse them when possible but not if the reuse
  * would exceed this value */
 #define BIG_ZONE_WASTE 4096

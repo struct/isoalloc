@@ -78,7 +78,7 @@ INTERNAL_HIDDEN void _verify_big_zone_list(iso_alloc_big_zone_t *head) {
     while(big != NULL) {
         check_big_canary(big);
 
-        if(big->size < SMALL_SZ_MAX) {
+        if(big->size < SMALL_SIZE_MAX) {
             LOG_AND_ABORT("Big zone size is too small %d", big->size);
         }
 
@@ -340,7 +340,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal) {
-    if(size > SMALL_SZ_MAX) {
+    if(size > SMALL_SIZE_MAX) {
         return NULL;
     }
 
@@ -417,7 +417,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         LOG_AND_ABORT("Cannot allocate additional zones. I have already allocated %d zones", _root->zones_used);
     }
 
-    if(size > SMALL_SZ_MAX) {
+    if(size > SMALL_SIZE_MAX) {
         LOG("Request for new zone with %ld byte chunks should be handled by big alloc path", size);
         return NULL;
     }
@@ -624,7 +624,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     /* The largest zone->max_bitmap_idx we will ever
      * have is 8192 for SMALLEST_CHUNK_SZ (16). The
      * smallest zone->max_bitmap_idx is 1 when chunk
-     * size is SMALL_SZ_MAX because the bitmap_size
+     * size is SMALL_SIZE_MAX because the bitmap_size
      * is only 8 bytes. If our max bitmap index is
      * small then it won't provide enough search
      * space for a random list to be of value */
@@ -1010,7 +1010,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     unsigned int res;
 
-    if(size < SMALL_SZ_MAX && (is_pow2(size)) != true) {
+    if(size < SMALL_SIZE_MAX && (is_pow2(size)) != true) {
         size = next_pow2(size);
     }
 
@@ -1043,7 +1043,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #endif
 
     /* Sizes are always a power of 2, even for private zones */
-    if(size < SMALL_SZ_MAX && is_pow2(size) != true) {
+    if(size < SMALL_SIZE_MAX && is_pow2(size) != true) {
         size = next_pow2(size);
     }
 
@@ -1095,9 +1095,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     _iso_alloc_profile(size);
 #endif
 
-    /* Allocation requests of SMALL_SZ_MAX bytes or larger are
+    /* Allocation requests of SMALL_SIZE_MAX bytes or larger are
      * handled by the 'big allocation' path. */
-    if(LIKELY(size <= SMALL_SZ_MAX)) {
+    if(LIKELY(size <= SMALL_SIZE_MAX)) {
 #if FUZZ_MODE
         _verify_all_zones();
 #endif
@@ -1188,7 +1188,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
 
         if(UNLIKELY(zone != NULL)) {
-            LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone (%d)", size, SMALL_SZ_MAX, zone->chunk_size);
+            LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone (%d)", size, SMALL_SIZE_MAX, zone->chunk_size);
         }
 
         return _iso_big_alloc(size);
@@ -1565,7 +1565,7 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 #endif
 
-    if(UNLIKELY(size > SMALL_SZ_MAX)) {
+    if(UNLIKELY(size > SMALL_SIZE_MAX)) {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
 
         if(UNLIKELY(big_zone == NULL)) {
@@ -1787,7 +1787,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     const size_t new_size = ROUND_UP_PAGE(size);
 
-    if(new_size < size || new_size > BIG_SZ_MAX || size <= SMALL_SZ_MAX) {
+    if(new_size < size || new_size > BIG_SZ_MAX || size <= SMALL_SIZE_MAX) {
 #if ABORT_ON_NULL
         LOG_AND_ABORT("Cannot allocate a big zone of %ld bytes", new_size);
 #endif

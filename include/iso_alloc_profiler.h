@@ -29,7 +29,7 @@ typedef struct {
     uint64_t count;
 } zone_profiler_map_t;
 
-zone_profiler_map_t _zone_profiler_map[SMALL_SZ_MAX];
+zone_profiler_map_t _zone_profiler_map[SMALL_SIZE_MAX];
 
 /* iso_alloc_traces_t is a public structure, and
  * is defined in the public header iso_alloc.h */

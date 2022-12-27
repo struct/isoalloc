@@ -13,7 +13,7 @@
  * each by 16 to make the size of our cache smaller
  * and save memory. Now this cache should only need
  * 16384 bytes */
-#define ZONE_LOOKUP_TABLE_SZ (SMALL_SZ_MAX >> 4) * sizeof(uint32_t)
+#define ZONE_LOOKUP_TABLE_SZ (SMALL_SIZE_MAX >> 4) * sizeof(uint32_t)
 #define SZ_TO_ZONE_LOOKUP_IDX(size) size >> 4
 
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))

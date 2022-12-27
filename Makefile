@@ -194,13 +194,15 @@ SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 ARM_TBI = 0
 
 ## Enables guard pages around big zone meta data. Big zones
-## are zones with a size greater than SMALL_SZ_MAX as defined
-## in conf.h. Disabling this will save 8192 bytes per big
-## zone allocation
+## are zones with a size greater than SMALL_SIZE_MAX as defined
+## in conf.h. Disabling this will save 2 pages per big zone
+## allocation. On systems with pages > 4k this is a substantial
+## memory savings
 BIG_ZONE_META_DATA_GUARD = -DBIG_ZONE_META_DATA_GUARD=1
 
 ## Ensures all big zone user data pages are marked PROT_NONE
-## while on the free list to catch UAF
+## while on the free list to catch UAF. This is disabled because
+## it incurs a syscall (mprotect) per call to free
 PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 
 LTO = -flto

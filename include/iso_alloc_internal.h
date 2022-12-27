@@ -271,16 +271,16 @@ extern uint32_t g_page_size_shift;
  * specific size request. */
 #define DEFAULT_ZONE_COUNT sizeof(default_zones) >> 3
 
-/* Each user allocation zone we make is 4mb in size.
+/* Each user allocation zone we make is 4MB in size.
  * With MAX_ZONES at 8192 this means we top out at
  * about 32~ gb of heap. If you adjust this then
- * you need to make sure that SMALL_SZ_MAX is correctly
+ * you need to make sure that SMALL_SIZE_MAX is correctly
  * adjusted or you will calculate chunks outside of
  * the zone user memory! */
 #define ZONE_USER_SIZE 4194304
 
 static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
-static_assert(SMALL_SZ_MAX <= 131072, "SMALL_SZ_MAX is too big, cannot exceed 131072");
+static_assert(SMALL_SIZE_MAX <= 131072, "SMALL_SIZE_MAX is too big, cannot exceed 131072");
 
 #if THREAD_SUPPORT
 #if USE_SPINLOCK

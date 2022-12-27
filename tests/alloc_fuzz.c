@@ -12,7 +12,7 @@
 static const uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                             ZONE_256, ZONE_512, ZONE_1024,
                                             ZONE_2048, ZONE_4096, ZONE_8192,
-                                            SMALL_SZ_MAX + 1};
+                                            SMALL_SIZE_MAX + 1};
 
 static const uint32_t array_sizes[] = {16, 32, 64, 128, 256};
 
@@ -106,7 +106,7 @@ int64_t allocate(size_t array_size, size_t allocation_size) {
             private_zone = NULL;
         }
 
-        if(allocation_size <= SMALL_SZ_MAX) {
+        if(allocation_size <= SMALL_SIZE_MAX) {
             private_zone = iso_alloc_new_zone(allocation_size);
 
             if(private_zone == NULL) {
@@ -120,7 +120,7 @@ int64_t allocate(size_t array_size, size_t allocation_size) {
             allocation_size = allocation_sizes[(rand() % sizeof(allocation_sizes) / sizeof(uint32_t))] + (rand() % 32);
         }
 
-        if(rand() % 100 == 1 && private_zone != NULL && allocation_size < SMALL_SZ_MAX) {
+        if(rand() % 100 == 1 && private_zone != NULL && allocation_size < SMALL_SIZE_MAX) {
             p[i] = iso_alloc_from_zone(private_zone);
             allocs++;
         } else {

@@ -23,14 +23,14 @@ All user chunk pages and bitmap pages are surrounded by guard page allocations w
 
 If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented further below.
 
-* All chunk sizes are a power of 2 and so are always aligned to 8.
+* All chunk sizes are a power of 2 and are always 8 byte aligned.
 * The `iso_alloc_root` structure is thread safe and guarded by a mutex or spinlock when `THREAD_SUPPORT` is enabled.
 * Each zone bitmap contains 2 bits per chunk.
 * All zones are 4 MB in size regardless of the chunk sizes they manage.
 * Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes.
 * Zones are created on demand for larger allocations or when these default zones are exhausted.
 * The free bit slot cache is 255 entries, it helps speed up allocations.
-* All allocations larger than `SMALL_SZ_MAX` live in big zones which have a size limitation of 4 GB. See [PERFORMANCE](PERFORMANCE.md).
+* All allocations larger than `SMALL_SIZE_MAX` live in big zones which have a size limitation of 4 GB. See [PERFORMANCE](PERFORMANCE.md).
 
 There is support for Address Sanitizer, Memory Sanitizer, and Undefined Behavior Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN`, `ENABLE_MSAN`, or `ENABLE_UBSAN` flags in the Makefile. Like any other usage of Address Sanitizer these are mutually exclusive. IsoAlloc will use Address Sanitizer macros to poison and unpoison user chunks appropriately. IsoAlloc still catches a number of issues Address Sanitizer does not, including double/unaligned/wild free's.
 

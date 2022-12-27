@@ -375,7 +375,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
         }
     }
 
-    for(uint32_t i = 0; i < SMALL_SZ_MAX; i++) {
+    for(uint32_t i = 0; i < SMALL_SIZE_MAX; i++) {
         if(_zone_profiler_map[i].count != 0) {
             _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
         }
