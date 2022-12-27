@@ -6,7 +6,16 @@
 /* This header contains the core data structures,
  * caches, and typedef used by the allocator */
 #define ZONE_FREE_LIST_SZ 255
-#define ZONE_LOOKUP_TABLE_SZ ((SMALL_SZ_MAX + 1) * sizeof(uint16_t))
+
+/* Zones manage chunks with sizes that are a power
+ * of 2. So the zone lookup table only has to hold
+ * indexes of 8, 16, 32 ... 131072. We can divide
+ * each by 16 to make the size of our cache smaller
+ * and save memory. Now this cache should only need
+ * 16384 bytes */
+#define ZONE_LOOKUP_TABLE_SZ (SMALL_SIZE_MAX >> 4) * sizeof(uint32_t)
+#define SZ_TO_ZONE_LOOKUP_IDX(size) size >> 4
+
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
 #define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
 
@@ -88,15 +97,20 @@ typedef struct {
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
-    iso_alloc_big_zone_t *big_zone_head;
+    iso_alloc_big_zone_t *big_zone_free;
+    iso_alloc_big_zone_t *big_zone_used;
+    int32_t big_zone_free_count;
+    int32_t big_zone_used_count;
     iso_alloc_zone_t *zones;
     size_t zones_size;
     uint64_t seed;
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
-    atomic_flag big_zone_busy_flag;
+    atomic_flag big_zone_free_flag;
+    atomic_flag big_zone_used_flag;
 #else
-    pthread_mutex_t big_zone_busy_mutex;
+    pthread_mutex_t big_zone_free_mutex;
+    pthread_mutex_t big_zone_used_mutex;
 #endif
 #endif
 #if NO_ZERO_ALLOCATIONS

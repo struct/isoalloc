@@ -128,7 +128,7 @@ UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 ## to reduce memory consumption and is only done for smaller
 ## sizes. Enabling this feature configures IsoAlloc to only
 ## use zones that are a perfect fit for the requested size
-## once its been rounded up to ALIGNMENT size (8)
+## once its been rounded up to the next power of 2
 STRONG_SIZE_ISOLATION = -DSTRONG_SIZE_ISOLATION=0
 
 ## Enable a sampling mechanism that searches for references
@@ -192,6 +192,18 @@ SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this
 ARM_TBI = 0
+
+## Enables guard pages around big zone meta data. Big zones
+## are zones with a size greater than SMALL_SIZE_MAX as defined
+## in conf.h. Disabling this will save 2 pages per big zone
+## allocation. On systems with pages > 4k this is a substantial
+## memory savings
+BIG_ZONE_META_DATA_GUARD = -DBIG_ZONE_META_DATA_GUARD=1
+
+## Ensures all big zone user data pages are marked PROT_NONE
+## while on the free list to catch UAF. This is disabled because
+## it incurs a syscall (mprotect) per call to free
+PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 
 LTO = -flto
 
@@ -258,7 +270,8 @@ CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
-	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER)
+	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
+	$(BIG_ZONE_META_DATA_GUARD) $(PROTECT_UNUSED_BIG_ZONE)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE

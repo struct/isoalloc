@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
     }
 
     iso_alloc_root *root = _get_root();
-    void *p = ((iso_alloc_big_zone_t *) ((uintptr_t) root->big_zone_next_mask ^ (uintptr_t) root->big_zone_head));
+    void *p = ((iso_alloc_big_zone_t *) ((uintptr_t) root->big_zone_next_mask ^ (uintptr_t) root->big_zone_used));
 
     if(p == NULL) {
         LOG_AND_ABORT("Big zone list is empty, %p must not be a big zone!", r);

@@ -5,9 +5,9 @@
 #include "iso_alloc_internal.h"
 
 int main(int argc, char *argv[]) {
-    void *p = iso_alloc(SMALL_SZ_MAX + 1);
+    void *p = iso_alloc(SMALL_SIZE_MAX + 1);
     iso_free(p);
-    void *z = iso_alloc(SMALL_SZ_MAX + 1);
+    void *z = iso_alloc(SMALL_SIZE_MAX + 1);
     iso_free(p);
     iso_free(z);
     return OK;

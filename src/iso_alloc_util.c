@@ -70,8 +70,12 @@ INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
  * with guard pages mapped on top and bottom. */
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
     size_t sz = ROUND_UP_PAGE(size);
-    void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
 
+    if(sz < size) {
+        return NULL;
+    }
+
+    void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
     create_guard_page(p);
     create_guard_page(p + (g_page_size + sz));
     return (p + g_page_size);
@@ -90,7 +94,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
 #else
     void *p = NULL;
 #endif
-    size = ROUND_UP_PAGE(size);
+    size_t sz = ROUND_UP_PAGE(size);
+
+    if(sz < size) {
+        return NULL;
+    }
 
     int32_t flags = (MAP_PRIVATE | MAP_ANONYMOUS);
     int fd = -1;
@@ -105,7 +113,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
 #if MAP_HUGETLB && HUGE_PAGES
     /* If we are allocating pages for a user zone
      * then take advantage of the huge TLB */
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
+    if(sz == ZONE_USER_SIZE || sz == (ZONE_USER_SIZE >> 1)) {
         flags |= MAP_HUGETLB;
     }
 #endif
@@ -113,45 +121,47 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
 #if VM_FLAGS_SUPERPAGE_SIZE_2MB && HUGE_PAGES
     /* If we are allocating pages for a user zone
      * we are going to use the 2 MB superpage flag */
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
+    if(sz == ZONE_USER_SIZE || sz == (ZONE_USER_SIZE >> 1)) {
         fd = VM_FLAGS_SUPERPAGE_SIZE_2MB;
     }
 #endif
 #endif
 
-    p = mmap(p, size, prot, flags, fd, 0);
+    p = mmap(p, sz, prot, flags, fd, 0);
 
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");
     }
 
 #if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
-    if(size == ZONE_USER_SIZE || size == (ZONE_USER_SIZE >> 1)) {
-        madvise(p, size, MADV_HUGEPAGE);
+    if(sz == ZONE_USER_SIZE || sz == (ZONE_USER_SIZE >> 1)) {
+        madvise(p, sz, MADV_HUGEPAGE);
     }
 #endif
 
     /* All pages are mapped as if we will never need
      * them. This is to ensure RSS stays managable */
-    madvise(p, size, FREE_OR_DONTNEED);
-
-#if __APPLE__
-    while(madvise(p, size, MADV_FREE_REUSABLE) && errno == EAGAIN) {
-    }
-#endif
+    dont_need_pages(p, sz);
 
     if(name != NULL) {
-        name_mapping(p, size, name);
+        name_mapping(p, sz, name);
     }
 
     return p;
 }
 
-INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
-    size = ROUND_UP_PAGE(size);
+INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size) {
+    madvise(p, size, FREE_OR_DONTNEED);
 
+#if __APPLE__
+    while(madvise(p, size, MADV_FREE_REUSE) == -1 && errno == EAGAIN) {
+    }
+#endif
+}
+
+INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
     if((mprotect(p, size, protection)) == ERR) {
-        LOG_AND_ABORT("Failed to mprotect pages @ 0x%p", p);
+        LOG_AND_ABORT("Failed to mprotect pages @ 0x%p (%s)", p, strerror(errno));
     }
 }
 

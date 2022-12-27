@@ -4,15 +4,13 @@
 
 # Isolation Alloc
 
-Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C11. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is originally inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict  isolation of allocations can be achieved using the APIs directly.
+Isolation Alloc (or IsoAlloc) is a secure and fast(ish) memory allocator written in C11. It is a drop in replacement for `malloc` on Linux / Mac OS using `LD_PRELOAD` or `DYLD_INSERT_LIBRARIES` respectively. Its security strategy is originally inspired by Chrome's [PartitionAlloc](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/allocator/partition_allocator/PartitionAlloc.md). A memory allocation isolation security strategy is best summed up as maintaining spatial separation, or isolation between objects of different sizes or types. While IsoAlloc wraps `malloc` and enforces naive isolation by default very strict isolation of allocations can be achieved using the APIs directly.
 
 IsoAlloc is designed and [tested](https://github.com/struct/isoalloc/actions) for 64 bit Linux and MacOS. The space afforded by a 64 bit process makes this possible, therefore Isolation Alloc does not support 32 bit targets. The number of bits of entropy provided to `mmap` based page allocations is far too low in a 32 bit process to provide much security value. It may work on operating systems other than Linux/MacOS but that is also untested at this time. There is partial FreeBSD support but CI is often flakey. A minimal Solaris/Illumos support is available, LTO not supported by the compilers backends.
 
 ## Design
 
 At a high level IsoAlloc creates zones which are used to manage regions of memory that hold individual allocations of a specific size. If you are familiar with the implementation of arenas in other heap allocators then the concepts here will be familiar to you.
-
-![Design of IsoAlloc schema](/misc/isoalloc_design.svg)
 
 There is one `iso_alloc_root` structure which contains a pointer to a fixed number of `iso_alloc_zone` structures. These `iso_alloc_zone` structures are referred to as *zones*. Zones point to user chunks and a bitmap that is used to manage those chunks. The translation between bitmap and user chunks is referred to as *bit slots*. The pages that back both the user chunks and the bitmap are allocated separately. The pointers that reference these in the zone meta data are masked in between allocation and free operations. The bitmap contains 2 bits of state per user chunk. The current bit value specification is as follows:
 
@@ -25,16 +23,16 @@ All user chunk pages and bitmap pages are surrounded by guard page allocations w
 
 If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented further below.
 
-* All allocations are 8 byte aligned.
+* All chunk sizes are a power of 2 and are always 8 byte aligned.
 * The `iso_alloc_root` structure is thread safe and guarded by a mutex or spinlock when `THREAD_SUPPORT` is enabled.
 * Each zone bitmap contains 2 bits per chunk.
 * All zones are 4 MB in size regardless of the chunk sizes they manage.
 * Default zones are created in the constructor for sizes: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 bytes.
 * Zones are created on demand for larger allocations or when these default zones are exhausted.
 * The free bit slot cache is 255 entries, it helps speed up allocations.
-* All allocations larger than 131072 bytes live in specially handled big zones which has a size limitation of 4 GB.
+* All allocations larger than `SMALL_SIZE_MAX` live in big zones which have a size limitation of 4 GB. See [PERFORMANCE](PERFORMANCE.md).
 
-There is support for Address Sanitizer, Memory Sanitizer, and Undefined Behavior Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN`, `ENABLE_MSAN`, or `ENABLE_UBSAN` flags in the `Makefile`. Like any other usage of Address Sanitizer these are mutually exclusive. IsoAlloc will use Address Sanitizer macros to poison and unpoison user chunks appropriately. IsoAlloc still catches a number of issues Address Sanitizer does not, including double/unaligned/wild free's.
+There is support for Address Sanitizer, Memory Sanitizer, and Undefined Behavior Sanitizer. If you want to enable it just uncomment the `ENABLE_ASAN`, `ENABLE_MSAN`, or `ENABLE_UBSAN` flags in the Makefile. Like any other usage of Address Sanitizer these are mutually exclusive. IsoAlloc will use Address Sanitizer macros to poison and unpoison user chunks appropriately. IsoAlloc still catches a number of issues Address Sanitizer does not, including double/unaligned/wild free's.
 
 A feature similar to [GWP-ASAN](https://www.chromium.org/Home/chromium-security/articles/gwp-asan) can be enabled with `ALLOC_SANITY` in the Makefile. It samples calls to `iso_alloc/malloc` and allocates a page of memory surrounded by guard pages in order to detect Use-After-Free and linear heap overflows. All sampled sanity allocations are verified with canaries to detect over/underflows into the surrounding bytes of the page. A percentage of sanity allocations are allocated at end of the page to detect linear overflows. This feature works on all supported platforms.
 
@@ -84,6 +82,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * `MEMORY_TAGGING` When enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/tagged_ptr_test.cpp) for an example of how to use it.
 * `MEMCPY_SANITY` and `MEMSET_SANITY` Configures the allocator will hook all calls to `memcpy`/`memset` and check for out of bounds r/w operations when either src or dst points to a chunk allocated by IsoAlloc
 * `STRONG_SIZE_ISOLATION` Enables a policy that enforces stronger memory isolation by size
+* `PROTECT_FREE_BIG_ZONES` Marks big zones on the free list as `PROT_NONE` when not in use
 
 ## Building
 
@@ -247,3 +246,8 @@ typedef struct {
 ```
 
 When `HEAP_PROFILER` is enabled these structure will contain information collected by the allocator by sampling `malloc` and `free` calls. This data structure is experimental and is subject to change. See `interfaces_test.c` file for an example of how to retrieve and inspect these structures. Note: On MacOS you may need to use gcc/g++ to compile this functionality without error.
+
+## Memory Isolation Visualized
+
+![Design of IsoAlloc schema](/misc/isoalloc_design.png)
+
