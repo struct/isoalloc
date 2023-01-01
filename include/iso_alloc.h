@@ -27,8 +27,12 @@ static_assert(sizeof(size_t) == 8, "IsoAlloc requires 64 bit size_t");
 #define ZONE_ALLOC_SIZE __attribute__((alloc_size(2)))
 #define ASSUME_ALIGNED __attribute__((assume_aligned(8)))
 
+#if MASK_PTRS
 #define UNMASK_ZONE_HANDLE(zone) \
     zone = (iso_alloc_zone_handle *) ((uintptr_t) zone ^ (uintptr_t) _root->zone_handle_mask);
+#else
+#define UNMASK_ZONE_HANDLE(zone) zone = zone;
+#endif
 
 typedef void iso_alloc_zone_handle;
 
