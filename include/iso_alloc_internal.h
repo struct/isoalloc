@@ -235,7 +235,6 @@ assert(sizeof(size_t) >= 64)
 #define UNMASK_BIG_ZONE_NEXT(bnp) bnp
 #endif
 
-
 /* Cap our big zones at 4GB of memory */
 #define BIG_SZ_MAX 4294967296
 
