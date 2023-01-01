@@ -632,7 +632,9 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
         bm_idx = ((uint32_t) us_rand_uint64(&_root->seed) & (zone->max_bitmap_idx - 1));
     }
 
-    __iso_memset(zone->free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
+    bit_slot_t *free_bit_slots = zone->free_bit_slots;
+
+    __iso_memset(free_bit_slots, BAD_BIT_SLOT, ZONE_FREE_LIST_SZ);
     zone->free_bit_slots_usable = 0;
     free_bit_slot_t free_bit_slots_index;
 
@@ -650,7 +652,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
          * bitslot without checking each bit value */
         if(bts == 0x0) {
             for(uint64_t z = 0; z < BITS_PER_QWORD; z += BITS_PER_CHUNK) {
-                zone->free_bit_slots[free_bit_slots_index] = (bm_idx_shf + z);
+                free_bit_slots[free_bit_slots_index] = (bm_idx_shf + z);
                 free_bit_slots_index++;
 
                 if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
@@ -660,7 +662,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
         } else {
             for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
                 if((GET_BIT(bts, j)) == 0) {
-                    zone->free_bit_slots[free_bit_slots_index] = (bm_idx_shf + j);
+                    free_bit_slots[free_bit_slots_index] = (bm_idx_shf + j);
                     free_bit_slots_index++;
 
                     if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
@@ -678,9 +680,9 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     if(free_bit_slots_index > MIN_RAND_FREELIST) {
         for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
             free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
-            bit_slot_t t = zone->free_bit_slots[j];
-            zone->free_bit_slots[j] = zone->free_bit_slots[i];
-            zone->free_bit_slots[i] = t;
+            bit_slot_t t = free_bit_slots[j];
+            free_bit_slots[j] = free_bit_slots[i];
+            free_bit_slots[i] = t;
         }
     }
 #endif

@@ -199,6 +199,7 @@ assert(sizeof(size_t) >= 64)
 #define ROUND_DOWN_PAGE(n) \
     (ROUND_UP_PAGE(n) - g_page_size)
 
+#if MASK_PTRS
 #define MASK_ZONE_PTRS(zone) \
     MASK_BITMAP_PTRS(zone);  \
     MASK_USER_PTRS(zone);
@@ -223,6 +224,17 @@ assert(sizeof(size_t) >= 64)
 
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
     ((iso_alloc_big_zone_t *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
+#else
+#define MASK_ZONE_PTRS(zone)
+#define UNMASK_ZONE_PTRS(zone)
+#define MASK_BITMAP_PTRS(zone)
+#define MASK_USER_PTRS(zone)
+#define UNMASK_USER_PTR(zone) (void *) zone->user_pages_start
+#define UNMASK_BITMAP_PTR(zone) (void *) zone->bitmap_start
+#define MASK_BIG_ZONE_NEXT(bnp) bnp
+#define UNMASK_BIG_ZONE_NEXT(bnp) bnp
+#endif
+
 
 /* Cap our big zones at 4GB of memory */
 #define BIG_SZ_MAX 4294967296

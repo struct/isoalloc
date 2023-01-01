@@ -4,13 +4,18 @@
 CC = clang
 CXX = clang++
 
-## Security flags can affect performance
-## SANITIZE_CHUNKS - Clear user chunks upon free
-## FUZZ_MODE - Call verify_all_zones upon alloc/free, never reuse private zones
-## PERM_FREE_REALLOC - Permanently free any realloc'd chunk
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
-## NEVER_REUSE_ZONES - Tells IsoAlloc to unmap user and bitmap pages when destroying private zones
-SECURITY_FLAGS = -DSANITIZE_CHUNKS=0 -DFUZZ_MODE=0 -DPERM_FREE_REALLOC=0 -DDISABLE_CANARY=0
+DISABLE_CANARY = -DDISABLE_CANARY=0
+
+## Clear user chunks upon free
+SANITIZE_CHUNKS = -DSANITIZE_CHUNKS=0
+
+## Call verify_all_zones upon alloc/free, never reuse private zones
+## Adds significant performance over head
+FUZZ_MODE = -DFUZZ_MODE=0
+
+## Permanently free any realloc'd chunk
+PERM_FREE_REALLOC = -DPERM_FREE_REALLOC=0
 
 ## Enable memory tagging support. This will generate a random
 ## 1 byte tag per addressable chunk of memory. These tags can
@@ -205,6 +210,11 @@ BIG_ZONE_META_DATA_GUARD = -DBIG_ZONE_META_DATA_GUARD=1
 ## it incurs a syscall (mprotect) per call to free
 PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 
+## By default IsoAlloc will mask pointers to protect against
+## certain memory disclosures. This can be beneficial but also
+## incurs a small performance cost.
+MASK_PTRS = -DMASK_PTRS=1
+
 LTO = -flto
 
 LIBNAME = libisoalloc.so
@@ -266,12 +276,13 @@ BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Werror -pedantic
 else
 BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
-CFLAGS += $(COMMON_CFLAGS) $(SECURITY_FLAGS) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
+CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=c11 $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
-	$(BIG_ZONE_META_DATA_GUARD) $(PROTECT_UNUSED_BIG_ZONE)
+	$(BIG_ZONE_META_DATA_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
+	$(PERM_FREE_REALLOC)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=c++17 $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE
