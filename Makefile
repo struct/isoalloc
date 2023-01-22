@@ -1,5 +1,5 @@
 ## IsoAlloc Makefile
-## Copyright 2022 - chris.rohlf@gmail.com
+## Copyright 2023 - chris.rohlf@gmail.com
 
 CC = clang
 CXX = clang++
