@@ -1,5 +1,5 @@
 /* libc_hook.c - Provides low level hooks for libc functions
- * Copyright 2022 - chris.rohlf@gmail.com */
+ * Copyright 2023 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
 #include "iso_alloc_sanity.h"
