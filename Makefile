@@ -109,7 +109,7 @@ SCHED_GETCPU =
 ## much of a performance penalty
 ALLOC_SANITY = -DALLOC_SANITY=0
 
-## Enable hooking of memcpy/memset to detect out of bounds
+## Enable hooking of memcpy/memmove/memset to detect out of bounds
 ## r/w operations on chunks allocated with IsoAlloc. Does
 ## not require ALLOC_SANITY is enabled. On MacOS you need
 ## to set FORTIFY_SOURCE to 0. Leave these commented if
@@ -389,7 +389,8 @@ libc_sanity_tests: clean library_debug_unit_tests
 	@echo "make libc_sanity_tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
-	build/memset_sanity ; build/memcpy_sanity
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memmove_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memmove_sanity $(LDFLAGS)
+	build/memset_sanity ; build/memcpy_sanity; build/memmove_sanity;
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"

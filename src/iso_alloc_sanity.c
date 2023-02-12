@@ -312,6 +312,58 @@ INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restric
     return __iso_memcpy(dest, src, n);
 }
 
+INTERNAL_HIDDEN INLINE void *__iso_memmove(void *dest, const void *src, size_t n) {
+#if MEMCPY_SANITY
+    char *p_dest = (char *) dest;
+    char const *p_src = (char const *) src;
+
+    if(dest == src) {
+        return dest;
+    }
+
+    if(p_src < p_dest) {
+        p_dest += n;
+        p_src += n;
+        while(n--) {
+            *--p_dest = *--p_src;
+        }
+    } else {
+        dest = __iso_memcpy(dest, src, n);
+    }
+
+    return dest;
+#else
+    return __builtin_memmove(dest, src, n);
+#endif
+}
+
+INTERNAL_HIDDEN void *_iso_alloc_memmove(void *dest, const void *src, size_t n) {
+#if MEMCPY_SANITY
+    if(n > SMALLEST_CHUNK_SZ) {
+        /* We don't want to add too much overhead here so we only
+         * check the chunk-to-zone cache for zone data and we don't
+         * need to lock the root for that. Its possible for a cache
+         * miss to mean a security check doesn't happen here but
+         * this feature is more for catching bugs than it is for
+         * mitigating them */
+        iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
+        void *user_pages_start = UNMASK_USER_PTR(zone);
+
+        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
+            LOG_AND_ABORT("Detected an out of bounds write memmove: dest=0x%p (%d bytes) src=0x%p size=%d", dest, zone->chunk_size, src, n);
+        }
+
+        zone = search_chunk_lookup_table(src);
+        user_pages_start = UNMASK_USER_PTR(zone);
+
+        if(MEM_SANITY_CHK(src, user_pages_start, zone->chunk_size)) {
+            LOG_AND_ABORT("Detected an out of bounds read memmove: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
+        }
+    }
+#endif
+    return __iso_memmove(dest, src, n);
+}
+
 INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n) {
 #if MEMSET_SANITY
     char *p_dest = (char *) dest;
