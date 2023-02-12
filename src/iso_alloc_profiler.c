@@ -88,11 +88,10 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void) {
         big = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
     }
 
+    /* All allocations on the used list are 'leaked' */
     while(big != NULL) {
-        if(big->free == true) {
-            big_leaks += big->size;
-            LOG("Big zone leaked %lu bytes", big->size);
-        }
+        big_leaks += big->size;
+        LOG("Big zone leaked %lu bytes", big->size);
 
         if(big->next != NULL) {
             big = UNMASK_BIG_ZONE_NEXT(big->next);
