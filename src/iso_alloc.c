@@ -188,13 +188,11 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
 
     /* Allocate memory with guard pages to hold zone data */
-    _root->zones = mmap_guarded_rw_pages(_root->zones_size, false, NULL);
+    _root->zones = mmap_guarded_rw_pages(_root->zones_size, false, "isoalloc zone metadata");
 
 #if __APPLE__
     darwin_reuse(_root->zones, g_page_size);
 #endif
-
-    name_mapping(_root->zones, _root->zones_size, "isoalloc zone metadata");
     MLOCK(_root->zones, _root->zones_size);
 
     size_t c = ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
@@ -2033,6 +2031,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #if MEM_USAGE
     mb = __iso_alloc_mem_usage();
+    mb += _iso_alloc_big_zone_mem_usage();
     LOG("Total megabytes consumed by all zones: %lu", mb);
     _iso_alloc_print_stats();
 #endif
