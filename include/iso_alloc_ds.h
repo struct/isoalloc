@@ -68,6 +68,7 @@ typedef struct iso_alloc_big_zone_t {
     uint64_t canary_a;
     bool free;
     uint64_t size;
+    uint32_t ttl;
     void *user_pages_start;
     struct iso_alloc_big_zone_t *next;
     uint64_t canary_b;

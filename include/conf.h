@@ -80,7 +80,7 @@
  * array. Currently the iso_alloc_zone_t structure is
  * roughly 2112 bytes so this results in 17301504 bytes
  * (~17 MB) for zone meta data. See PERFORMANCE.md for
- * more information on this value. Max is 65335 */
+ * more information on this value. Max is 65535 */
 #define MAX_ZONES 8192
 
 /* Anything above this size will need to go through the
@@ -90,15 +90,20 @@
  * values for SMALL_SIZE_MAX are powers of 2 through 131072 */
 #define SMALL_SIZE_MAX 65535
 
-/* Big zones are for any chunk bigger than SMALL_SIZE_MAX.
- * We reuse them when possible but not if the reuse
- * would exceed this value */
-#define BIG_ZONE_WASTE 4096
+/* Big zones are for any allocation bigger than SMALL_SIZE_MAX.
+ * We reuse them when possible but not if the reuse would
+ * result in unused memory that exceeds this value */
+#define BIG_ZONE_WASTE 8192
 
 /* The maximum number of big zone free list entries.
  * We want to limit the number of these because they
  * are often backed by a large number of pages */
-#define BIG_ZONE_MAX_FREE_LIST 32
+#define BIG_ZONE_MAX_FREE_LIST 64
+
+/* Big zones can be retired after a certain number of
+ * allocations. Big zones pages will be unmapped and
+ * not added to the free list after being used N times */
+#define BIG_ZONE_ALLOC_RETIRE 16
 
 /* We allocate zones at startup for common sizes.
  * Each of these default zones is 4mb (ZONE_USER_SIZE)
