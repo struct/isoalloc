@@ -1744,7 +1744,8 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
      * to do is sanitize the mapping and mark it free.
      * The pages that back the big zone can be reused
      * if we aren't at max entries in the free list */
-    if(LIKELY(permanent == false) && _root->big_zone_free_count < BIG_ZONE_MAX_FREE_LIST) {
+    if(LIKELY(permanent == false) && _root->big_zone_free_count < BIG_ZONE_MAX_FREE_LIST &&
+       big_zone->ttl < BIG_ZONE_ALLOC_RETIRE) {
         POISON_BIG_ZONE(big_zone);
         big_zone->free = true;
         dont_need_pages(big_zone->user_pages_start, big_zone->size);
@@ -1845,6 +1846,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
                 /* Insert this big zone at the head of the used list */
                 big->next = _root->big_zone_used;
+                big->ttl++;
                 _root->big_zone_used = MASK_BIG_ZONE_NEXT(big);
                 _root->big_zone_used_count++;
 
@@ -1895,6 +1897,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     new_big->free = false;
     new_big->size = size;
     new_big->next = NULL;
+    new_big->ttl++;
 
     /* Save a pointer to the user pages */
     new_big->user_pages_start = user_pages;
