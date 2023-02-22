@@ -13,31 +13,31 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 :grey_question: = Todo
 
 
-| Security Feature      | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  | PartitionAlloc   | snmalloc |
-|:---------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|Memory Isolation       |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:
-|Canaries               |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
-|Non-global canary      |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
-|Guard Pages            |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
-|Randomized Allocations |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
-|Pointer Obfuscation    |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |:heavy_check_mark:|:heavy_check_mark:
-|Double Free Detection  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
-|Chunk Alignment Check  |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
-|Out Of Band Metadata   |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:               |:heavy_check_mark:
-|Permanent Frees        |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
-|Freed Chunk Sanitization   |:heavy_plus_sign:|:heavy_check_mark:|:x:            |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:x:
-|Adjacent Chunk Verification|:heavy_check_mark:|:heavy_check_mark:|:x:           |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
-|Delayed Free           |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:
-|Dangling Pointer Detection |:heavy_plus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_plus_sign: |:x:
-|GWP-ASAN Like Sampling |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:grey_question:   |:x:
-|Size Mismatch Detection|:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:grey_question:
-|ARM Memory Tagging     |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:grey_question:
-|Zone/Chunk CPU Pinning |:heavy_plus_sign: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
-|Chunk Race Error Detection |:x:           |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |:grey_question:   |:heavy_plus_sign:
-|Zero Size Allocation Special Handling|:heavy_check_mark:|:x: |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
-|Read-only global structure|:heavy_minus_sign:|:x:            |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
-|SW Memory Tagging      |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:
-|Guarded Memcpy         |:heavy_check_mark:               |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
+| Security Feature                    | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  | PartitionAlloc   | snmalloc |
+|:-----------------------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|Memory Isolation                     |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:
+|Canaries                             |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
+|Non-global canary                    |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
+|Guard Pages                          |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
+|Randomized Allocations               |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:grey_question:  |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
+|Pointer Obfuscation                  |:heavy_check_mark:|:x:               |:heavy_plus_sign: |:grey_question:  |:x:               |:grey_question:   |:x:               |:grey_question:   |:heavy_check_mark:|:heavy_check_mark:
+|Double Free Detection                |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
+|Chunk Alignment Check                |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:x:              |:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:
+|Out Of Band Metadata                 |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:               |:heavy_check_mark:
+|Permanent Frees                      |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
+|Freed Chunk Sanitization             |:heavy_plus_sign: |:heavy_check_mark:|:x:               |:x:              |:x:               |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:x:
+|Adjacent Chunk Verification          |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
+|Delayed Free                         |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:
+|Dangling Pointer Detection           |:heavy_plus_sign: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_plus_sign: |:x:
+|GWP-ASAN Like Sampling               |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:grey_question:   |:x:
+|Size Mismatch Detection              |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:grey_question:
+|ARM Memory Tagging                   |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:grey_question:
+|Zone/Chunk CPU Pinning               |:heavy_plus_sign: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
+|Chunk Race Error Detection           |:x:               |:heavy_check_mark:|:grey_question:   |:x:              |:x:               |:x:               |:grey_question:   |:grey_question:   |:grey_question:   |:heavy_plus_sign:
+|Zero Size Allocation Special Handling|:heavy_check_mark:|:x:               |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
+|Read-only global structure           |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
+|SW Memory Tagging                    |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:
+|Guarded Memcpy                       |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
 
 **Lexicon**
 
