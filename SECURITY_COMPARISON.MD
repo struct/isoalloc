@@ -38,6 +38,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Read-only global structure           |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
 |SW Memory Tagging                    |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:
 |Guarded Memcpy                       |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
+|Automatic initialization             |:x:               |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
 
 **Lexicon**
 
@@ -56,6 +57,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 - *Read-only global structure*: The global state structure is entirely read-only after initialization.
 - *SW Memory Tagging*: The ability to tag pointers with a unique tag that is later verified before pointer dereference
 - *Guarded Memcpy*: Ability to use allocator meta-data to protect destination of memcpy from overflow.
+- *Automatic initialization*: The allocator memory is always initialized to a specific value, usually `0`. Note that while this is cheaper than zero'ing on free, it is also less powerful.
 
 **Notes**
 
