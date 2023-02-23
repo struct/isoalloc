@@ -37,7 +37,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Zero Size Allocation Special Handling|:heavy_check_mark:|:x:               |:grey_question:   |:grey_question:  |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
 |Read-only global structure           |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:               |:x:
 |SW Memory Tagging                    |:heavy_minus_sign:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:|:x:
-|Guarded Memcpy                       |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
+|Guarded memcpy/memmove               |:heavy_check_mark:|:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:
 |Automatic initialization             |:x:               |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
 
 **Lexicon**
