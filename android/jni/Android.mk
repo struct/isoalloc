@@ -10,7 +10,11 @@ LOCAL_CFLAGS := -DTHREAD_SUPPORT=1 -pthread									\
 	-DUAF_PTR_PAGE=0 -DVERIFY_FREE_BIT_SLOTS=0 -DNAMED_MAPPINGS=1 -fPIC		\
 	-shared -DDEBUG=1 -DLEAK_DETECTOR=1 -DMEM_USAGE=1 -DUSE_MLOCK=1 		\
 	-DMEMORY_TAGGING=0 -DSCHED_GETCPU -g -ggdb3 -fno-omit-frame-pointer		\
-	-DRANDOMIZE_FREELIST=1
+	-DRANDOMIZE_FREELIST=1 -DBIG_ZONE_META_DATA_GUARD=0 -DBIG_ZONE_GUARD=0  \
+	-DPROTECT_FREE_BIG_ZONES=0 -DMASK_PTRS=1 -DSIGNAL_HANDLER=0				\
+	-DUSE_MLOCK=1 -DNO_ZERO_ALLOCATIONS=1 -DABORT_ON_NULL=0					\
+	-DABORT_NO_ENTROPY=1 -DMEMCPY_SANITY=0 -DMEMSET_SANITY=0				\
+	-DSTRONG_SIZE_ISOLATION=0 -DISO_DTOR_CLEANUP=0
 
 LOCAL_SRC_FILES := ../../src/iso_alloc.c ../../src/iso_alloc_printf.c ../../src/iso_alloc_random.c				\
 				   ../../src/iso_alloc_search.c ../../src/iso_alloc_interfaces.c ../../src/iso_alloc_profiler.c	\

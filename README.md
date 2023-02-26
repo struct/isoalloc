@@ -84,6 +84,8 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * `MEMCPY_SANITY` and `MEMSET_SANITY` Configures the allocator will hook all calls to `memcpy`/`memset` and check for out of bounds r/w operations when either src or dst points to a chunk allocated by IsoAlloc
 * `STRONG_SIZE_ISOLATION` Enables a policy that enforces stronger memory isolation by size
 * `PROTECT_FREE_BIG_ZONES` Marks big zones on the free list as `PROT_NONE` when not in use
+* `BIG_ZONE_META_DATA_GUARD` Enables guard pages for big zone meta data
+* `BIG_ZONE_GUARD` Enables guard pages for big zone user pages
 
 ## Building
 
