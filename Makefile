@@ -201,24 +201,30 @@ ARM_TBI = 0
 ## Enables guard pages around big zone meta data. Big zones
 ## are zones with a size greater than SMALL_SIZE_MAX as defined
 ## in conf.h. Disabling this will save 2 pages per big zone
-## allocation. On systems with pages > 4k this is a substantial
-## memory savings
-BIG_ZONE_META_DATA_GUARD = -DBIG_ZONE_META_DATA_GUARD=1
+## allocation. On systems with pages > 4k this results in
+## substantial memory usage
+BIG_ZONE_META_DATA_GUARD = -DBIG_ZONE_META_DATA_GUARD=0
+
+## Enables guard pages around big zone user pages. On systems
+## with pages > 4k this results in substantial memory usage
+BIG_ZONE_GUARD = -DBIG_ZONE_GUARD=0
 
 ## Ensures all big zone user data pages are marked PROT_NONE
 ## while on the free list to catch UAF. This is disabled because
-## it incurs a syscall (mprotect) per call to free
+## it incurs a syscall (mprotect) per call to free and again
+## upon reuse to mark them R/W again.
 PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 
 ## By default IsoAlloc will mask pointers to protect against
 ## certain memory disclosures. This can be beneficial but also
-## incurs a small performance cost.
+## incurs a small performance cost
 MASK_PTRS = -DMASK_PTRS=1
 
 ## We start with the standard C++ specifics but giving
 ## the liberty to choose the gnu++* variants and/or
-## higher than C++17.
+## higher than C++17
 STDCXX=c++17
+
 ## Ditto but with C, now modern compilers support -std=c2x
 STDC=c11
 
@@ -288,7 +294,7 @@ CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
-	$(BIG_ZONE_META_DATA_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
+	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
 	$(PERM_FREE_REALLOC)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) $(HOOKS)
 

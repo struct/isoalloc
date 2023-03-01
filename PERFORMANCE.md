@@ -20,7 +20,7 @@ Default zones for common sizes are created in the library constructor. This help
 
 All chunk sizes are powers of 2 with a minimum value of `SMALLEST_CHUNK_SZ` (16 by default) and a maximum value of `SMALL_SIZE_MAX` up to 65535 by default. In a configuration with `SMALL_SIZE_MAX` set to 65535 zones will only be created for 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, and 65535. You can increase `SMALL_SIZE_MAX` up to 131072. If you choose to change this value be mindful of the pages that it can waste (e.g. allocating a chunk of 16385 bytes will result in returning a chunk of 32768 bytes).
 
-Everything above `SMALL_SIZE_MAX` is allocated by the big zone path which has a limitation of 4 GB and a size granularity that is only limited by page size alignment. Big zones have meta data allocated separately. Guard pages for this meta data can be enabled or disabled using `BIG_ZONE_META_DATA_GUARD`.
+Everything above `SMALL_SIZE_MAX` is allocated by the big zone path which has a limitation of 4 GB and a size granularity that is only limited by page size alignment. Big zones have meta data allocated separately. Guard pages for this meta data can be enabled or disabled using `BIG_ZONE_META_DATA_GUARD`. Likewise `BIG_ZONE_GUARD` can be used to enable or disable guard pages for big zone user data pages.
 
 By default user chunks are not sanitized upon free. While this helps mitigate uninitialized memory vulnerabilities it is a very slow operation. You can enable this feature by changing the `SANITIZE_CHUNKS` flag in the Makefile.
 

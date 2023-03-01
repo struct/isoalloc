@@ -1872,7 +1872,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
     /* The free list contained no usable entries
      * so we need to create a new one */
+#if BIG_ZONE_GUARD
     void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#else
+    void *user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#endif
 
     if(UNLIKELY(user_pages == NULL)) {
 #if ABORT_ON_NULL
@@ -1992,7 +1996,11 @@ INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head) {
         }
 
         /* Free the user pages first */
+#if BIG_ZONE_GUARD
         unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
+#else
+        munmap(big_zone->user_pages_start, big_zone->size);
+#endif
 
 #if BIG_ZONE_META_DATA_GUARD
         unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
