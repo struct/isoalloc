@@ -13,7 +13,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 :grey_question: = Todo
 
 
-| Security Feature                    | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | malloc_hardened  | PartitionAlloc   | snmalloc |
+| Security Feature                    | isoalloc         | scudo            | mimalloc         | tcmalloc        | ptmalloc3        | jemalloc         | musl's malloc-ng | hardened_malloc  | PartitionAlloc   | snmalloc |
 |:-----------------------------------:|:----------------:|:----------------:|:----------------:|:---------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|:----------------:|
 |Memory Isolation                     |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:x:              |:x:               |:grey_question:   |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:
 |Canaries                             |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:heavy_check_mark:|:heavy_check_mark:|:grey_question:   |:heavy_check_mark:
