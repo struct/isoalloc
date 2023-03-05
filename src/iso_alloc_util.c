@@ -62,7 +62,8 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
 
 /* Assumes p is page aligned and surrounded by guard pages */
 INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
-    munmap(p - g_page_size, size + (g_page_size << 1));
+    size_t sz = ROUND_UP_PAGE(size);
+    munmap(p - g_page_size, sz + (g_page_size << 1));
 }
 
 /* Assumes size for guard pages is NOT accounted for.

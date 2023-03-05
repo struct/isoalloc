@@ -213,7 +213,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     /* If we don't lock the these lookup tables we may incur
      * a soft page fault with almost every alloc/free */
-    _root->zone_lookup_table = mmap_guarded_rw_pages(ALIGN_SZ_UP(ZONE_LOOKUP_TABLE_SZ), true, NULL);
+    _root->zone_lookup_table = mmap_guarded_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
 #if __APPLE__
     darwin_reuse(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
 #endif
@@ -2073,8 +2073,8 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #if ISO_DTOR_CLEANUP
     unmap_guarded_pages(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
-    unmap_guarded_pages(_root->chunk_quarantine, ROUND_UP_PAGE(CHUNK_QUARANTINE_SZ * sizeof(uintptr_t)));
-    unmap_guarded_pages(zone_cache, ROUND_UP_PAGE(ZONE_CACHE_SZ * sizeof(_tzc)));
+    unmap_guarded_pages(_root->chunk_quarantine, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
+    unmap_guarded_pages(zone_cache, ZONE_CACHE_SZ * sizeof(_tzc));
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
     UNLOCK_BIG_ZONE_FREE();
