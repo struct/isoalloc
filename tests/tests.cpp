@@ -95,6 +95,14 @@ int main(int argc, char *argv[]) {
         auto d = std::make_unique<Derived>(i);
     }
 
+    for(size_t i = 0; i < array_sizeslen; i++) {
+        allocate(array_sizes[i], 0);
+        auto *ptr = new uint8_t[sizeof(Derived)];
+        auto *d = new(ptr) Derived(i);
+        d->~Derived();
+        ::operator delete[](ptr);
+    }
+
     for(size_t i = 0; i < 4; i++) {
         std::array<std::thread, 4> t;
         for(size_t z = 0; z < 4; z++) {
