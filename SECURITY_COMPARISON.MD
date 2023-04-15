@@ -29,7 +29,7 @@ Heap allocators hide incredible complexity behind `malloc` and `free`. They must
 |Adjacent Chunk Verification          |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
 |Delayed Free                         |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:x:               |:heavy_plus_sign: |:heavy_check_mark:|:heavy_check_mark:|:heavy_plus_sign: |:heavy_check_mark:
 |Dangling Pointer Detection           |:heavy_plus_sign: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_plus_sign: |:x:
-|GWP-ASAN Like Sampling               |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:grey_question:   |:x:
+|GWP-ASAN Like Sampling               |:heavy_plus_sign: |:heavy_plus_sign: |:x:               |:heavy_check_mark:              |:x:               |:x:               |:x:               |:x:               |:grey_question:   |:x:
 |Size Mismatch Detection              |:heavy_check_mark:|:heavy_check_mark:|:x:               |:x:              |:heavy_plus_sign: |:x:               |:x:               |:heavy_check_mark:|:heavy_plus_sign: |:heavy_plus_sign:
 |ARM Memory Tagging                   |:x:               |:heavy_check_mark:|:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:heavy_check_mark:               |:x:
 |Zone/Chunk CPU Pinning               |:heavy_plus_sign: |:x:               |:x:               |:x:              |:x:               |:x:               |:x:               |:x:               |:x:               |:x:
@@ -92,3 +92,5 @@ https://sourceware.org/glibc/wiki/MallocInternals
 https://source.chromium.org/chromium/chromium/src/+/master:base/allocator/partition_allocator/PartitionAlloc.md
 
 https://source.chromium.org/chromium/chromium/src/+/master:base/allocator/partition_allocator/starscan/README.md
+
+https://google.github.io/tcmalloc/gwp-asan.html
