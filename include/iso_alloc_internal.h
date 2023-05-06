@@ -188,10 +188,10 @@ assert(sizeof(size_t) >= 64)
     n &= ~(1UL << k);
 
 #define ALIGN_SZ_UP(n) \
-    ((((n + ALIGNMENT) - 1) >> 3) * ALIGNMENT)
+    ((n + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
 
 #define ALIGN_SZ_DOWN(n) \
-    ((((n + ALIGNMENT) - 1) >> 3) * ALIGNMENT) - ALIGNMENT
+    (((n + ALIGNMENT - 1) & ~(ALIGNMENT - 1)) - ALIGNMENT)
 
 #define ROUND_UP_PAGE(n) \
     ((((n + g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
