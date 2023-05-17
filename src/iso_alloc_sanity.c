@@ -27,7 +27,7 @@ pthread_t _page_fault_thread;
 struct uffdio_api _uffd_api;
 int64_t _uf_fd;
 
-INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd() {
+INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd(void) {
     _uf_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
 
     if(_uf_fd == ERR) {
@@ -247,7 +247,7 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
 
 #if UNINIT_READ_SANITY
     struct uffdio_register reg = {0};
-    reg.range.start = (uint64_t) ROUND_DOWN_PAGE(p);
+    reg.range.start = (uint64_t) ROUND_DOWN_PAGE((uintptr_t) p);
     reg.range.len = g_page_size;
     reg.mode = UFFDIO_REGISTER_MODE_MISSING;
 #endif

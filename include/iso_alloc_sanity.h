@@ -62,7 +62,7 @@ extern _sane_allocation_t _sane_allocations[MAX_SANE_SAMPLES];
 extern uint64_t _sanity_canary;
 
 #if UNINIT_READ_SANITY
-INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd();
+INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd(void);
 INTERNAL_HIDDEN void *_page_fault_thread_handler(void *uf_fd);
 #endif
 
