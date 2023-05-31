@@ -479,7 +479,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     char *name = NULL;
 
-#if NAMED_MAPPINGS && __ANDROID__
+#if NAMED_MAPPINGS && (__ANDROID__ || KERNEL_VERSION_SEQ_5_17)
     if(internal == true) {
         name = INTERNAL_UZ_NAME;
     } else {
@@ -503,7 +503,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 #endif
     void *p = mmap_rw_pages(total_size, false, name);
 
-#if __ANDROID__ && NAMED_MAPPINGS && MEMORY_TAGGING
+#if(__ANDROID__ || KERNEL_VERSION_SEQ_5_17) && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
         name = MEM_TAG_NAME;
     }

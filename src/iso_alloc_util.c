@@ -167,7 +167,7 @@ INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
 }
 
 INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
-#if NAMED_MAPPINGS && __ANDROID__
+#if NAMED_MAPPINGS && (__ANDROID__ || KERNEL_VERSION_SEQ_5_17)
     return prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, sz, name);
 #else
     return 0;
