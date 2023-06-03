@@ -403,7 +403,8 @@ libc_sanity_tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memset_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memset_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memmove_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memmove_sanity $(LDFLAGS)
-	build/memset_sanity ; build/memcpy_sanity; build/memmove_sanity;
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bzero_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bzero_sanity $(LDFLAGS)
+	build/memset_sanity ; build/memcpy_sanity; build/memmove_sanity; build/bzero_sanity ;
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"

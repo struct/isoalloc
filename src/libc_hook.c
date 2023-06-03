@@ -19,4 +19,13 @@ EXTERNAL_API void *memmove(void *dest, const void *src, size_t n) {
 EXTERNAL_API void *memset(void *dest, int b, size_t n) {
     return _iso_alloc_memset(dest, b, n);
 }
+
+/*
+ * bzero is removed from the POSIX standard in IEEE Std 1003.1-2008, but still a valid *BSD extension
+ */
+#if(__FreeBSD__ || __NetBSD__ || __OpenBSD__ || __DragonFly__)
+EXTERNAL_API void bzero(void *dest, size_t n) {
+    (void) _iso_alloc_memset(dest, 0, n);
+}
+#endif
 #endif
