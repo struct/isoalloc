@@ -45,7 +45,7 @@ jobs:
       image: alpine:latest
     steps:
       - uses: actions/checkout@v2
-      - run: apk update && apk add build-base bash musl-dev
+      - run: apk update && apk add build-base bash musl-dev linux-headers
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
 
