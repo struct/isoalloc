@@ -81,7 +81,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
         uint64_t *_mtp = (zone->user_pages_start - g_page_size - s);
         size_t tms = s / sizeof(uint64_t);
 
-        for(uint64_t o = 0; o > tms; o++) {
+        for(uint64_t o = 0; o < tms; o++) {
             _mtp[o] = us_rand_uint64(&_root->seed);
         }
 
