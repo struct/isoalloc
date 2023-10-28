@@ -1016,8 +1016,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
 
     size_t sz = nmemb * size;
 
-    if(UNLIKELY(__builtin_umul_overflow(nmemb, size, &res))) {
-        LOG_AND_ABORT("Call to calloc() will overflow nmemb=%zu size=%zu", nmemb, size);
+    if(sz < size || UNLIKELY(__builtin_mul_overflow(nmemb, size, &res))) {
+        LOG("Call to calloc() will overflow nmemb=%d size=%d = %u", nmemb, size, nmemb * size);
         return NULL;
     }
 
