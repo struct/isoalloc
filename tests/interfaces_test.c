@@ -18,12 +18,11 @@ int main(int argc, char *argv[]) {
         LOG_AND_ABORT("iso_calloc failed")
     }
 
-    p = iso_calloc(INT_MAX-1, 4);
+    p = iso_calloc(INT_MAX - 1, 4);
 
     if(p != NULL) {
         LOG_AND_ABORT("iso_calloc over check failed")
     }
-
 
     iso_free(p);
 
