@@ -39,6 +39,23 @@ class Derived : Base {
         iso_free(str);
     }
 
+    void operator delete(void *p) {}
+
+    void operator delete(void *p, void *h) {
+        Derived *d = static_cast<Derived *>(p);
+        d->~Derived();
+        uint8_t *plc = static_cast<uint8_t *>(h);
+        delete[] plc;
+    }
+
+#if __cplusplus >= 202002L
+    /* Note this need to be class member */
+    void operator delete(Derived *ptr, std::destroying_delete_t) {
+        ptr->~Derived();
+        ::operator delete(ptr);
+    }
+#endif
+
     uint32_t count;
 };
 
@@ -99,8 +116,7 @@ int main(int argc, char *argv[]) {
         allocate(array_sizes[i], 0);
         auto *ptr = new uint8_t[sizeof(Derived)];
         auto *d = new(ptr) Derived(i);
-        d->~Derived();
-        ::operator delete[](ptr);
+        Derived::operator delete(d, ptr);
     }
 
     for(size_t i = 0; i < 4; i++) {
