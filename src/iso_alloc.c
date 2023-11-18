@@ -225,10 +225,21 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 #endif
     MLOCK(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
 
-    for(int64_t i = 0; i < DEFAULT_ZONE_COUNT; i++) {
+    for(int i = 0; i < DEFAULT_ZONE_COUNT; i++) {
         if((_iso_new_zone(default_zones[i], true, -1)) == NULL) {
             LOG_AND_ABORT("Failed to create a new zone");
         }
+    }
+
+    char *name = NULL;
+
+#if NAMED_MAPPINGS && (__ANDROID__ || KERNEL_VERSION_SEQ_5_17)
+    name = PREALLOC_BITMAPS;
+#endif
+
+    for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+        _root->bitmaps[i].bitmap = mmap_rw_pages(g_page_size, false, name);
+        _root->bitmaps[i].bucket = small_bitmap_sizes[i];
     }
 
     _root->seed = rand_uint64();
@@ -329,7 +340,19 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
 #endif
 
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
-    munmap(zone->bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
+
+    if(zone->preallocated_bitmap_idx == -1) {
+        munmap(zone->bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
+    } else {
+        for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+            if(zone->bitmap_size == _root->bitmaps[i].bucket) {
+                UNSET_BIT(_root->bitmaps[i].in_use, zone->preallocated_bitmap_idx);
+                __iso_memset(zone->bitmap_start, 0x0, zone->bitmap_size);
+                break;
+            }
+        }
+    }
+
     munmap(zone->user_pages_start - g_page_size, (ZONE_USER_SIZE + g_page_size * 2));
 
     if(replace == true) {
@@ -470,12 +493,38 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
     uint32_t bitmap_size = (new_zone->chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
-    new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
-    new_zone->max_bitmap_idx = new_zone->bitmap_size >> 3;
 
     /* All of the following fields are immutable
      * and should not change once they are set */
-    new_zone->bitmap_start = mmap_guarded_rw_pages(new_zone->bitmap_size, true, ZONE_BITMAP_NAME);
+    new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
+    new_zone->max_bitmap_idx = new_zone->bitmap_size >> 3;
+
+    if(g_page_size > new_zone->bitmap_size) {
+        for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+            if(_root->bitmaps[i].bucket == new_zone->bitmap_size) {
+                for(int z = 0; z < BITS_PER_HALFWORD; z++) {
+                    if((GET_BIT(_root->bitmaps[i].in_use, z)) == 0) {
+                        new_zone->bitmap_start = _root->bitmaps[i].bitmap + (new_zone->bitmap_size * z);
+                        new_zone->preallocated_bitmap_idx = z;
+                        SET_BIT(_root->bitmaps[i].in_use, z);
+                        break;
+                    }
+                }
+            }
+
+            if(new_zone->bitmap_start != NULL) {
+                break;
+            }
+        }
+
+        if(new_zone->bitmap_start == NULL) {
+            new_zone->bitmap_start = mmap_guarded_rw_pages(new_zone->bitmap_size, true, ZONE_BITMAP_NAME);
+            new_zone->preallocated_bitmap_idx = -1;
+        }
+    } else {
+        new_zone->bitmap_start = mmap_guarded_rw_pages(new_zone->bitmap_size, true, ZONE_BITMAP_NAME);
+        new_zone->preallocated_bitmap_idx = -1;
+    }
 
     char *name = NULL;
 
@@ -1043,7 +1092,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #endif
 
     /* Sizes are always a power of 2, even for private zones */
-    if(size < SMALL_SIZE_MAX && is_pow2(size) != true) {
+    if(size < SMALL_SIZE_MAX && is_pow2(size) == false) {
         size = next_pow2(size);
     }
 
@@ -1484,7 +1533,6 @@ INTERNAL_HIDDEN void flush_caches(void) {
 INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void) {
     /* Free all the thread quarantined chunks */
     size_t chunk_quarantine_count = _root->chunk_quarantine_count;
-
     for(int64_t i = 0; i < chunk_quarantine_count; i++) {
         _iso_free_internal_unlocked((void *) _root->chunk_quarantine[i], false, NULL);
     }
@@ -2087,6 +2135,10 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     UNLOCK_BIG_ZONE_USED();
     pthread_mutex_destroy(&_root->big_zone_used_mutex);
 #endif
+
+    for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+        munmap(_root->bitmaps[i].bitmap, g_page_size);
+    }
 
     unmap_guarded_pages(_root, sizeof(iso_alloc_root));
 #endif

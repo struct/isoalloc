@@ -97,7 +97,7 @@ EXTERNAL_API FLATTEN NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(vo
 EXTERNAL_API FLATTEN NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size) {
     unsigned int res;
 
-    if(__builtin_umul_overflow(nmemb, size, &res)) {
+    if(__builtin_mul_overflow(nmemb, size, &res)) {
         return NULL;
     }
 

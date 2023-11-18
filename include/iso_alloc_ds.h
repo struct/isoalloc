@@ -35,6 +35,7 @@ typedef uint8_t free_bit_slot_t;
 typedef struct {
     void *user_pages_start;                       /* Start of the pages backing this zone */
     void *bitmap_start;                           /* Start of the bitmap */
+    int8_t preallocated_bitmap_idx;               /* The bitmap is preallocated and its index */
     int64_t next_free_bit_slot;                   /* The last bit slot returned by get_next_free_bit_slot */
     free_bit_slot_t free_bit_slots_index;         /* Tracks how many entries in the cache are filled */
     free_bit_slot_t free_bit_slots_usable;        /* The oldest members of the free cache are served first */
@@ -74,6 +75,30 @@ typedef struct iso_alloc_big_zone_t {
     uint64_t canary_b;
 } __attribute__((packed, aligned(sizeof(int64_t)))) iso_alloc_big_zone_t;
 
+#define BITMAP_SIZE_16 16
+#define BITMAP_SIZE_32 32
+#define BITMAP_SIZE_64 64
+#define BITMAP_SIZE_128 128
+#define BITMAP_SIZE_256 256
+#define BITMAP_SIZE_512 512
+#define BITMAP_SIZE_1024 1024
+
+/* Small bitmap sizes are in reverse order as
+ * smaller chunks are more likely to be needed */
+const static uint64_t small_bitmap_sizes[] = {BITMAP_SIZE_1024, BITMAP_SIZE_512, BITMAP_SIZE_256, BITMAP_SIZE_128,
+                                              BITMAP_SIZE_64, BITMAP_SIZE_32, BITMAP_SIZE_16};
+
+/* Preallocated pages for bitmaps are managed using
+ * an array of these structures placed in the root */
+typedef struct {
+    /* Our bitmap has a bitmap */
+    uint16_t in_use;
+    /* Bucket value determines how many times we divy up
+     * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
+    uint8_t bucket;
+    void *bitmap;
+} __attribute__((packed, aligned(sizeof(int64_t)))) iso_alloc_bitmap_t;
+
 /* There is only one iso_alloc root per-process.
  * It contains an array of zone structures. Each
  * Zone represents a number of contiguous pages
@@ -95,6 +120,10 @@ typedef struct {
      * to a zone index. Misses are gracefully handled and
      * more common with a higher RSS and more mappings. */
     chunk_lookup_table_t *chunk_lookup_table;
+    /* For chunk sizes >= 1024 our bitmap size is smaller
+    * than a page. This optimization preallocates pages to
+    * hold multiple bitmaps for these zones */
+    iso_alloc_bitmap_t bitmaps[sizeof(small_bitmap_sizes)];
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
