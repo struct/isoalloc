@@ -92,19 +92,14 @@ const static int small_bitmap_sizes[] = {
     BITMAP_SIZE_128,
     BITMAP_SIZE_64,
     BITMAP_SIZE_32,
-/* MacOS targets have 16k page sizes, we would need a
- * 128-bit bitmap to divide up these pages for zones
- * holding very large chunks */
-#if !__APPLE__
     BITMAP_SIZE_16,
-#endif
 };
 
 /* Preallocated pages for bitmaps are managed using
  * an array of these structures placed in the root */
 typedef struct {
     /* Our bitmap has a bitmap */
-    uint64_t in_use;
+    uint32_t in_use;
     /* Bucket value determines how many times we divy up
      * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
     uint8_t bucket;
