@@ -38,6 +38,7 @@
 #define INTERNAL_UZ_NAME "internal isoalloc user zone"
 #define PRIVATE_UZ_NAME "private isoalloc user zone"
 #define MEM_TAG_NAME "isoalloc zone mem tags"
+#define PREALLOC_BITMAPS "isoalloc small bitmaps"
 #endif
 
 /* If you're using the UAF_PTR_PAGE functionality and
