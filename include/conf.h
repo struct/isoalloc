@@ -88,7 +88,7 @@
  * we construct the zone bitmap. You can think of this
  * value as roughly equivalent to M_MMAP_THRESHOLD. Valid
  * values for SMALL_SIZE_MAX are powers of 2 through 131072 */
-#define SMALL_SIZE_MAX 65535
+#define SMALL_SIZE_MAX 65536
 
 /* Big zones are for any allocation bigger than SMALL_SIZE_MAX.
  * We reuse them when possible but not if the reuse would

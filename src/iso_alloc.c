@@ -1711,6 +1711,7 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
                 _root->big_zone_used = big_zone->next;
             }
 
+            big_zone->next = NULL;
             UNLOCK_BIG_ZONE_USED();
             return big_zone;
         }
@@ -1744,6 +1745,8 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
      * to do is sanitize the mapping and mark it free.
      * The pages that back the big zone can be reused
      * if we aren't at max entries in the free list */
+    LOCK_BIG_ZONE_FREE();
+
     if(LIKELY(permanent == false) && _root->big_zone_free_count < BIG_ZONE_MAX_FREE_LIST &&
        big_zone->ttl < BIG_ZONE_ALLOC_RETIRE) {
         POISON_BIG_ZONE(big_zone);
@@ -1754,7 +1757,6 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
 #endif
 
-        LOCK_BIG_ZONE_FREE();
         big_zone->next = _root->big_zone_free;
         _root->big_zone_free = MASK_BIG_ZONE_NEXT(big_zone);
         _root->big_zone_free_count++;
@@ -1762,20 +1764,24 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         return;
     }
 
+    UNLOCK_BIG_ZONE_FREE();
+
     /* Our zone is already removed from the list via find_big_zone() */
     if(permanent == true) {
         big_zone->free = true;
-
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
         dont_need_pages(big_zone->user_pages_start, big_zone->size);
-
         __iso_memset(big_zone, POISON_BYTE, sizeof(iso_alloc_big_zone_t));
 
         /* Big zone meta data is at a random offset from its base page */
         mprotect_pages(((void *) ROUND_DOWN_PAGE((uintptr_t) big_zone)), g_page_size, PROT_NONE);
     } else {
+#if BIG_ZONE_GUARD
         /* Free the user pages first */
         unmap_guarded_pages(big_zone->user_pages_start, big_zone->size);
+#else
+        munmap(big_zone->user_pages_start, big_zone->size);
+#endif
 
 #if BIG_ZONE_META_DATA_GUARD
         unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
@@ -1788,7 +1794,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     const size_t new_size = ROUND_UP_PAGE(size);
 
-    if(new_size < size || new_size > BIG_SZ_MAX || size <= SMALL_SIZE_MAX) {
+    if(new_size < size || new_size > BIG_SZ_MAX || size < SMALL_SIZE_MAX) {
 #if ABORT_ON_NULL
         LOG_AND_ABORT("Cannot allocate a big zone of %ld bytes", new_size);
 #endif
@@ -1918,7 +1924,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     _root->big_zone_used_count++;
 
     UNLOCK_BIG_ZONE_USED();
-
     return new_big->user_pages_start;
 }
 
