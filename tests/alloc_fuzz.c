@@ -157,7 +157,7 @@ int64_t allocate(size_t array_size, size_t allocation_size) {
     return allocs;
 }
 
-void *start() {
+void *start(void *p) {
     uint64_t total_allocations = 0;
     uint64_t loop = 1;
 
