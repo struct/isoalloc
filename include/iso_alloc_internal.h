@@ -161,8 +161,6 @@ assert(sizeof(size_t) >= 64)
 #define BITS_PER_BYTE 8
 #define BITS_PER_BYTE_SHIFT 3
 
-#define BITS_PER_HALFWORD 16
-
 #define BITS_PER_QWORD 64
 #define BITS_PER_QWORD_SHIFT 6
 

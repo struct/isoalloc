@@ -237,7 +237,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     name = PREALLOC_BITMAPS;
 #endif
 
-    for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+    for(int i = 0; i < sizeof(small_bitmap_sizes) / sizeof(int); i++) {
         _root->bitmaps[i].bitmap = mmap_rw_pages(g_page_size, false, name);
         _root->bitmaps[i].bucket = small_bitmap_sizes[i];
     }
@@ -502,7 +502,15 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     if(g_page_size > new_zone->bitmap_size) {
         for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
             if(_root->bitmaps[i].bucket == new_zone->bitmap_size) {
-                for(int z = 0; z < BITS_PER_HALFWORD; z++) {
+                /* Easy path is the bitmap is unused */
+                if(_root->bitmaps[i].in_use == 0) {
+                    new_zone->bitmap_start = _root->bitmaps[i].bitmap;
+                    new_zone->preallocated_bitmap_idx = 0;
+                    SET_BIT(_root->bitmaps[i].in_use, 0);
+                    break;
+                }
+
+                for(int z = 0; z < BITMAP_BITS; z++) {
                     if((GET_BIT(_root->bitmaps[i].in_use, z)) == 0) {
                         new_zone->bitmap_start = _root->bitmaps[i].bitmap + (new_zone->bitmap_size * z);
                         new_zone->preallocated_bitmap_idx = z;

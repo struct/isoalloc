@@ -85,14 +85,36 @@ typedef struct iso_alloc_big_zone_t {
 
 /* Small bitmap sizes are in reverse order as
  * smaller chunks are more likely to be needed */
-const static uint64_t small_bitmap_sizes[] = {BITMAP_SIZE_1024, BITMAP_SIZE_512, BITMAP_SIZE_256, BITMAP_SIZE_128,
-                                              BITMAP_SIZE_64, BITMAP_SIZE_32, BITMAP_SIZE_16};
+const static int small_bitmap_sizes[] = {
+    BITMAP_SIZE_1024,
+    BITMAP_SIZE_512,
+    BITMAP_SIZE_256,
+    BITMAP_SIZE_128,
+    BITMAP_SIZE_64,
+    BITMAP_SIZE_32,
+/* MacOS targets have 16k page sizes, we would need a
+ * 128-bit bitmap to divide up these pages for zones
+ * holding very large chunks */
+#if !__APPLE__
+    BITMAP_SIZE_16,
+#endif
+};
+
+#if __APPLE__
+#define BITMAP_BITS 64
+#else
+#define BITMAP_BITS 32
+#endif
 
 /* Preallocated pages for bitmaps are managed using
  * an array of these structures placed in the root */
 typedef struct {
     /* Our bitmap has a bitmap */
-    uint16_t in_use;
+#if __APPLE__
+    uint64_t in_use;
+#else
+    uint32_t in_use;
+#endif
     /* Bucket value determines how many times we divy up
      * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
     uint8_t bucket;
