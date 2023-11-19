@@ -100,21 +100,11 @@ const static int small_bitmap_sizes[] = {
 #endif
 };
 
-#if __APPLE__
-#define BITMAP_BITS 64
-#else
-#define BITMAP_BITS 32
-#endif
-
 /* Preallocated pages for bitmaps are managed using
  * an array of these structures placed in the root */
 typedef struct {
     /* Our bitmap has a bitmap */
-#if __APPLE__
     uint64_t in_use;
-#else
-    uint32_t in_use;
-#endif
     /* Bucket value determines how many times we divy up
      * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
     uint8_t bucket;

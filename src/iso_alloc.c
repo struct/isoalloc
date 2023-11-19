@@ -510,7 +510,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
                     break;
                 }
 
-                for(int z = 0; z < BITMAP_BITS; z++) {
+                for(int z = 0; z < BITS_PER_QWORD; z++) {
                     if((GET_BIT(_root->bitmaps[i].in_use, z)) == 0) {
                         new_zone->bitmap_start = _root->bitmaps[i].bitmap + (new_zone->bitmap_size * z);
                         new_zone->preallocated_bitmap_idx = z;
