@@ -74,7 +74,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks(void) {
 
     LOCK_ROOT();
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    for(uint16_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         total_leaks += _iso_alloc_zone_leak_detector(zone, false);
     }
@@ -125,8 +125,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     uint32_t was_used = 0;
     int64_t bms = zone->bitmap_size / sizeof(bitmap_index_t);
 
-    for(int64_t i = 0; i < bms; i++) {
-        for(size_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+    for(bitmap_index_t i = 0; i < bms; i++) {
+        for(int j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
 
             if(bm[i] == 0) {
                 continue;
@@ -194,7 +194,7 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_zone_mem_usage(iso_alloc_zone_t *zone) {
 INTERNAL_HIDDEN uint64_t __iso_alloc_mem_usage(void) {
     uint64_t mem_usage = 0;
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    for(uint16_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         mem_usage += zone->bitmap_size;
         mem_usage += ZONE_USER_SIZE;
@@ -327,17 +327,17 @@ INTERNAL_HIDDEN void _iso_output_profile() {
     _iso_alloc_printf(profiler_fd, "freed=%d\n", _free_count);
     _iso_alloc_printf(profiler_fd, "free_sampled=%d\n", _free_sampled_count);
 
-    for(uint32_t i = 0; i < _root->zones_used; i++) {
+    for(uint16_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _zone_profiler_map[zone->chunk_size].total++;
     }
 
-    for(uint32_t i = 0; i < _alloc_bts_count; i++) {
+    for(size_t i = 0; i < _alloc_bts_count; i++) {
         iso_alloc_traces_t *abts = &_alloc_bts[i];
         _iso_alloc_printf(profiler_fd, "alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d\n",
                           i, abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size);
 
-        for(int32_t j = 0; j < BACKTRACE_DEPTH; j++) {
+        for(int j = 0; j < BACKTRACE_DEPTH; j++) {
             if(abts->callers[j] < 0x1000) {
                 continue;
             }
@@ -353,12 +353,12 @@ INTERNAL_HIDDEN void _iso_output_profile() {
         }
     }
 
-    for(uint32_t i = 0; i < _free_bts_count; i++) {
+    for(size_t i = 0; i < _free_bts_count; i++) {
         iso_free_traces_t *fbts = &_free_bts[i];
         _iso_alloc_printf(profiler_fd, "free_backtrace=%d,backtrace_hash=0x%x,calls=%d\n",
                           i, fbts->backtrace_hash, fbts->call_count);
 
-        for(int32_t j = 0; j < BACKTRACE_DEPTH; j++) {
+        for(int j = 0; j < BACKTRACE_DEPTH; j++) {
             if(fbts->callers[j] < 0x1000) {
                 continue;
             }
@@ -374,7 +374,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
         }
     }
 
-    for(uint32_t i = 0; i < SMALL_SIZE_MAX; i++) {
+    for(int i = 0; i < SMALL_SIZE_MAX; i++) {
         if(_zone_profiler_map[i].count != 0) {
             _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
         }
@@ -396,7 +396,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
 
     _alloc_sampled_count++;
 
-    for(uint64_t i = 0; i < _root->zones_used; i++) {
+    for(uint16_t i = 0; i < _root->zones_used; i++) {
         uint32_t used = 0;
         iso_alloc_zone_t *zone = &_root->zones[i];
 
@@ -421,7 +421,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
         uint16_t hash = (_get_backtrace_hash() & HG_SIZE);
 
         /* Take the backtrace hash and determine if its already been seen */
-        for(uint64_t i = 0; i < _alloc_bts_count; i++) {
+        for(size_t i = 0; i < _alloc_bts_count; i++) {
             if(_alloc_bts[i].backtrace_hash == hash) {
                 abts = &_alloc_bts[i];
 
@@ -464,7 +464,7 @@ INTERNAL_HIDDEN void _iso_free_profile(void) {
         uint16_t hash = (_get_backtrace_hash() & HG_SIZE);
 
         /* Take the backtrace hash and determine if its already been seen */
-        for(uint32_t i = 0; i < _free_bts_count; i++) {
+        for(size_t i = 0; i < _free_bts_count; i++) {
             if(_free_bts[i].backtrace_hash == hash) {
                 fbts = &_free_bts[i];
                 fbts->call_count++;

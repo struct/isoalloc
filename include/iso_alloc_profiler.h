@@ -5,6 +5,7 @@
 
 #if HEAP_PROFILER
 #include "compiler.h"
+#include "conf.h"
 
 #define PROFILER_ODDS 10000
 #define HG_SIZE 65535
@@ -50,7 +51,7 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size);
 INTERNAL_HIDDEN void _iso_free_profile(void);
 INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out);
 INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out);
-INTERNAL_HIDDEN void _iso_alloc_reset_traces();
+INTERNAL_HIDDEN void _iso_alloc_reset_traces(void);
 #endif
 
 INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, bool profile);

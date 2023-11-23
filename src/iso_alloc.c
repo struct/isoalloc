@@ -99,9 +99,9 @@ INTERNAL_HIDDEN void _verify_big_zone_list(iso_alloc_big_zone_t *head) {
 }
 
 INTERNAL_HIDDEN void _verify_all_zones(void) {
-    const size_t zones_used = _root->zones_used;
+    const uint16_t zones_used = _root->zones_used;
 
-    for(int32_t i = 0; i < zones_used; i++) {
+    for(uint16_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
         if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
@@ -758,9 +758,9 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t
      * to add duplicate bit_slots which would result in iso_alloc()
      * handing out in-use chunks. The _iso_alloc() path also does
      * a check on the bitmap itself before handing out any chunks */
-    const int32_t max_cache_slots = (ZONE_FREE_LIST_SZ >> 3);
+    const free_bit_slot_t max_cache_slots = (ZONE_FREE_LIST_SZ >> 3);
 
-    for(int32_t i = zone->free_bit_slots_usable; i < max_cache_slots; i++) {
+    for(free_bit_slot_t i = zone->free_bit_slots_usable; i < max_cache_slots; i++) {
         if(zone->free_bit_slots[i] == bit_slot) {
             LOG_AND_ABORT("Zone[%d] already contains bit slot %lu in cache", zone->index, bit_slot);
         }
@@ -2077,7 +2077,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
     flush_chunk_quarantine();
 
-    const size_t zones_used = _root->zones_used;
+    const uint16_t zones_used = _root->zones_used;
 
 #if HEAP_PROFILER
     _iso_output_profile();
@@ -2096,7 +2096,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     uint64_t mb = 0;
 #endif
 
-    for(uint32_t i = 0; i < zones_used; i++) {
+    for(uint16_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _iso_alloc_zone_leak_detector(zone, false);
     }
@@ -2110,7 +2110,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #endif
 
-    for(uint32_t i = 0; i < zones_used; i++) {
+    for(uint16_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
         _verify_zone(zone);
 #if ISO_DTOR_CLEANUP
