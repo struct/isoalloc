@@ -7,36 +7,35 @@ jobs:
       - uses: actions/checkout@v2
       - run: make tests
       - run: make cpp_tests
-  testsuite-clang11:
+  testsuite-clang:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [11, 12, 13, 14, 15]
     steps:
-      - uses: actions/checkout@v2
-      - run: sudo apt install clang-11
-      - run: make tests
-      - run: make cpp_tests
-  testsuite-clang12:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: sudo apt install clang-12
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt install clang-${{ matrix.version }}
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ matrix.version }} 100
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ matrix.version }} 100
       - run: make tests
       - run: make cpp_tests
   testsuite-clang12-perf:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: sudo apt install clang-12
       - run: make malloc_cmp_test
   testsuite-clang-format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: sudo apt install clang clang-format-12
       - run: make format-ci
   testsuite-gcc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
   testsuite-musl:
@@ -44,7 +43,7 @@ jobs:
     container:
       image: alpine:latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: apk update && apk add build-base bash musl-dev linux-headers
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
