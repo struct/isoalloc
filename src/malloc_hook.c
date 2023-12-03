@@ -54,7 +54,15 @@ EXTERNAL_API void *reallocarray(void *p, size_t n, size_t s) {
 }
 
 EXTERNAL_API int __posix_memalign(void **r, size_t a, size_t s) {
-    /* All iso_alloc allocations are 8 byte aligned */
+    if(is_pow2(a) == false) {
+        *r = NULL;
+        return EINVAL;
+    }
+
+    if(s < a) {
+        s = a;
+    }
+
     *r = iso_alloc(s);
 
     if(*r != NULL) {
