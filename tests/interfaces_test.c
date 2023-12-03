@@ -105,13 +105,13 @@ int main(int argc, char *argv[]) {
 
     uint8_t *ap = NULL;
     int rr = 0;
-    rr = posix_memalign((void**) &ap, 16, 64);
+    rr = posix_memalign((void **) &ap, 16, 64);
     if(ap == NULL || rr != 0 || ((uintptr_t) ap % 16) != 0) {
         LOG_AND_ABORT("ap %p | %d != 0", ap, (uintptr_t) ap % 16);
     }
     free(ap);
 
-    rr = posix_memalign((void**) &ap, 256, 16);
+    rr = posix_memalign((void **) &ap, 256, 16);
     if(ap == NULL || rr != 0 || ((uintptr_t) ap % 256) != 0) {
         LOG_AND_ABORT("ap %p | %d != 0", ap, (uintptr_t) ap % 256);
     }
