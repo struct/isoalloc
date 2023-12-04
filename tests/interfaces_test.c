@@ -1,14 +1,14 @@
 /* iso_alloc interfaces_test.c
  * Copyright 2023 - chris.rohlf@gmail.com */
-
+#define _POSIX_C_SOURCE 200809L
+#include <stdlib.h>
+#include <assert.h>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
 #if HEAP_PROFILER
 #include "iso_alloc_profiler.h"
 #endif
-
-#include <assert.h>
 
 int main(int argc, char *argv[]) {
     /* Test iso_calloc() */
@@ -102,6 +102,20 @@ int main(int argc, char *argv[]) {
 
     void *sz = iso_alloc(8192);
     iso_free_size(sz, 8192);
+
+    uint8_t *ap = NULL;
+    int rr = 0;
+    rr = posix_memalign((void **) &ap, 16, 64);
+    if(ap == NULL || rr != 0 || ((uintptr_t) ap % 16) != 0) {
+        LOG_AND_ABORT("ap %p | %d != 0", ap, (uintptr_t) ap % 16);
+    }
+    free(ap);
+
+    rr = posix_memalign((void **) &ap, 256, 16);
+    if(ap == NULL || rr != 0 || ((uintptr_t) ap % 256) != 0) {
+        LOG_AND_ABORT("ap %p | %d != 0", ap, (uintptr_t) ap % 256);
+    }
+    free(ap);
 
 #if HEAP_PROFILER
     iso_alloc_traces_t at[BACKTRACE_DEPTH_SZ];
