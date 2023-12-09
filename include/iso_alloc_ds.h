@@ -35,29 +35,29 @@ typedef uint8_t free_bit_slot_t;
 typedef struct {
     void *user_pages_start;                       /* Start of the pages backing this zone */
     void *bitmap_start;                           /* Start of the bitmap */
-    int8_t preallocated_bitmap_idx;               /* The bitmap is preallocated and its index */
     int64_t next_free_bit_slot;                   /* The last bit slot returned by get_next_free_bit_slot */
-    free_bit_slot_t free_bit_slots_index;         /* Tracks how many entries in the cache are filled */
-    free_bit_slot_t free_bit_slots_usable;        /* The oldest members of the free cache are served first */
     bit_slot_t free_bit_slots[ZONE_FREE_LIST_SZ]; /* A cache of bit slots that point to freed chunks */
     uint64_t canary_secret;                       /* Each zone has its own canary secret */
     uint64_t pointer_mask;                        /* Each zone has its own pointer protection secret */
+    bitmap_index_t max_bitmap_idx;                /* Max bitmap index for this bitmap */
     uint32_t chunk_size;                          /* Size of chunks managed by this zone */
     uint32_t bitmap_size;                         /* Size of the bitmap in bytes */
-    bitmap_index_t max_bitmap_idx;                /* Max bitmap index for this bitmap */
-    bool internal;                                /* Zones can be managed by iso_alloc or private */
-    bool is_full;                                 /* Flags whether this zone is full to avoid bit slot searches */
-    uint16_t index;                               /* Zone index */
-    uint16_t next_sz_index;                       /* What is the index of the next zone of this size */
-    uint32_t alloc_count;                         /* Total number of lifetime allocations */
     uint32_t af_count;                            /* Increment/Decrement with each alloc/free operation */
     uint32_t chunk_count;                         /* Total number of chunks in this zone */
+    uint32_t alloc_count;                         /* Total number of lifetime allocations */
+    uint16_t index;                               /* Zone index */
+    uint16_t next_sz_index;                       /* What is the index of the next zone of this size */
+    free_bit_slot_t free_bit_slots_index;         /* Tracks how many entries in the cache are filled */
+    free_bit_slot_t free_bit_slots_usable;        /* The oldest members of the free cache are served first */
     uint8_t chunk_size_pow2;                      /* Computed by _log2(chunk_size) at zone creation */
-#if MEMORY_TAGGING
-    bool tagged; /* Zone supports memory tagging */
-#endif
+    int8_t preallocated_bitmap_idx;               /* The bitmap is preallocated and its index */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
+#endif
+    bool internal; /* Zones can be managed by iso_alloc or private */
+    bool is_full;  /* Flags whether this zone is full to avoid bit slot searches */
+#if MEMORY_TAGGING
+    bool tagged; /* Zone supports memory tagging */
 #endif
 } __attribute__((packed, aligned(sizeof(int64_t)))) iso_alloc_zone_t;
 
@@ -84,7 +84,9 @@ typedef struct iso_alloc_big_zone_t {
 #define BITMAP_SIZE_1024 1024
 
 /* Small bitmap sizes are in reverse order as
- * smaller chunks are more likely to be needed */
+ * smaller chunks are more likely to be needed.
+ * The extra 0 is for alignment, we subtract it
+ * when iterating _root->bitmaps */
 const static int small_bitmap_sizes[] = {
     BITMAP_SIZE_1024,
     BITMAP_SIZE_512,
@@ -93,17 +95,17 @@ const static int small_bitmap_sizes[] = {
     BITMAP_SIZE_64,
     BITMAP_SIZE_32,
     BITMAP_SIZE_16,
-};
+    0};
 
 /* Preallocated pages for bitmaps are managed using
  * an array of these structures placed in the root */
 typedef struct {
+    void *bitmap;
     /* Our bitmap has a bitmap */
     uint32_t in_use;
     /* Bucket value determines how many times we divy up
      * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
-    uint8_t bucket;
-    void *bitmap;
+    uint32_t bucket;
 } __attribute__((packed, aligned(sizeof(int64_t)))) iso_alloc_bitmap_t;
 
 /* There is only one iso_alloc root per-process.
@@ -111,10 +113,7 @@ typedef struct {
  * Zone represents a number of contiguous pages
  * that hold chunks containing caller data */
 typedef struct {
-    uint16_t zones_used;
-    uint32_t zone_retirement_shf;
-    uintptr_t *chunk_quarantine;
-    size_t chunk_quarantine_count;
+    iso_alloc_zone_t *zones;
     /* Zones are linked by their next_sz_index member which
      * tells the allocator where in the _root->zones array
      * it can find the next zone that holds the same size
@@ -127,20 +126,25 @@ typedef struct {
      * to a zone index. Misses are gracefully handled and
      * more common with a higher RSS and more mappings. */
     chunk_lookup_table_t *chunk_lookup_table;
+    uintptr_t *chunk_quarantine;
+    iso_alloc_big_zone_t *big_zone_free;
+    iso_alloc_big_zone_t *big_zone_used;
+#if NO_ZERO_ALLOCATIONS
+    void *zero_alloc_page;
+#endif
+#if UAF_PTR_PAGE
+    void *uaf_ptr_page;
+#endif
     /* For chunk sizes >= 1024 our bitmap size is smaller
     * than a page. This optimization preallocates pages to
     * hold multiple bitmaps for these zones */
-    iso_alloc_bitmap_t bitmaps[sizeof(small_bitmap_sizes)];
+    iso_alloc_bitmap_t bitmaps[sizeof(small_bitmap_sizes) / sizeof(int)];
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
-    iso_alloc_big_zone_t *big_zone_free;
-    iso_alloc_big_zone_t *big_zone_used;
-    int32_t big_zone_free_count;
-    int32_t big_zone_used_count;
-    iso_alloc_zone_t *zones;
-    size_t zones_size;
     uint64_t seed;
+    size_t chunk_quarantine_count;
+    size_t zones_size;
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
     atomic_flag big_zone_free_flag;
@@ -150,12 +154,10 @@ typedef struct {
     pthread_mutex_t big_zone_used_mutex;
 #endif
 #endif
-#if NO_ZERO_ALLOCATIONS
-    void *zero_alloc_page;
-#endif
-#if UAF_PTR_PAGE
-    void *uaf_ptr_page;
-#endif
+    uint32_t zone_retirement_shf;
+    int32_t big_zone_free_count;
+    int32_t big_zone_used_count;
+    uint16_t zones_used;
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 typedef struct {
