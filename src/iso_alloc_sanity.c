@@ -7,6 +7,120 @@
 #define MEM_SANITY_CHK(p, start, sz) (start <= p && (start + ZONE_USER_SIZE) - n > p && n > sz)
 #endif
 
+#if ENABLE_ASAN
+INTERNAL_HIDDEN void verify_all_zones(void) {
+    return;
+}
+
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
+    return;
+}
+
+INTERNAL_HIDDEN void _verify_all_zones(void) {
+    return;
+}
+
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
+    return;
+}
+#else
+/* Verify the integrity of all canary chunks and the
+ * canary written to all free chunks. This function
+ * either aborts or returns nothing */
+INTERNAL_HIDDEN void verify_all_zones(void) {
+    LOCK_ROOT();
+    _verify_all_zones();
+    UNLOCK_ROOT();
+}
+
+INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
+    LOCK_ROOT();
+    _verify_zone(zone);
+    UNLOCK_ROOT();
+}
+
+INTERNAL_HIDDEN void _verify_big_zone_list(iso_alloc_big_zone_t *head) {
+    iso_alloc_big_zone_t *big = head;
+
+    if(big != NULL) {
+        big = UNMASK_BIG_ZONE_NEXT(head);
+    }
+
+    while(big != NULL) {
+        check_big_canary(big);
+
+        if(big->size < SMALL_SIZE_MAX) {
+            LOG_AND_ABORT("Big zone size is too small %d", big->size);
+        }
+
+        if(big->size > BIG_SZ_MAX) {
+            LOG_AND_ABORT("Big zone size is too big %d", big->size);
+        }
+
+        if(big->user_pages_start == NULL) {
+            LOG_AND_ABORT("Big zone %p has NULL user pages", big);
+        }
+
+        if(big->next != NULL) {
+            big = UNMASK_BIG_ZONE_NEXT(big->next);
+        } else {
+            break;
+        }
+    }
+}
+
+INTERNAL_HIDDEN void _verify_all_zones(void) {
+    const uint16_t zones_used = _root->zones_used;
+
+    for(uint16_t i = 0; i < zones_used; i++) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+
+        if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
+            break;
+        }
+
+        _verify_zone(zone);
+    }
+
+    /* Root is locked already */
+    _verify_big_zone_list(_root->big_zone_used);
+    _verify_big_zone_list(_root->big_zone_free);
+}
+
+INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
+    UNMASK_ZONE_PTRS(zone);
+    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    bit_slot_t bit_slot;
+
+    if(zone->next_sz_index > _root->zones_used) {
+        LOG_AND_ABORT("Detected corruption in zone[%d] next_sz_index=%d", zone->index, zone->next_sz_index);
+    }
+
+    if(zone->next_sz_index != 0) {
+        iso_alloc_zone_t *zt = &_root->zones[zone->next_sz_index];
+        if(zone->chunk_size != zt->chunk_size) {
+            LOG_AND_ABORT("Inconsistent chunk sizes for zones %d,%d with chunk sizes %d,%d", zone->index, zt->index, zone->chunk_size, zt->chunk_size);
+        }
+    }
+
+    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
+        bit_slot_t bsl = bm[i];
+        for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+            /* If this bit is set it is either a free chunk or
+             * a canary chunk. Either way it should have a set
+             * of canaries we can verify */
+            if((GET_BIT(bsl, j)) == 1) {
+                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
+                const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
+                check_canary(zone, p);
+            }
+        }
+    }
+
+    MASK_ZONE_PTRS(zone);
+}
+#endif
+
 #if ALLOC_SANITY
 
 #if THREAD_SUPPORT

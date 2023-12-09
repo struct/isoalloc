@@ -35,121 +35,6 @@ uint32_t g_page_size;
 uint32_t g_page_size_shift;
 iso_alloc_root *_root;
 
-#if ENABLE_ASAN
-INTERNAL_HIDDEN void verify_all_zones(void) {
-    return;
-}
-
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
-    return;
-}
-
-INTERNAL_HIDDEN void _verify_all_zones(void) {
-    return;
-}
-
-INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
-    return;
-}
-#else
-
-/* Verify the integrity of all canary chunks and the
- * canary written to all free chunks. This function
- * either aborts or returns nothing */
-INTERNAL_HIDDEN void verify_all_zones(void) {
-    LOCK_ROOT();
-    _verify_all_zones();
-    UNLOCK_ROOT();
-}
-
-INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
-    LOCK_ROOT();
-    _verify_zone(zone);
-    UNLOCK_ROOT();
-}
-
-INTERNAL_HIDDEN void _verify_big_zone_list(iso_alloc_big_zone_t *head) {
-    iso_alloc_big_zone_t *big = head;
-
-    if(big != NULL) {
-        big = UNMASK_BIG_ZONE_NEXT(head);
-    }
-
-    while(big != NULL) {
-        check_big_canary(big);
-
-        if(big->size < SMALL_SIZE_MAX) {
-            LOG_AND_ABORT("Big zone size is too small %d", big->size);
-        }
-
-        if(big->size > BIG_SZ_MAX) {
-            LOG_AND_ABORT("Big zone size is too big %d", big->size);
-        }
-
-        if(big->user_pages_start == NULL) {
-            LOG_AND_ABORT("Big zone %p has NULL user pages", big);
-        }
-
-        if(big->next != NULL) {
-            big = UNMASK_BIG_ZONE_NEXT(big->next);
-        } else {
-            break;
-        }
-    }
-}
-
-INTERNAL_HIDDEN void _verify_all_zones(void) {
-    const uint16_t zones_used = _root->zones_used;
-
-    for(uint16_t i = 0; i < zones_used; i++) {
-        iso_alloc_zone_t *zone = &_root->zones[i];
-
-        if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
-            break;
-        }
-
-        _verify_zone(zone);
-    }
-
-    /* Root is locked already */
-    _verify_big_zone_list(_root->big_zone_used);
-    _verify_big_zone_list(_root->big_zone_free);
-}
-
-INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
-    UNMASK_ZONE_PTRS(zone);
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
-    bit_slot_t bit_slot;
-
-    if(zone->next_sz_index > _root->zones_used) {
-        LOG_AND_ABORT("Detected corruption in zone[%d] next_sz_index=%d", zone->index, zone->next_sz_index);
-    }
-
-    if(zone->next_sz_index != 0) {
-        iso_alloc_zone_t *zt = &_root->zones[zone->next_sz_index];
-        if(zone->chunk_size != zt->chunk_size) {
-            LOG_AND_ABORT("Inconsistent chunk sizes for zones %d,%d with chunk sizes %d,%d", zone->index, zt->index, zone->chunk_size, zt->chunk_size);
-        }
-    }
-
-    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
-        bit_slot_t bsl = bm[i];
-        for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            /* If this bit is set it is either a free chunk or
-             * a canary chunk. Either way it should have a set
-             * of canaries we can verify */
-            if((GET_BIT(bsl, j)) == 1) {
-                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
-                const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
-                check_canary(zone, p);
-            }
-        }
-    }
-
-    MASK_ZONE_PTRS(zone);
-}
-#endif
-
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     iso_alloc_root *p = NULL;
 
@@ -237,7 +122,9 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     name = PREALLOC_BITMAPS;
 #endif
 
-    for(int i = 0; i < sizeof(small_bitmap_sizes) / sizeof(int); i++) {
+    const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1 - 1;
+
+    for(int i = 0; i < sbsi; i++) {
         _root->bitmaps[i].bitmap = mmap_rw_pages(g_page_size, false, name);
         _root->bitmaps[i].bucket = small_bitmap_sizes[i];
     }
@@ -344,7 +231,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bo
     if(zone->preallocated_bitmap_idx == -1) {
         munmap(zone->bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
     } else {
-        for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+        const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
+
+        for(int i = 0; i < sbsi; i++) {
             if(zone->bitmap_size == _root->bitmaps[i].bucket) {
                 UNSET_BIT(_root->bitmaps[i].in_use, zone->preallocated_bitmap_idx);
                 __iso_memset(zone->bitmap_start, 0x0, zone->bitmap_size);
@@ -499,8 +388,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
     new_zone->max_bitmap_idx = new_zone->bitmap_size >> 3;
 
-    if(g_page_size > new_zone->bitmap_size) {
-        for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+    if(g_page_size >= new_zone->bitmap_size) {
+        const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
+
+        for(int i = 0; i < sbsi; i++) {
             if(_root->bitmaps[i].bucket == new_zone->bitmap_size) {
                 /* Easy path is the bitmap is unused */
                 if(_root->bitmaps[i].in_use == 0) {
@@ -510,7 +401,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
                     break;
                 }
 
-                for(int z = 0; z < BITS_PER_QWORD; z++) {
+                int bits_available = g_page_size / new_zone->bitmap_size;
+
+                for(int z = 0; z < bits_available; z++) {
                     if((GET_BIT(_root->bitmaps[i].in_use, z)) == 0) {
                         new_zone->bitmap_start = _root->bitmaps[i].bitmap + (new_zone->bitmap_size * z);
                         new_zone->preallocated_bitmap_idx = z;
@@ -688,7 +581,6 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     }
 
     bit_slot_t *free_bit_slots = zone->free_bit_slots;
-
     __iso_memset(free_bit_slots, BAD_BIT_SLOT, ZONE_FREE_LIST_SZ);
     zone->free_bit_slots_usable = 0;
     free_bit_slot_t free_bit_slots_index;
@@ -2144,7 +2036,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     pthread_mutex_destroy(&_root->big_zone_used_mutex);
 #endif
 
-    for(int i = 0; i < sizeof(small_bitmap_sizes); i++) {
+    const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
+
+    for(int i = 0; i < sbsi; i++) {
         munmap(_root->bitmaps[i].bitmap, g_page_size);
     }
 
