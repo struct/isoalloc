@@ -7,7 +7,7 @@
 
 static const uint32_t allocation_sizes[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128,
                                             ZONE_256, ZONE_512, ZONE_1024,
-                                            ZONE_2048, ZONE_4096, ZONE_8192, 16384, 32768, 65535};
+                                            ZONE_2048, ZONE_4096, ZONE_8192, 16384, 32768, 42000};
 
 static const uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024,
                                        2048, 4096, 8192, 16384, 32768, 65536};

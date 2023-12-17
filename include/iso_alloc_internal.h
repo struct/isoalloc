@@ -169,7 +169,7 @@ assert(sizeof(size_t) >= 64)
 /* All chunks are 8 byte aligned */
 #define CHUNK_ALIGNMENT 8
 
-#define SZ_ALIGNMENT 64
+#define SZ_ALIGNMENT 32
 
 #define WHICH_BIT(bit_slot) \
     (bit_slot & (BITS_PER_QWORD - 1))

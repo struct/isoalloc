@@ -332,10 +332,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     /* Minimum chunk size */
     if(size < SMALLEST_CHUNK_SZ) {
         size = SMALLEST_CHUNK_SZ;
-    } else if(size > SZ_ALIGNMENT && (size % SZ_ALIGNMENT) != 0) {
+    } else if((size % SZ_ALIGNMENT) != 0) {
         size = ALIGN_SZ_UP(size);
-    } else if ((size % SMALLEST_CHUNK_SZ) != 0) {
-        size = ((size + SMALLEST_CHUNK_SZ - 1) & ~(SMALLEST_CHUNK_SZ - 1));
     }
 
     iso_alloc_zone_t *new_zone = NULL;
@@ -547,7 +545,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     _root->seed = rand_uint64();
 
     /* The largest zone->max_bitmap_idx we will ever
-     * have is 8192 for SMALLEST_CHUNK_SZ (16). The
+     * have is 8192 for SMALLEST_CHUNK_SZ. The
      * smallest zone->max_bitmap_idx is 1 when chunk
      * size is SMALL_SIZE_MAX because the bitmap_size
      * is only 8 bytes. If our max bitmap index is
@@ -972,10 +970,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
     if(size < SMALLEST_CHUNK_SZ) {
         size = SMALLEST_CHUNK_SZ;
-    } else if(size > SZ_ALIGNMENT && (size % SZ_ALIGNMENT) != 0) {
+    } else if((size % SZ_ALIGNMENT) != 0) {
         size = ALIGN_SZ_UP(size);
-    } else if ((size % SMALLEST_CHUNK_SZ) != 0) {
-        size = ((size + SMALLEST_CHUNK_SZ - 1) & ~(SMALLEST_CHUNK_SZ - 1));
     }
 
     if(UNLIKELY(zone && size > zone->chunk_size)) {

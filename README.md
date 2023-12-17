@@ -23,7 +23,7 @@ All user chunk pages and bitmap pages are surrounded by guard page allocations w
 
 If `DEBUG`, `LEAK_DETECTOR`, or `MEM_USAGE` are specified during compilation a memory leak and memory usage routine will be called from the destructor which will print useful information about the state of the heap at that time. These can also be invoked via the API, which is documented further below.
 
-* All chunk sizes are a multiple of 64 and are always 8 byte aligned.
+* All chunk sizes are a multiple of 32 and are always 8 byte aligned.
 * The `iso_alloc_root` structure is thread safe and guarded by a mutex or spinlock when `THREAD_SUPPORT` is enabled.
 * Each zone bitmap contains 2 bits per chunk.
 * All zones are 4 MB in size regardless of the chunk sizes they manage.
