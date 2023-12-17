@@ -332,8 +332,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     /* Minimum chunk size */
     if(size < SMALLEST_CHUNK_SZ) {
         size = SMALLEST_CHUNK_SZ;
-    } else if((size % SZ_ALIGNMENT) != 0) {
+    } else if(size > SZ_ALIGNMENT && (size % SZ_ALIGNMENT) != 0) {
         size = ALIGN_SZ_UP(size);
+    } else if ((size % SMALLEST_CHUNK_SZ) != 0) {
+        size = ((size + SMALLEST_CHUNK_SZ - 1) & ~(SMALLEST_CHUNK_SZ - 1));
     }
 
     iso_alloc_zone_t *new_zone = NULL;
@@ -972,6 +974,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         size = SMALLEST_CHUNK_SZ;
     } else if(size > SZ_ALIGNMENT && (size % SZ_ALIGNMENT) != 0) {
         size = ALIGN_SZ_UP(size);
+    } else if ((size % SMALLEST_CHUNK_SZ) != 0) {
+        size = ((size + SMALLEST_CHUNK_SZ - 1) & ~(SMALLEST_CHUNK_SZ - 1));
     }
 
     if(UNLIKELY(zone && size > zone->chunk_size)) {
@@ -1446,7 +1450,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     _iso_free_profile();
 #endif
 
-    if(permanent == true) {
+    if(UNLIKELY(permanent == true)) {
         _iso_free_internal(p, permanent);
         return;
     }
@@ -1691,7 +1695,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     UNLOCK_BIG_ZONE_FREE();
 
     /* Our zone is already removed from the list via find_big_zone() */
-    if(permanent == true) {
+    if(UNLIKELY(permanent == true)) {
         big_zone->free = true;
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
         dont_need_pages(big_zone->user_pages_start, big_zone->size);

@@ -133,6 +133,7 @@ int allocate(size_t array_size, size_t allocation_size) {
 
 int main(int argc, char *argv[]) {
     clock_t start, end;
+    srand(time(NULL));
 
     start = clock();
 
