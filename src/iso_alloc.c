@@ -782,7 +782,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
      * isolation primitives */
     while(size <= ZONE_1024) {
         if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
-            size += ALIGN_SZ_UP(size+1);
+            size += ALIGN_SZ_UP(size + 1);
         } else {
             break;
         }

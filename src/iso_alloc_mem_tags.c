@@ -21,7 +21,8 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
         LOG_AND_ABORT("Chunk offset %d not an alignment of %d", chunk_offset, zone->chunk_size);
     }
 
-    _mtp += (chunk_offset / zone->chunk_size);;
+    _mtp += (chunk_offset / zone->chunk_size);
+    ;
     return *_mtp;
 #else
     return 0;
