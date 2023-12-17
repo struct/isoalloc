@@ -79,7 +79,7 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
 
             /* Ensure the pointer is properly aligned */
             if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
-                LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, ALIGNMENT);
+                LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, SZ_ALIGNMENT);
             }
 
             uint64_t chunk_offset = (uint64_t) (p - (uint64_t *) zone->user_pages_start);

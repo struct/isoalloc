@@ -7,12 +7,7 @@
  * caches, and typedef used by the allocator */
 #define ZONE_FREE_LIST_SZ 255
 
-/* Zones manage chunks with sizes that are a power
- * of 2. So the zone lookup table only has to hold
- * indexes of 8, 16, 32 ... 131072. We can divide
- * each by 16 to make the size of our cache smaller
- * and save memory. Now this cache should only need
- * 16384 bytes */
+/* The size of this table scales with SMALL_SIZE_MAX. */
 #define ZONE_LOOKUP_TABLE_SZ (SMALL_SIZE_MAX >> 4) * sizeof(uint32_t)
 #define SZ_TO_ZONE_LOOKUP_IDX(size) size >> 4
 
@@ -49,7 +44,6 @@ typedef struct {
     uint16_t next_sz_index;                       /* What is the index of the next zone of this size */
     free_bit_slot_t free_bit_slots_index;         /* Tracks how many entries in the cache are filled */
     free_bit_slot_t free_bit_slots_usable;        /* The oldest members of the free cache are served first */
-    uint8_t chunk_size_pow2;                      /* Computed by _log2(chunk_size) at zone creation */
     int8_t preallocated_bitmap_idx;               /* The bitmap is preallocated and its index */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
@@ -114,12 +108,6 @@ typedef struct {
  * that hold chunks containing caller data */
 typedef struct {
     iso_alloc_zone_t *zones;
-    /* Zones are linked by their next_sz_index member which
-     * tells the allocator where in the _root->zones array
-     * it can find the next zone that holds the same size
-     * chunks. The lookup table helps us find the first zone
-     * that holds a specific size in O(1) time */
-    zone_lookup_table_t *zone_lookup_table;
     /* The chunk to zone lookup table provides a high hit
      * rate cache for finding which zone owns a user chunk.
      * It works by mapping the MSB of the chunk addressq
@@ -135,6 +123,12 @@ typedef struct {
 #if UAF_PTR_PAGE
     void *uaf_ptr_page;
 #endif
+    /* Zones are linked by their next_sz_index member which
+     * tells the allocator where in the _root->zones array
+     * it can find the next zone that holds the same size
+     * chunks. The lookup table helps us find the first zone
+     * that holds a specific size in O(1) time */
+    zone_lookup_table_t zone_lookup_table[ZONE_LOOKUP_TABLE_SZ];
     /* For chunk sizes >= 1024 our bitmap size is smaller
     * than a page. This optimization preallocates pages to
     * hold multiple bitmaps for these zones */

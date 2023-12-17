@@ -60,13 +60,13 @@ assert(sizeof(size_t) >= 64)
 #include <fcntl.h>
 #endif
 
+#include "conf.h"
 #include "iso_alloc.h"
 #include "iso_alloc_sanity.h"
 #include "iso_alloc_util.h"
 #include "iso_alloc_ds.h"
 #include "iso_alloc_profiler.h"
 #include "compiler.h"
-#include "conf.h"
 
 #ifndef MADV_DONTNEED
 #define MADV_DONTNEED POSIX_MADV_DONTNEED
@@ -167,13 +167,15 @@ assert(sizeof(size_t) >= 64)
 #define CANARY_SIZE 8
 
 /* All chunks are 8 byte aligned */
-#define ALIGNMENT 8
+#define CHUNK_ALIGNMENT 8
+
+#define SZ_ALIGNMENT 64
 
 #define WHICH_BIT(bit_slot) \
     (bit_slot & (BITS_PER_QWORD - 1))
 
 #define IS_ALIGNED(v) \
-    (v & (ALIGNMENT - 1))
+    (v & (CHUNK_ALIGNMENT - 1))
 
 #define IS_PAGE_ALIGNED(v) \
     (v & (g_page_size - 1))
@@ -188,10 +190,10 @@ assert(sizeof(size_t) >= 64)
     n &= ~(1UL << k);
 
 #define ALIGN_SZ_UP(n) \
-    ((n + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
+    ((n + SZ_ALIGNMENT - 1) & ~(SZ_ALIGNMENT - 1))
 
 #define ALIGN_SZ_DOWN(n) \
-    (((n + ALIGNMENT - 1) & ~(ALIGNMENT - 1)) - ALIGNMENT)
+    (((n + SZ_ALIGNMENT - 1) & ~(SZ_ALIGNMENT - 1)) - SZ_ALIGNMENT)
 
 #define ROUND_UP_PAGE(n) \
     ((((n + g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
