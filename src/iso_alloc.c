@@ -96,14 +96,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     MLOCK(zone_cache, z);
 #endif
 
-    /* If we don't lock the these lookup tables we may incur
-     * a soft page fault with almost every alloc/free */
-    _root->zone_lookup_table = mmap_guarded_rw_pages(ZONE_LOOKUP_TABLE_SZ, true, NULL);
-#if __APPLE__
-    darwin_reuse(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
-#endif
-    MLOCK(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
-
     _root->chunk_lookup_table = mmap_guarded_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
 #if __APPLE__
     darwin_reuse(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
@@ -340,16 +332,8 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     /* Minimum chunk size */
     if(size < SMALLEST_CHUNK_SZ) {
         size = SMALLEST_CHUNK_SZ;
-    }
-
-    /* In order for our bitmap to be a power of 2
-     * the size we allocate also needs to be. We
-     * want our bitmap to be a power of 2 because
-     * if its not then we either waste memory
-     * or have to perform inefficient searches
-     * whenever we need more bitslots */
-    if((is_pow2(size)) != true) {
-        size = next_pow2(size);
+    } else if((size % SZ_ALIGNMENT) != 0) {
+        size = ALIGN_SZ_UP(size);
     }
 
     iso_alloc_zone_t *new_zone = NULL;
@@ -371,22 +355,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     new_zone->is_full = false;
     new_zone->chunk_size = size;
 
-    /* We compute this now so that in the hot path we can
-     * perform a fast bit shift:
-     *  chunk_number = (chunk_offset >> zone->chunk_size_pow2)
-     * vs a slow division:
-     *  chunk_number = (chunk_offset / zone->chunk_size) */
-    new_zone->chunk_size_pow2 = _log2(new_zone->chunk_size);
-    new_zone->chunk_count = (ZONE_USER_SIZE >> new_zone->chunk_size_pow2);
+    new_zone->chunk_count = (ZONE_USER_SIZE / new_zone->chunk_size);
 
     /* If a caller requests an allocation that is >=(ZONE_USER_SIZE/2)
      * then we need to allocate a minimum size bitmap */
-    uint32_t bitmap_size = (new_zone->chunk_count << BITS_PER_CHUNK_SHIFT) >> BITS_PER_BYTE_SHIFT;
-
-    /* All of the following fields are immutable
-     * and should not change once they are set */
+    uint32_t bitmap_size = (new_zone->chunk_count * BITS_PER_CHUNK) / BITS_PER_BYTE;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
-    new_zone->max_bitmap_idx = new_zone->bitmap_size >> 3;
+    new_zone->max_bitmap_idx = (new_zone->bitmap_size >> 3);
 
     if(g_page_size >= new_zone->bitmap_size) {
         const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
@@ -807,7 +782,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
      * isolation primitives */
     while(size <= ZONE_1024) {
         if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
-            size = next_pow2(size);
+            size += ALIGN_SZ_UP(size+1);
         } else {
             break;
         }
@@ -959,8 +934,10 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     unsigned int res;
 
-    if(size < SMALL_SIZE_MAX && (is_pow2(size)) != true) {
-        size = next_pow2(size);
+    if(size < SMALLEST_CHUNK_SZ) {
+        size = SMALLEST_CHUNK_SZ;
+    } else if((size % SZ_ALIGNMENT) != 0) {
+        size = ALIGN_SZ_UP(size);
     }
 
     size_t sz = nmemb * size;
@@ -991,13 +968,14 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     }
 #endif
 
-    /* Sizes are always a power of 2, even for private zones */
-    if(size < SMALL_SIZE_MAX && is_pow2(size) == false) {
-        size = next_pow2(size);
+    if(size < SMALLEST_CHUNK_SZ) {
+        size = SMALLEST_CHUNK_SZ;
+    } else if(size > SZ_ALIGNMENT && (size % SZ_ALIGNMENT) != 0) {
+        size = ALIGN_SZ_UP(size);
     }
 
     if(UNLIKELY(zone && size > zone->chunk_size)) {
-        LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d", zone->index, zone->chunk_size);
+        LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d, only %d", zone->index, size, zone->chunk_size);
     }
 
     LOCK_ROOT();
@@ -1325,16 +1303,14 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p) 
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
-    const size_t chunk_number = (chunk_offset >> zone->chunk_size_pow2);
+    const size_t chunk_number = (chunk_offset / zone->chunk_size);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
-    /* Ensure the pointer is a multiple of chunk size. Chunk size
-     * should always be a power of 2 so this bitwise AND works and
-     * is generally faster than modulo */
-    if(UNLIKELY((chunk_offset & (zone->chunk_size - 1)) != 0)) {
-        LOG_AND_ABORT("Chunk at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits",
-                      p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
+    /* Ensure the pointer is a multiple of chunk size. */
+    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+        LOG_AND_ABORT("Chunk %d at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits",
+                      chunk_offset, p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
     }
 
     if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
@@ -1449,7 +1425,7 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     /* All pointers to chunks should be 8 byte aligned.
      * This is true whether its big zone or not */
     if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
-        LOG_AND_ABORT("Chunk at 0x%p is not %d byte aligned", p, ALIGNMENT);
+        LOG_AND_ABORT("Chunk at 0x%p is not %d byte aligned", p, SZ_ALIGNMENT);
     }
 
 #if NO_ZERO_ALLOCATIONS
@@ -1602,7 +1578,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
                 void *user_pages_start = UNMASK_USER_PTR(zone);
                 uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
                 uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
-                _mtp += (chunk_offset >> zone->chunk_size_pow2);
+                _mtp += (chunk_offset / zone->chunk_size);
 
                 /* Generate and write a new tag for this chunk */
                 *_mtp = (uint8_t) us_rand_uint64(&_root->seed);
@@ -2024,7 +2000,6 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     UNLOCK_BIG_ZONE_FREE();
 
 #if ISO_DTOR_CLEANUP
-    unmap_guarded_pages(_root->zone_lookup_table, ZONE_LOOKUP_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_quarantine, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
     unmap_guarded_pages(zone_cache, ZONE_CACHE_SZ * sizeof(_tzc));

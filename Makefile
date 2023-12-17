@@ -34,7 +34,7 @@ ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
 
 ## Enable memory sanitizer to catch uninitialized reads.
 ## This is slow, and it's incompatible with other sanitizers
-#ENABLE_MSAN = -fsanitize=memory -fsanitize-memory-track-origins
+#ENABLE_MSAN = -fsanitize=memory -fsanitize-memory-track-origins -DENABLE_MSAN=1
 
 ## Enable undefined behavior sanitizer to catch undefined behavior.
 ## This is slow, and it's incompatible with other sanitizers
@@ -133,7 +133,7 @@ UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 ## to reduce memory consumption and is only done for smaller
 ## sizes. Enabling this feature configures IsoAlloc to only
 ## use zones that are a perfect fit for the requested size
-## once its been rounded up to the next power of 2
+## once its been rounded up to an aligned size.
 STRONG_SIZE_ISOLATION = -DSTRONG_SIZE_ISOLATION=0
 
 ## Enable a sampling mechanism that searches for references
@@ -457,6 +457,7 @@ format-ci:
 	clang-format-12 --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
-	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out test_output.txt *.dSYM core* iso_alloc_profiler.data
+	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out \
+		tagging_test_output.txt test_output.txt *.dSYM core* iso_alloc_profiler.data
 	rm -rf android/libs android/obj
 	mkdir -p build/
