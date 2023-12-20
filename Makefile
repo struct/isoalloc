@@ -195,7 +195,7 @@ ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 
 ## Enable AARCH64 / ARMv8.5a Memory Tagging Extension support
-ARM_MTE = -DARM_MTE=1 -march=armv8.5-a+memtag
+#ARM_MTE = -DARM_MTE=1 -march=armv8.5-a+memtag
 
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this.
