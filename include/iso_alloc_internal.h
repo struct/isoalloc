@@ -419,7 +419,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 #if ARM_MTE
 INLINE uintptr_t iso_mte_untag_ptr(uintptr_t p);
 INLINE uint8_t extractTag(uintptr_t p);
-INLINE bool iso_is_mte_supported();
+INLINE bool iso_is_mte_supported(void);
 void *iso_mte_set_tag_range(void *p, size_t size);
 uintptr_t iso_mte_create_tag(uintptr_t p, uintptr_t exclusion_mask);
 void iso_mte_set_tag(uintptr_t p);

@@ -129,6 +129,8 @@ To build Android libraries for x86_64 and ARM64 architectures just `cd` into the
 
 For those of you on an M1 based Mac you can still build IsoAlloc with the following command:
 `arch -x86_64 /bin/bash -c $ANDROID_NDK_HOME/build/ndk-build`
+or
+`~/Library/Android/sdk/ndk/26.1.10909125/ndk-build`
 
 ## Linking With C++
 
