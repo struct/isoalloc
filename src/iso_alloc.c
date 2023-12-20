@@ -67,6 +67,16 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
      * result in a soft page fault */
     MLOCK(&_root, sizeof(iso_alloc_root));
 
+#if ARM_MTE
+    if(iso_is_mte_supported() == false) {
+        LOG_AND_ABORT("ARM_MTE Enabled in build but not supported by this platform");
+    }
+
+    prctl(PR_SET_TAGGED_ADDR_CTRL,
+          PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_SYNC | (0xfffe << PR_MTE_TAG_SHIFT),
+          0, 0, 0);
+#endif
+
     _root->zone_retirement_shf = _log2(ZONE_ALLOC_RETIRE);
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
@@ -1108,6 +1118,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
         populate_zone_cache(zone);
 
+#if ARM_MTE
+        p = iso_mte_set_tag_range(p, zone->chunk_size);
+#endif
         return p;
     } else {
         /* It's safe to unlock the root at this point because
@@ -1591,6 +1604,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
             _iso_alloc_ptr_search(p, true);
         }
 #endif
+
+#if ARM_MTE
+        p = iso_mte_set_tag_range(p, zone->chunk_size);
+#endif
         return zone;
     } else {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
@@ -1784,6 +1801,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 #if PROTECT_FREE_BIG_ZONES
                 mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
 #endif
+#if ARM_MTE
+                big->user_pages_start = iso_mte_set_tag_range(big->user_pages_start, big->size);
+#endif
                 return big->user_pages_start;
             }
 
@@ -1848,6 +1868,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     _root->big_zone_used_count++;
 
     UNLOCK_BIG_ZONE_USED();
+#if ARM_MTE
+    new_big->user_pages_start = iso_mte_set_tag_range(new_big->user_pages_start, new_big->size);
+#endif
     return new_big->user_pages_start;
 }
 

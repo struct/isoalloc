@@ -416,6 +416,17 @@ INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
+#if ARM_MTE
+INLINE uintptr_t iso_mte_untag_ptr(uintptr_t p);
+INLINE uint8_t extractTag(uintptr_t p);
+INLINE bool iso_is_mte_supported();
+void *iso_mte_set_tag_range(void *p, size_t size);
+uintptr_t iso_mte_create_tag(uintptr_t p, uintptr_t exclusion_mask);
+void iso_mte_set_tag(uintptr_t p);
+uintptr_t iso_mte_get_tag(uintptr_t p);
+uintptr_t iso_mte_set_tags(uintptr_t start, uintptr_t end);
+#endif
+
 #if SIGNAL_HANDLER
 INTERNAL_HIDDEN void handle_signal(int sig, siginfo_t *si, void *ctx);
 #endif

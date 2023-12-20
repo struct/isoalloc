@@ -1,6 +1,8 @@
 /* iso_alloc_mem_tags.c - A secure memory allocator
  * Copyright 2023 - chris.rohlf@gmail.com */
 
+/* This file contains the software only implementation of
+ * of memory tagging. See MEMORY_TAGGING.md for more info */
 #include "iso_alloc_internal.h"
 
 /* Returns a tag for a pointer p, which must be untagged

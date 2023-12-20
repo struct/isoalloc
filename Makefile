@@ -194,6 +194,9 @@ ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 ## UAF_PTR_PAGE is enabled for better crash handling
 SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 
+## Enable AARCH64 / ARMv8.5a Memory Tagging Extension support
+ARM_MTE = -DARM_MTE=1 -march=armv8.5-a+memtag
+
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this.
 ## (Currently unused)
@@ -280,6 +283,14 @@ LTO =
 HUGE_PAGES =
 endif
 
+ifneq ($(ARM_MTE), )
+ifneq ($(UNAME), Linux)
+$(error "ARM MTE is only supported on Linux / Android")
+endif
+CC = clang-12
+CXX = clang++-12
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
@@ -295,7 +306,7 @@ CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
 	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
-	$(PERM_FREE_REALLOC)
+	$(PERM_FREE_REALLOC) $(ARM_MTE)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE
