@@ -3,7 +3,9 @@
 
 #include <memory>
 #include <array>
+#if THREAD_SUPPORT
 #include <thread>
+#endif
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
@@ -119,6 +121,7 @@ int main(int argc, char *argv[]) {
         Derived::operator delete(d, ptr);
     }
 
+#if THREAD_SUPPORT
     for(size_t i = 0; i < 4; i++) {
         std::array<std::thread, 4> t;
         for(size_t z = 0; z < 4; z++) {
@@ -126,6 +129,7 @@ int main(int argc, char *argv[]) {
             t[i].join();
         }
     }
+#endif
 
     iso_verify_zones();
 

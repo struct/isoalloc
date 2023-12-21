@@ -252,11 +252,10 @@ endif
 
 ifeq ($(UNAME), FreeBSD)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
-## Using spinlocks to avoid recursive locks contentions with calloc
-USE_SPINLOCK = -DUSE_SPINLOCK=1
-## Once FreeBSD 13.1 becomes the minimal non EOL version
-## it can be enabled
-## SCHED_GETCPU = -DSCHED_GETCPU
+# The unit tests fail when thread support is enabled on this platform
+# causing zones size mismatches
+THREAD_SUPPORT = -DTHREAD_SUPPORT=0
+SCHED_GETCPU = -DSCHED_GETCPU
 endif
 
 ifeq ($(UNAME), DragonFly)
