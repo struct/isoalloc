@@ -25,6 +25,7 @@ INTERNAL_HIDDEN void *create_guard_page(void *p);
 INTERNAL_HIDDEN INLINE void darwin_reuse(void *p, size_t size);
 INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_mte_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_mte_pages(size_t size, bool populate, const char *name);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot);

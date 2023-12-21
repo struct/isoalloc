@@ -76,15 +76,28 @@ void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
         return NULL;
     }
 
-#if ARM_MTE
-    void *p = mmap_rw_mte_pages(sz + (g_page_size * 2), populate, name);
-#else
     void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
-#endif
+
     create_guard_page(p);
     create_guard_page(p + (g_page_size + sz));
     return (p + g_page_size);
 }
+
+#if ARM_MTE
+void *mmap_guarded_rw_mte_pages(size_t size, bool populate, const char *name) {
+    size_t sz = ROUND_UP_PAGE(size);
+
+    if(sz < size) {
+        return NULL;
+    }
+
+    void *p = mmap_rw_mte_pages(sz + (g_page_size * 2), populate, name);
+
+    create_guard_page(p);
+    create_guard_page(p + (g_page_size + sz));
+    return (p + g_page_size);
+}
+#endif
 
 void *mmap_rw_pages(size_t size, bool populate, const char *name) {
     return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);

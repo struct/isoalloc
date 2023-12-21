@@ -69,12 +69,14 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
 #if ARM_MTE
     if(iso_is_mte_supported() == false) {
-        LOG_AND_ABORT("ARM_MTE Enabled in build but not supported by this platform");
+        LOG("ARM_MTE Enabled in build but not supported by this platform");
+        _root->arm_mte_enabled = false;
+    } else {
+        _root->arm_mte_enabled = true;
+        prctl(PR_SET_TAGGED_ADDR_CTRL,
+              PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_SYNC | (0xfffe << PR_MTE_TAG_SHIFT),
+              0, 0, 0);
     }
-
-    prctl(PR_SET_TAGGED_ADDR_CTRL,
-          PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_SYNC | (0xfffe << PR_MTE_TAG_SHIFT),
-          0, 0, 0);
 #endif
 
     _root->zone_retirement_shf = _log2(ZONE_ALLOC_RETIRE);
@@ -436,7 +438,17 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         tag_mapping_size = 0;
     }
 #endif
-    void *p = mmap_rw_pages(total_size, false, name);
+    void *p = NULL;
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = mmap_rw_mte_pages(total_size, false, name);
+    } else {
+        p = mmap_rw_pages(total_size, false, name);
+    }
+#else
+    p = mmap_rw_pages(total_size, false, name);
+#endif
 
 #if(__ANDROID__ || KERNEL_VERSION_SEQ_5_17) && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
@@ -1119,7 +1131,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         populate_zone_cache(zone);
 
 #if ARM_MTE
-        p = iso_mte_set_tag_range(p, zone->chunk_size);
+        if(_root->arm_mte_enabled == true) {
+            p = iso_mte_set_tag_range(p, zone->chunk_size);
+        }
 #endif
         return p;
     } else {
@@ -1606,7 +1620,9 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
 #endif
 
 #if ARM_MTE
-        p = iso_mte_set_tag_range(p, zone->chunk_size);
+        if(_root->arm_mte_enabled == true) {
+            p = iso_mte_set_tag_range(p, zone->chunk_size);
+        }
 #endif
         return zone;
     } else {
@@ -1802,7 +1818,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
                 mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
 #endif
 #if ARM_MTE
-                big->user_pages_start = iso_mte_set_tag_range(big->user_pages_start, big->size);
+                if(_root->arm_mte_enabled == true) {
+                    big->user_pages_start = iso_mte_set_tag_range(big->user_pages_start, big->size);
+                }
 #endif
                 return big->user_pages_start;
             }
@@ -1822,10 +1840,21 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
     /* The free list contained no usable entries
      * so we need to create a new one */
+    void *user_pages = NULL;
+#if ARM_MTE
 #if BIG_ZONE_GUARD
-    void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
 #else
-    void *user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    if(_root->arm_mte_enabled == true) {
+        user_pages = mmap_rw_mte_pages(size, false, BIG_ZONE_UD_NAME);
+    }
+#endif
+#else
+#if BIG_ZONE_GUARD
+    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#else
+    user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#endif
 #endif
 
     if(UNLIKELY(user_pages == NULL)) {
@@ -1869,7 +1898,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
     UNLOCK_BIG_ZONE_USED();
 #if ARM_MTE
-    new_big->user_pages_start = iso_mte_set_tag_range(new_big->user_pages_start, new_big->size);
+    if(_root->arm_mte_enabled == true) {
+        new_big->user_pages_start = iso_mte_set_tag_range(new_big->user_pages_start, new_big->size);
+    }
 #endif
     return new_big->user_pages_start;
 }

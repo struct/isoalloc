@@ -4,6 +4,7 @@
 #pragma once
 
 #include <sys/prctl.h>
+#include <sys/auxv.h>
 #include <byteswap.h>
 /* Get linux kernel version */
 #include <linux/version.h>

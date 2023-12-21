@@ -2,7 +2,6 @@
  * Copyright 2024 - chris.rohlf@gmail.com */
 
 #include "iso_alloc_internal.h"
-#include <sys/auxv.h>
 
 /* The majority of this code is adapted from Scudos implementation
  * of ARM MTE support. That code can be found here:

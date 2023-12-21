@@ -4,6 +4,7 @@
 #pragma once
 
 #include <sys/prctl.h>
+#include <sys/auxv.h>
 
 /* This magic number is usually defined by Android Bionic:
  * https://android.googlesource.com/platform/bionic/+/263325d/libc/include/sys/prctl.h#42 */
