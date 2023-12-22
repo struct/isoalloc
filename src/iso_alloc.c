@@ -1420,9 +1420,6 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
 
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
-        /* We want to catch immediate use-after-free without waiting
-         * for chunks to be free'd from the quarantine so we set a new
-         * random tag for the first 16 byte granule at this address */
         p = iso_mte_create_tag(p, 0x0);
         iso_mte_set_tag(p);
     }
@@ -1487,6 +1484,16 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         _iso_free_internal(p, permanent);
         return;
     }
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        /* We want to catch immediate use-after-free without waiting
+         * for chunks to be free'd from the quarantine so we set a new
+         * random tag for the first 16 byte granule at this address */
+        p = iso_mte_create_tag(p, 0x0);
+        iso_mte_set_tag(p);
+    }
+#endif
 
     LOCK_ROOT();
 
