@@ -420,11 +420,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 INLINE uintptr_t iso_mte_untag_ptr(void *p);
 INLINE uint8_t iso_mte_extract_tag(void *p);
 INLINE bool iso_is_mte_supported(void);
-void *iso_mte_set_tag_range(void *p, size_t size);
-void *iso_mte_create_tag(void *p, uint64_t exclusion_mask);
-void iso_mte_set_tag(void *p);
-void *iso_mte_get_tag(void *p);
-void *iso_mte_set_tags(void *start, void *end);
+INLINE void *iso_mte_set_tag_range(void *p, size_t size);
+INLINE void *iso_mte_create_tag(void *p, uint64_t exclusion_mask);
+INLINE void iso_mte_set_tag(void *p);
+INLINE void *iso_mte_get_tag(void *p);
+INLINE void *iso_mte_set_tags(void *start, void *end);
 #endif
 
 #if SIGNAL_HANDLER
