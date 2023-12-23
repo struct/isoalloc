@@ -417,14 +417,14 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
 #if ARM_MTE
-INLINE uintptr_t iso_mte_untag_ptr(uintptr_t p);
-INLINE uint8_t extractTag(uintptr_t p);
+INLINE uintptr_t iso_mte_untag_ptr(void *p);
+INLINE uint8_t iso_mte_extract_tag(void *p);
 INLINE bool iso_is_mte_supported(void);
 void *iso_mte_set_tag_range(void *p, size_t size);
-uintptr_t iso_mte_create_tag(uintptr_t p, uintptr_t exclusion_mask);
-void iso_mte_set_tag(uintptr_t p);
-uintptr_t iso_mte_get_tag(uintptr_t p);
-uintptr_t iso_mte_set_tags(uintptr_t start, uintptr_t end);
+void *iso_mte_create_tag(void *p, uint64_t exclusion_mask);
+void iso_mte_set_tag(void *p);
+void *iso_mte_get_tag(void *p);
+void *iso_mte_set_tags(void *start, void *end);
 #endif
 
 #if SIGNAL_HANDLER

@@ -11,12 +11,12 @@
 
 #if ARM_MTE == 1
 
-uintptr_t iso_mte_untag_ptr(uintptr_t p) {
-    return p & ((1ULL << 56) - 1);
+uintptr_t iso_mte_untag_ptr(void *p) {
+    return (uintptr_t) p & ((1ULL << 56) - 1);
 }
 
-uint8_t iso_mte_extract_tag(uintptr_t p) {
-    return (p >> 56) & 0xF;
+uint8_t iso_mte_extract_tag(void *p) {
+    return ((uintptr_t) p >> 56) & 0xF;
 }
 
 /* Check for the MTE bit in the ELF Auxv */
@@ -28,14 +28,14 @@ bool iso_is_mte_supported(void) {
 }
 
 void *iso_mte_set_tag_range(void *p, size_t size) {
-    uintptr_t tagged_ptr = iso_mte_create_tag((uintptr_t) p, 0x0);
+    void *tagged_ptr = iso_mte_create_tag(p, 0x0);
     return (void *) iso_mte_set_tags(tagged_ptr, tagged_ptr + size);
 }
 
 /* Uses IRG to create a random tag */
-uintptr_t iso_mte_create_tag(uintptr_t p, uintptr_t exclusion_mask) {
+void *iso_mte_create_tag(void *p, uint64_t exclusion_mask) {
     exclusion_mask |= 1;
-    uintptr_t tagged_ptr;
+    void *tagged_ptr;
     __asm__ __volatile__(
         ".arch_extension memtag\n"
         "irg %[tagged_ptr], %[p], %[exclusion_mask]\n"
@@ -45,8 +45,7 @@ uintptr_t iso_mte_create_tag(uintptr_t p, uintptr_t exclusion_mask) {
 }
 
 /* Uses STG to lock a tag to an address */
-void iso_mte_set_tag(uintptr_t p) {
-    //DCHECK_EQ(0, Ptr % 16);
+void iso_mte_set_tag(void *p) {
     __asm__ __volatile__(
         ".arch_extension memtag\n"
         "stg %0, [%0]\n"
@@ -56,9 +55,8 @@ void iso_mte_set_tag(uintptr_t p) {
 }
 
 /* Uses LDG to load a tag */
-uintptr_t iso_mte_get_tag(uintptr_t p) {
-    //DCHECK_EQ(0, Ptr % 16);
-    uintptr_t tagged_ptr = p;
+void *iso_mte_get_tag(void *p) {
+    void *tagged_ptr = p;
     __asm__ __volatile__(
         ".arch_extension memtag\n"
         "ldg %0, [%0]\n"
@@ -69,8 +67,7 @@ uintptr_t iso_mte_get_tag(uintptr_t p) {
 }
 
 /* Set tag for a region of memory, zeroize */
-uintptr_t iso_mte_set_tags(uintptr_t start, uintptr_t end) {
-    //DCHECK_EQ(0, Begin % 16);
+void *iso_mte_set_tags(void *start, void *end) {
     uintptr_t line_size, next, tmp;
     __asm__ __volatile__(
         ".arch_extension memtag\n"
