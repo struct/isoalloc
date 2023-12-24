@@ -3,6 +3,9 @@
 
 #pragma once
 #include "compiler.h"
+#include <sys/types.h>
+#include <inttypes.h>
+#include <stdbool.h>
 
 #if !NAMED_MAPPINGS
 #define SAMPLED_ALLOC_NAME ""

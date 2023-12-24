@@ -121,8 +121,6 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
 }
 #endif
 
-#if ALLOC_SANITY
-
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
 atomic_flag sane_cache_flag;
@@ -382,7 +380,6 @@ INTERNAL_HIDDEN void *_iso_alloc_sample(const size_t size) {
     UNLOCK_SANITY_CACHE();
     return p;
 }
-#endif
 
 INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *restrict dest, const void *restrict src, size_t n) {
 #if MEMCPY_SANITY

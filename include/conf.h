@@ -56,8 +56,8 @@
 #define ZONE_ALLOC_RETIRE 32
 
 /* This byte value will overwrite the contents
- * of all free'd user chunks if -DSANITIZE_CHUNKS
- * is enabled in the Makefile. The value is completely
+ * of all free'd user chunks if the SANITIZE_CHUNKS
+ * option is enabled. The value is completely
  * arbitrary, but non-zero since this could mask
  * some bugs. */
 #define POISON_BYTE 0xde
