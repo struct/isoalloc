@@ -34,11 +34,11 @@ int main(int argc, char *argv[]) {
             adj_count++;
         }
 
-#if RANDOMIZE_FREELIST
-        if(adj_count > FAIL) {
-            LOG_AND_ABORT("First allocation %p adjacent to second %p", p, q);
+        if(iso_option_get(RANDOMIZE_FREELIST)) {
+            if(adj_count > FAIL) {
+                LOG_AND_ABORT("First allocation %p adjacent to second %p", p, q);
+            }
         }
-#endif
         iso_free(p);
         iso_free(q);
     }

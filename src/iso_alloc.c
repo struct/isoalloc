@@ -597,19 +597,19 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
         }
     }
 
-#if RANDOMIZE_FREELIST
     static_assert(MIN_RAND_FREELIST >= 2, "MIN_RAND_FREELIST should be at least 2");
 
-    /* Randomize the list of free bitslots */
-    if(free_bit_slots_index > MIN_RAND_FREELIST) {
-        for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
-            free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
-            bit_slot_t t = free_bit_slots[j];
-            free_bit_slots[j] = free_bit_slots[i];
-            free_bit_slots[i] = t;
+    if(_iso_option_get(RANDOMIZE_FREELIST)) {
+        /* Randomize the list of free bitslots */
+        if(free_bit_slots_index > MIN_RAND_FREELIST) {
+            for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
+                free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
+                bit_slot_t t = free_bit_slots[j];
+                free_bit_slots[j] = free_bit_slots[i];
+                free_bit_slots[i] = t;
+            }
         }
     }
-#endif
 
     zone->free_bit_slots_index = free_bit_slots_index;
 }

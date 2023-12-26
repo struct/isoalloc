@@ -45,8 +45,14 @@ typedef enum iso_option {
     // used in production builds and should not incur too
     // much of a performance penalty
     ALLOC_SANITY,
+    // Randomizes the free bit slot list upon creation. This can
+    // impact perf. You can control the minimum size of the list
+    // to be randomized with MIN_RAND_FREELIST in conf.h
+    RANDOMIZE_FREELIST,
+    // Enable abort() when isoalloc can't gather enough entropy.
+    ABORT_NO_ENTROPY,
     OPTION_FIRST = SANITIZE_CHUNKS,
-    OPTION_LAST = ALLOC_SANITY
+    OPTION_LAST = ABORT_NO_ENTROPY
 } iso_option_t;
 
 typedef void iso_alloc_zone_handle;

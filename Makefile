@@ -20,9 +20,6 @@ PERM_FREE_REALLOC = -DPERM_FREE_REALLOC=0
 ## with ARM MTE and PAC. See MEMORY_TAGGING.md for more information
 MEMORY_TAGGING = -DMEMORY_TAGGING=0
 
-## Enable abort() when isoalloc can't gather enough entropy.
-ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
-
 ## This enables Address Sanitizer support for manually
 ## poisoning and unpoisoning zones. It adds significant
 ## performance and memory overhead
@@ -127,11 +124,6 @@ UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 ## chunk to a caller. This is a slow search that has a small
 ## performance penalty
 VERIFY_FREE_BIT_SLOTS = -DVERIFY_FREE_BIT_SLOTS=0
-
-## Randomizes the free bit slot list upon creation. This can
-## impact perf. You can control the minimum size of the list
-## to be randomized with MIN_RAND_FREELIST in conf.h
-RANDOMIZE_FREELIST = -DRANDOMIZE_FREELIST=1
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
