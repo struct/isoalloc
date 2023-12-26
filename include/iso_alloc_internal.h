@@ -427,3 +427,6 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root(void);
 #endif
+
+INTERNAL_HIDDEN unsigned long _iso_option_get(iso_option_t);
+INTERNAL_HIDDEN void _iso_option_set(iso_option_t, unsigned long);

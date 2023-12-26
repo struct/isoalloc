@@ -64,11 +64,11 @@ INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void) {
     arc4random_buf(&val, sizeof(val));
 #endif
 
-#if ABORT_NO_ENTROPY
-    if(ret != 0) {
-        LOG_AND_ABORT("Unable to gather enough entropy");
+    if(_iso_option_get(ABORT_NO_ENTROPY)) {
+        if(ret != 0) {
+            LOG_AND_ABORT("Unable to gather enough entropy");
+        }
     }
-#endif
 
     return val;
 }

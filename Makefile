@@ -7,9 +7,6 @@ CXX = clang++
 ## DISABLE_CANARY - Disables the use of canaries, improves performance
 DISABLE_CANARY = -DDISABLE_CANARY=0
 
-## Clear user chunks upon free
-SANITIZE_CHUNKS = -DSANITIZE_CHUNKS=0
-
 ## Call verify_all_zones upon alloc/free, never reuse private zones
 ## Adds significant performance over head
 FUZZ_MODE = -DFUZZ_MODE=0
@@ -22,9 +19,6 @@ PERM_FREE_REALLOC = -DPERM_FREE_REALLOC=0
 ## be retrieved and verified. This feature will likely interfere
 ## with ARM MTE and PAC. See MEMORY_TAGGING.md for more information
 MEMORY_TAGGING = -DMEMORY_TAGGING=0
-
-## Enable abort() when isoalloc can't gather enough entropy.
-ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
 
 ## This enables Address Sanitizer support for manually
 ## poisoning and unpoisoning zones. It adds significant
@@ -100,23 +94,6 @@ HUGE_PAGES = -DHUGE_PAGES=1
 CPU_PIN = -DCPU_PIN=0
 SCHED_GETCPU =
 
-## Enable the allocation sanity feature. This works a lot
-## like GWP-ASAN does. It samples calls to iso_alloc and
-## randomly swaps them out for raw page allocations that
-## are surrounded by guard pages. These pages are unmapped
-## upon free. Much like GWP-ASAN this is designed to be
-## used in production builds and should not incur too
-## much of a performance penalty
-ALLOC_SANITY = -DALLOC_SANITY=0
-
-## Enable hooking of memcpy/memmove/memset to detect out of bounds
-## r/w operations on chunks allocated with IsoAlloc. Does
-## not require ALLOC_SANITY is enabled. On MacOS you need
-## to set FORTIFY_SOURCE to 0. Leave these commented if
-## you aren't enabling them.
-MEMCPY_SANITY = -DMEMCPY_SANITY=0
-MEMSET_SANITY = -DMEMSET_SANITY=0
-
 ## Enable the userfaultfd based uninitialized read detection
 ## feature. This samples calls to malloc, and allocates raw
 ## pages of memory with mmap which are registered with the
@@ -125,7 +102,7 @@ MEMSET_SANITY = -DMEMSET_SANITY=0
 ## previous call to write. Think of it as GWP-ASAN but for
 ## uninitialized reads. Enabling this feature does incur a
 ## performance penalty. This requires that both ALLOC_SANITY
-## and THREAD_SUPPORT are enabled. Linux only
+## option and THREAD_SUPPORT are enabled. Linux only
 UNINIT_READ_SANITY = -DUNINIT_READ_SANITY=0
 
 ## By default IsoAlloc may select a zone that holds chunks
@@ -147,11 +124,6 @@ UAF_PTR_PAGE = -DUAF_PTR_PAGE=0
 ## chunk to a caller. This is a slow search that has a small
 ## performance penalty
 VERIFY_FREE_BIT_SLOTS = -DVERIFY_FREE_BIT_SLOTS=0
-
-## Randomizes the free bit slot list upon creation. This can
-## impact perf. You can control the minimum size of the list
-## to be randomized with MIN_RAND_FREELIST in conf.h
-RANDOMIZE_FREELIST = -DRANDOMIZE_FREELIST=1
 
 ## Enable experimental features that are not guaranteed to
 ## compile, or introduce stability and performance bugs
@@ -290,11 +262,11 @@ else
 BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
-	-std=$(STDC) $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
+	-std=$(STDC) $(SANITIZER_SUPPORT) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
 	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
-	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
+	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(FUZZ_MODE) \
 	$(PERM_FREE_REALLOC)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) $(HOOKS)
 

@@ -319,3 +319,11 @@ EXTERNAL_API FLATTEN void iso_alloc_search_stack(void *p) {
     _iso_alloc_search_stack(p);
 }
 #endif
+
+EXTERNAL_API uint64_t iso_option_get(iso_option_t id) {
+    return _iso_option_get(id);
+}
+
+EXTERNAL_API void iso_option_set(iso_option_t id, uint64_t val) {
+    _iso_option_set(id, val);
+}

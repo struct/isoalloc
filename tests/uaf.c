@@ -4,7 +4,7 @@
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
-#if UAF_PTR_PAGE && !ALLOC_SANITY
+#if UAF_PTR_PAGE
 /* This test should be run manually after enabling UAF_PTR_PAGE
  * and disabling the sampling mechanism before the call to
  * _iso_alloc_ptr_search in _iso_free_internal_unlocked */
@@ -13,6 +13,7 @@ typedef struct test {
 } test_t;
 
 int main(int argc, char *argv[]) {
+    iso_option_set(ALLOC_SANITY, 0);
     void *str = iso_alloc(32);
     test_t *test = (test_t *) iso_alloc(1024);
     test->str = str;

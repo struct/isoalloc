@@ -34,6 +34,27 @@ static_assert(sizeof(size_t) == 8, "IsoAlloc requires 64 bit size_t");
 #define UNMASK_ZONE_HANDLE(zone) zone = zone;
 #endif
 
+typedef enum iso_option {
+    // Clear user chunks upon free
+    SANITIZE_CHUNKS,
+    // Enable the allocation sanity feature. This works a lot
+    // like GWP-ASAN does. It samples calls to iso_alloc and
+    // randomly swaps them out for raw page allocations that
+    // are surrounded by guard pages. These pages are unmapped
+    // upon free. Much like GWP-ASAN this is designed to be
+    // used in production builds and should not incur too
+    // much of a performance penalty
+    ALLOC_SANITY,
+    // Randomizes the free bit slot list upon creation. This can
+    // impact perf. You can control the minimum size of the list
+    // to be randomized with MIN_RAND_FREELIST in conf.h
+    RANDOMIZE_FREELIST,
+    // Enable abort() when isoalloc can't gather enough entropy.
+    ABORT_NO_ENTROPY,
+    OPTION_FIRST = SANITIZE_CHUNKS,
+    OPTION_LAST = ABORT_NO_ENTROPY
+} iso_option_t;
+
 typedef void iso_alloc_zone_handle;
 
 #if CPP_SUPPORT
@@ -111,6 +132,9 @@ EXTERNAL_API void iso_alloc_reset_traces(void);
 #if EXPERIMENTAL
 EXTERNAL_API void iso_alloc_search_stack(void *p);
 #endif
+
+EXTERNAL_API uint64_t iso_option_get(iso_option_t);
+EXTERNAL_API void iso_option_set(iso_option_t, uint64_t);
 
 #if CPP_SUPPORT
 }

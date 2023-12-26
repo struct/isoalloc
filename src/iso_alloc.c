@@ -142,9 +142,9 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
     pthread_mutex_init(&root_busy_mutex, NULL);
     pthread_mutex_init(&_root->big_zone_free_mutex, NULL);
     pthread_mutex_init(&_root->big_zone_used_mutex, NULL);
-#if ALLOC_SANITY
-    pthread_mutex_init(&sane_cache_mutex, NULL);
-#endif
+    if(_iso_option_get(ALLOC_SANITY)) {
+        pthread_mutex_init(&sane_cache_mutex, NULL);
+    }
 #endif
 
 #if HEAP_PROFILER
@@ -159,13 +159,15 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void) {
     _root->uaf_ptr_page = mmap_pages(g_page_size, false, NULL, PROT_NONE);
 #endif
 
-#if ALLOC_SANITY && UNINIT_READ_SANITY
-    _iso_alloc_setup_userfaultfd();
+#if UNINIT_READ_SANITY
+    if(_iso_option_get(ALLOC_SANITY)) {
+        _iso_alloc_setup_userfaultfd();
+    }
 #endif
 
-#if ALLOC_SANITY
-    _sanity_canary = us_rand_uint64(&_root->seed);
-#endif
+    if(_iso_option_get(ALLOC_SANITY)) {
+        _sanity_canary = us_rand_uint64(&_root->seed);
+    }
 
 #if SIGNAL_HANDLER
     struct sigaction sa;
@@ -595,19 +597,19 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
         }
     }
 
-#if RANDOMIZE_FREELIST
     static_assert(MIN_RAND_FREELIST >= 2, "MIN_RAND_FREELIST should be at least 2");
 
-    /* Randomize the list of free bitslots */
-    if(free_bit_slots_index > MIN_RAND_FREELIST) {
-        for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
-            free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
-            bit_slot_t t = free_bit_slots[j];
-            free_bit_slots[j] = free_bit_slots[i];
-            free_bit_slots[i] = t;
+    if(_iso_option_get(RANDOMIZE_FREELIST)) {
+        /* Randomize the list of free bitslots */
+        if(free_bit_slots_index > MIN_RAND_FREELIST) {
+            for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
+                free_bit_slot_t j = ((free_bit_slot_t) us_rand_uint64(&_root->seed) * i) >> FREE_LIST_SHF;
+                bit_slot_t t = free_bit_slots[j];
+                free_bit_slots[j] = free_bit_slots[i];
+                free_bit_slots[i] = t;
+            }
         }
     }
-#endif
 
     zone->free_bit_slots_index = free_bit_slots_index;
 }
@@ -1003,9 +1005,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #endif
     }
 
-#if ALLOC_SANITY
     /* We don't sample if we are allocating from a private zone */
-    if(zone != NULL) {
+    if(_iso_option_get(ALLOC_SANITY) && zone != NULL) {
         if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
@@ -1016,7 +1017,6 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
             }
         }
     }
-#endif
 
 #if HEAP_PROFILER
     _iso_alloc_profile(size);
@@ -1341,8 +1341,10 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     if(LIKELY(permanent == false)) {
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
-#if !ENABLE_ASAN && SANITIZE_CHUNKS
-        __iso_memset(p, POISON_BYTE, zone->chunk_size);
+#if !ENABLE_ASAN
+        if(_iso_option_get(SANITIZE_CHUNKS)) {
+            __iso_memset(p, POISON_BYTE, zone->chunk_size);
+        }
 #endif
     } else {
         __iso_memset(p, POISON_BYTE, zone->chunk_size);
@@ -1434,13 +1436,13 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     }
 #endif
 
-#if ALLOC_SANITY
-    int32_t r = _iso_alloc_free_sane_sample(p);
+    if(_iso_option_get(ALLOC_SANITY)) {
+        int32_t r = _iso_alloc_free_sane_sample(p);
 
-    if(r == OK) {
-        return;
+        if(r == OK) {
+            return;
+        }
     }
-#endif
 
 #if HEAP_PROFILER
     _iso_free_profile();
@@ -1481,13 +1483,13 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     }
 #endif
 
-#if ALLOC_SANITY
-    int32_t r = _iso_alloc_free_sane_sample(p);
+    if(_iso_option_get(ALLOC_SANITY)) {
+        int32_t r = _iso_alloc_free_sane_sample(p);
 
-    if(r == OK) {
-        return;
+        if(r == OK) {
+            return;
+        }
     }
-#endif
 
     if(UNLIKELY(size > SMALL_SIZE_MAX)) {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
@@ -1662,8 +1664,10 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         LOG_AND_ABORT("Double free of big zone 0x%p has been detected!", big_zone);
     }
 
-#if !ENABLE_ASAN && SANITIZE_CHUNKS
-    __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
+#if !ENABLE_ASAN
+    if(_iso_option_get(SANITIZE_CHUNKS)) {
+        __iso_memset(big_zone->user_pages_start, POISON_BYTE, big_zone->size);
+    }
 #endif
     /* If this isn't a permanent free then all we need
      * to do is sanitize the mapping and mark it free.
@@ -1874,18 +1878,18 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     }
 #endif
 
-#if ALLOC_SANITY
-    LOCK_SANITY_CACHE();
-    _sane_allocation_t *sane_alloc = _get_sane_alloc(p);
+    if(_iso_option_get(ALLOC_SANITY)) {
+        LOCK_SANITY_CACHE();
+        _sane_allocation_t *sane_alloc = _get_sane_alloc(p);
 
-    if(sane_alloc != NULL) {
-        size_t orig_size = sane_alloc->orig_size;
+        if(sane_alloc != NULL) {
+            size_t orig_size = sane_alloc->orig_size;
+            UNLOCK_SANITY_CACHE();
+            return orig_size;
+        }
+
         UNLOCK_SANITY_CACHE();
-        return orig_size;
     }
-
-    UNLOCK_SANITY_CACHE();
-#endif
 
     LOCK_ROOT();
 

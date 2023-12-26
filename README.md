@@ -214,6 +214,13 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone)` - Returns the total number of chunks a private zone can hold not including canary chunks. If canaries are disabled this number is absolute, otherwise it is a safe lower bound and actual number may be higher due to canary creation random seed.
 
+### Runtime options APIs
+
+It is possible to set a handful of global runtime options with the following.
+
+`uint64_t iso_option_get(iso_option_t id)` - Fetches the current value of the option `id`.
+`void iso_option_set(iso_option_t id, uint64_t val)` - Set the current value of the option `id`.
+
 ### Experimental APIs
 
 These APIs are exposed via the public header `iso_alloc.h` but are subject to backward breaking changes at any time.
