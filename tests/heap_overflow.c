@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
                     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     memcpy(p, A, strlen(A));
 #else
-    size_t n = 16384;
+    size_t n = 65536;
     uint8_t *pw = (uint8_t *) p;
     while(n--) {
         *pw = 'A';
