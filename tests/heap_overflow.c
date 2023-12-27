@@ -14,15 +14,17 @@ int main(int argc, char *argv[]) {
 
     p = (uint8_t *) iso_alloc(32);
 
+#if MEMCPY_SANITY
     const char *A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-#if MEMCPY_SANITY
     memcpy(p, A, strlen(A));
 #else
-    size_t n = strlen(A);
+    size_t n = 16384;
+    uint8_t *pw = (uint8_t *) p;
     while(n--) {
-        *p++ = *A++;
+        *pw = 'A';
+        pw++;
     }
 #endif
 

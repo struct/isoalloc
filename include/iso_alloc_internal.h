@@ -368,7 +368,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *p);
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *p);
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *restrict p);
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone);
@@ -380,7 +380,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void flush_caches(void);
-INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
+INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace);
@@ -417,14 +417,13 @@ INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
 
 #if ARM_MTE
-INLINE uintptr_t iso_mte_untag_ptr(void *p);
+INLINE void *iso_mte_untag_ptr(void *p);
 INLINE uint8_t iso_mte_extract_tag(void *p);
 INLINE bool iso_is_mte_supported(void);
 INLINE void *iso_mte_set_tag_range(void *p, size_t size);
 INLINE void *iso_mte_create_tag(void *p, uint64_t exclusion_mask);
 INLINE void iso_mte_set_tag(void *p);
 INLINE void *iso_mte_get_tag(void *p);
-INLINE void *iso_mte_set_tags(void *start, void *end);
 #endif
 
 #if SIGNAL_HANDLER

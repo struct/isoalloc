@@ -287,6 +287,15 @@ ifneq ($(ARM_MTE), )
 ifneq ($(UNAME), Linux)
 $(error "ARM MTE is only supported on Linux / Android")
 endif
+
+ifneq ($(DISABLE_CANARY), -DDISABLE_CANARY=1)
+$(error "Disable canaries before continuing")
+endif
+
+ifneq ($(MEMORY_TAGGING), -DMEMORY_TAGGING=0)
+$(error "Disable software tagging before continuing")
+endif
+
 CC = clang-12
 CXX = clang++-12
 endif
@@ -396,7 +405,19 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/pool_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/pool_test $(LDFLAGS)
 	utils/run_tests.sh
 
+mte_test: clean
+	@echo "make mte_test"
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free
+	qemu-aarch64-static -cpu max build/tests
+	qemu-aarch64-static -cpu max build/interfaces_test
+	qemu-aarch64-static -cpu max build/heap_overflow
+	qemu-aarch64-static -cpu max build/double_free
+
 tagging_tests: clean cpp_library_debug
+	@echo "make tagging_tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bad_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bad_tag_ptr_test $(LDFLAGS)

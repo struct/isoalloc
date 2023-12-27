@@ -69,7 +69,6 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
 #if ARM_MTE
     if(iso_is_mte_supported() == false) {
-        LOG("ARM_MTE Enabled in build but not supported by this platform");
         _root->arm_mte_enabled = false;
     } else {
         _root->arm_mte_enabled = true;
@@ -1132,7 +1131,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
 #if ARM_MTE
         if(_root->arm_mte_enabled == true) {
-            p = iso_mte_set_tag_range(p, zone->chunk_size);
+            return iso_mte_set_tag_range(p, zone->chunk_size);
         }
 #endif
         return p;
@@ -1204,7 +1203,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     return NULL;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *restrict p) {
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = iso_mte_untag_ptr(p);
+    }
+#endif
     iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
     void *user_pages_start = UNMASK_USER_PTR(zone);
 
@@ -1329,7 +1333,12 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p) 
 #endif
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
+#if ARM_MTE
+    const uint64_t chunk_offset = (uint64_t) ((iso_mte_untag_ptr(p)) - UNMASK_USER_PTR(zone));
+#else
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
+#endif
+
     const size_t chunk_number = (chunk_offset / zone->chunk_size);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
@@ -1473,11 +1482,6 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
     _iso_free_profile();
 #endif
 
-    if(UNLIKELY(permanent == true)) {
-        _iso_free_internal(p, permanent);
-        return;
-    }
-
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
         /* We want to catch immediate use-after-free without waiting
@@ -1487,6 +1491,11 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
         iso_mte_set_tag(p);
     }
 #endif
+
+    if(UNLIKELY(permanent == true)) {
+        _iso_free_internal(p, permanent);
+        return;
+    }
 
     LOCK_ROOT();
 
@@ -1661,6 +1670,12 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
     if(big_zone != NULL) {
         big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
     }
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = iso_mte_untag_ptr(p);
+    }
+#endif
 
     while(big_zone != NULL) {
         check_big_canary(big_zone);
