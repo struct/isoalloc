@@ -86,6 +86,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * `PROTECT_FREE_BIG_ZONES` Marks big zones on the free list as `PROT_NONE` when not in use
 * `BIG_ZONE_META_DATA_GUARD` Enables guard pages for big zone meta data
 * `BIG_ZONE_GUARD` Enables guard pages for big zone user pages
+* `ARM_MTE` Enables support for the ARM v8.5a Memory Tagging Extension
 
 ## Building
 
@@ -125,10 +126,12 @@ The Makefile targets are very simple:
 
 ## Android
 
-To build Android libraries for x86_64 and ARM64 architectures just `cd` into the `android/jni` directory and run `ndk-build`.
+To build Android libraries for the ARM64 architecture just `cd` into the `android/jni` directory and run `ndk-build`.
 
 For those of you on an M1 based Mac you can still build IsoAlloc with the following command:
 `arch -x86_64 /bin/bash -c $ANDROID_NDK_HOME/build/ndk-build`
+or
+`~/Library/Android/sdk/ndk/26.1.10909125/ndk-build`
 
 ## Linking With C++
 

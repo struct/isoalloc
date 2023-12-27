@@ -14,12 +14,13 @@ LOCAL_CFLAGS := -DTHREAD_SUPPORT=1 -pthread									\
 	-DPROTECT_FREE_BIG_ZONES=0 -DMASK_PTRS=1 -DSIGNAL_HANDLER=0				\
 	-DUSE_MLOCK=1 -DNO_ZERO_ALLOCATIONS=1 -DABORT_ON_NULL=0					\
 	-DABORT_NO_ENTROPY=1 -DMEMCPY_SANITY=0 -DMEMSET_SANITY=0				\
-	-DSTRONG_SIZE_ISOLATION=0 -DISO_DTOR_CLEANUP=0
+	-DSTRONG_SIZE_ISOLATION=0 -DISO_DTOR_CLEANUP=0 -DARM_MTE=1 				\
+	-march=armv8.5-a+memtag
 
 LOCAL_SRC_FILES := ../../src/iso_alloc.c ../../src/iso_alloc_printf.c ../../src/iso_alloc_random.c				\
 				   ../../src/iso_alloc_search.c ../../src/iso_alloc_interfaces.c ../../src/iso_alloc_profiler.c	\
 				   ../../src/iso_alloc_sanity.c ../../src/iso_alloc_util.c ../../src/malloc_hook.c 				\
-				   ../../src/libc_hook.c ../../src/iso_alloc_mem_tags.c
+				   ../../src/libc_hook.c ../../src/iso_alloc_mem_tags.c ../../src/iso_alloc_mte.c
 
 LOCAL_C_INCLUDES := ../../include/
 

@@ -67,6 +67,17 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
      * result in a soft page fault */
     MLOCK(&_root, sizeof(iso_alloc_root));
 
+#if ARM_MTE
+    if(iso_is_mte_supported() == false) {
+        _root->arm_mte_enabled = false;
+    } else {
+        _root->arm_mte_enabled = true;
+        prctl(PR_SET_TAGGED_ADDR_CTRL,
+              PR_TAGGED_ADDR_ENABLE | PR_MTE_TCF_SYNC | (0xfffe << PR_MTE_TAG_SHIFT),
+              0, 0, 0);
+    }
+#endif
+
     _root->zone_retirement_shf = _log2(ZONE_ALLOC_RETIRE);
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
@@ -426,7 +437,17 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         tag_mapping_size = 0;
     }
 #endif
-    void *p = mmap_rw_pages(total_size, false, name);
+    void *p = NULL;
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = mmap_rw_mte_pages(total_size, false, name);
+    } else {
+        p = mmap_rw_pages(total_size, false, name);
+    }
+#else
+    p = mmap_rw_pages(total_size, false, name);
+#endif
 
 #if(__ANDROID__ || KERNEL_VERSION_SEQ_5_17) && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
@@ -1108,6 +1129,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         UNLOCK_ROOT();
         populate_zone_cache(zone);
 
+#if ARM_MTE
+        if(_root->arm_mte_enabled == true) {
+            return iso_mte_set_tag_range(p, zone->chunk_size);
+        }
+#endif
         return p;
     } else {
         /* It's safe to unlock the root at this point because
@@ -1177,7 +1203,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     return NULL;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *restrict p) {
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *restrict p) {
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = iso_mte_untag_ptr(p);
+    }
+#endif
     iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
     void *user_pages_start = UNMASK_USER_PTR(zone);
 
@@ -1302,7 +1333,12 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p) 
 #endif
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
+#if ARM_MTE
+    const uint64_t chunk_offset = (uint64_t) ((iso_mte_untag_ptr(p)) - UNMASK_USER_PTR(zone));
+#else
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
+#endif
+
     const size_t chunk_number = (chunk_offset / zone->chunk_size);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
@@ -1444,6 +1480,16 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
 #if HEAP_PROFILER
     _iso_free_profile();
+#endif
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        /* We want to catch immediate use-after-free without waiting
+         * for chunks to be free'd from the quarantine so we set a new
+         * random tag for the first 16 byte granule at this address */
+        p = (void *) iso_mte_create_tag(p, (1ULL << iso_mte_extract_tag(p)));
+        iso_mte_set_tag(p);
+    }
 #endif
 
     if(UNLIKELY(permanent == true)) {
@@ -1591,6 +1637,12 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
             _iso_alloc_ptr_search(p, true);
         }
 #endif
+
+#if ARM_MTE
+        if(_root->arm_mte_enabled == true) {
+            p = iso_mte_set_tag_range(p, zone->chunk_size);
+        }
+#endif
         return zone;
     } else {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
@@ -1618,6 +1670,12 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
     if(big_zone != NULL) {
         big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
     }
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        p = iso_mte_untag_ptr(p);
+    }
+#endif
 
     while(big_zone != NULL) {
         check_big_canary(big_zone);
@@ -1784,6 +1842,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 #if PROTECT_FREE_BIG_ZONES
                 mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
 #endif
+#if ARM_MTE
+                if(_root->arm_mte_enabled == true) {
+                    big->user_pages_start = iso_mte_set_tag_range(big->user_pages_start, big->size);
+                }
+#endif
                 return big->user_pages_start;
             }
 
@@ -1802,10 +1865,21 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
 
     /* The free list contained no usable entries
      * so we need to create a new one */
+    void *user_pages = NULL;
+#if ARM_MTE
 #if BIG_ZONE_GUARD
-    void *user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
 #else
-    void *user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    if(_root->arm_mte_enabled == true) {
+        user_pages = mmap_rw_mte_pages(size, false, BIG_ZONE_UD_NAME);
+    }
+#endif
+#else
+#if BIG_ZONE_GUARD
+    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#else
+    user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+#endif
 #endif
 
     if(UNLIKELY(user_pages == NULL)) {
@@ -1848,6 +1922,11 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     _root->big_zone_used_count++;
 
     UNLOCK_BIG_ZONE_USED();
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        new_big->user_pages_start = iso_mte_set_tag_range(new_big->user_pages_start, new_big->size);
+    }
+#endif
     return new_big->user_pages_start;
 }
 

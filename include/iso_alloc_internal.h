@@ -368,7 +368,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *p);
-INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(const void *p);
+INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p);
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone);
@@ -415,6 +415,16 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
+
+#if ARM_MTE
+INLINE void *iso_mte_untag_ptr(void *p);
+INLINE uint8_t iso_mte_extract_tag(void *p);
+INLINE bool iso_is_mte_supported(void);
+INLINE void *iso_mte_set_tag_range(void *p, size_t size);
+INLINE void *iso_mte_create_tag(void *p, uint64_t exclusion_mask);
+INLINE void iso_mte_set_tag(void *p);
+INLINE void *iso_mte_get_tag(void *p);
+#endif
 
 #if SIGNAL_HANDLER
 INTERNAL_HIDDEN void handle_signal(int sig, siginfo_t *si, void *ctx);

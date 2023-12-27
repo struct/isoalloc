@@ -194,6 +194,9 @@ ISO_DTOR_CLEANUP = -DISO_DTOR_CLEANUP=0
 ## UAF_PTR_PAGE is enabled for better crash handling
 SIGNAL_HANDLER = -DSIGNAL_HANDLER=0
 
+## Enable AARCH64 / ARMv8.5a Memory Tagging Extension support
+#ARM_MTE = -DARM_MTE=1 -march=armv8.5-a+memtag
+
 ## If you know your target will have an ARMv8.1-A or newer and
 ## supports Top Byte Ignore (TBI) then you want to enable this.
 ## (Currently unused)
@@ -280,6 +283,23 @@ LTO =
 HUGE_PAGES =
 endif
 
+ifneq ($(ARM_MTE), )
+ifneq ($(UNAME), Linux)
+$(error "ARM MTE is only supported on Linux / Android")
+endif
+
+ifneq ($(DISABLE_CANARY), -DDISABLE_CANARY=1)
+$(error "Disable canaries before continuing")
+endif
+
+ifneq ($(MEMORY_TAGGING), -DMEMORY_TAGGING=0)
+$(error "Disable software tagging before continuing")
+endif
+
+CC = clang-12
+CXX = clang++-12
+endif
+
 HOOKS = $(MALLOC_HOOK)
 OPTIMIZE = -O2 -fstrict-aliasing -Wstrict-aliasing
 COMMON_CFLAGS = -Wall -Iinclude/ $(THREAD_SUPPORT) $(PRE_POPULATE_PAGES) $(STARTUP_MEM_USAGE)
@@ -295,7 +315,7 @@ CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
 	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
-	$(PERM_FREE_REALLOC)
+	$(PERM_FREE_REALLOC) $(ARM_MTE)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE
@@ -385,7 +405,19 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/pool_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/pool_test $(LDFLAGS)
 	utils/run_tests.sh
 
+mte_test: clean
+	@echo "make mte_test"
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tests.c -o $(BUILD_DIR)/tests
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/interfaces_test.c -o $(BUILD_DIR)/interfaces_test
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/heap_overflow.c -o $(BUILD_DIR)/heap_overflow
+	$(CC) $(CFLAGS) $(C_SRCS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/double_free.c -o $(BUILD_DIR)/double_free
+	qemu-aarch64-static -cpu max build/tests
+	qemu-aarch64-static -cpu max build/interfaces_test
+	qemu-aarch64-static -cpu max build/heap_overflow
+	qemu-aarch64-static -cpu max build/double_free
+
 tagging_tests: clean cpp_library_debug
+	@echo "make tagging_tests"
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tagged_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bad_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bad_tag_ptr_test $(LDFLAGS)

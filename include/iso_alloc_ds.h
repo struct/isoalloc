@@ -152,6 +152,9 @@ typedef struct {
     int32_t big_zone_free_count;
     int32_t big_zone_used_count;
     uint16_t zones_used;
+#if ARM_MTE
+    bool arm_mte_enabled;
+#endif
 } __attribute__((aligned(sizeof(int64_t)))) iso_alloc_root;
 
 typedef struct {

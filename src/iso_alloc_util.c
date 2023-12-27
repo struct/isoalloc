@@ -7,7 +7,7 @@
 /* sched_getcpu's performance depends on the
  * architecture/kernel version, so we lower
  * the cost of feature's abstraction here. */
-INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
+int _iso_getcpu(void) {
 #if defined(SCHED_GETCPU)
     return sched_getcpu();
 #elif defined(__x86_64__)
@@ -39,14 +39,14 @@ INTERNAL_HIDDEN INLINE int _iso_getcpu(void) {
 }
 #endif
 
-INTERNAL_HIDDEN INLINE void darwin_reuse(void *p, size_t size) {
+void darwin_reuse(void *p, size_t size) {
 #if __APPLE__
     while(madvise(p, size, MADV_FREE_REUSE) && errno == EAGAIN) {
     }
 #endif
 }
 
-INTERNAL_HIDDEN void *create_guard_page(void *p) {
+void *create_guard_page(void *p) {
     if(p == NULL) {
         p = mmap_rw_pages(g_page_size, false, NULL);
 
@@ -61,7 +61,7 @@ INTERNAL_HIDDEN void *create_guard_page(void *p) {
 }
 
 /* Assumes p is page aligned and surrounded by guard pages */
-INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
+void unmap_guarded_pages(void *p, size_t size) {
     size_t sz = ROUND_UP_PAGE(size);
     munmap(p - g_page_size, sz + (g_page_size << 1));
 }
@@ -69,7 +69,7 @@ INTERNAL_HIDDEN void unmap_guarded_pages(void *p, size_t size) {
 /* Assumes size for guard pages is NOT accounted for.
  * Returns a pointer to a contiguous set of RW pages
  * with guard pages mapped on top and bottom. */
-INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
+void *mmap_guarded_rw_pages(size_t size, bool populate, const char *name) {
     size_t sz = ROUND_UP_PAGE(size);
 
     if(sz < size) {
@@ -77,16 +77,39 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_guarded_rw_pages(size_t size, bool pop
     }
 
     void *p = mmap_rw_pages(sz + (g_page_size * 2), populate, name);
+
     create_guard_page(p);
     create_guard_page(p + (g_page_size + sz));
     return (p + g_page_size);
 }
 
-INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_rw_pages(size_t size, bool populate, const char *name) {
+#if ARM_MTE
+void *mmap_guarded_rw_mte_pages(size_t size, bool populate, const char *name) {
+    size_t sz = ROUND_UP_PAGE(size);
+
+    if(sz < size) {
+        return NULL;
+    }
+
+    void *p = mmap_rw_mte_pages(sz + (g_page_size * 2), populate, name);
+
+    create_guard_page(p);
+    create_guard_page(p + (g_page_size + sz));
+    return (p + g_page_size);
+}
+#endif
+
+void *mmap_rw_pages(size_t size, bool populate, const char *name) {
     return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
 }
 
-INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
+#if ARM_MTE
+void *mmap_rw_mte_pages(size_t size, bool populate, const char *name) {
+    return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE | PROT_MTE);
+}
+#endif
+
+void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
 #if !ENABLE_ASAN
     /* Produce a random page address as a hint for mmap */
     uint64_t hint = ROUND_DOWN_PAGE(rand_uint64());
@@ -151,7 +174,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *mmap_pages(size_t size, bool populate, cons
     return p;
 }
 
-INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size) {
+void dont_need_pages(void *p, size_t size) {
     madvise(p, size, FREE_OR_DONTNEED);
 
 #if __APPLE__
@@ -160,13 +183,13 @@ INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size) {
 #endif
 }
 
-INTERNAL_HIDDEN void mprotect_pages(void *p, size_t size, int32_t protection) {
+void mprotect_pages(void *p, size_t size, int32_t protection) {
     if((mprotect(p, size, protection)) == ERR) {
         LOG_AND_ABORT("Failed to mprotect pages @ 0x%p (%s)", p, strerror(errno));
     }
 }
 
-INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
+int32_t name_mapping(void *p, size_t sz, const char *name) {
 #if NAMED_MAPPINGS && (__ANDROID__ || KERNEL_VERSION_SEQ_5_17)
     return prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, sz, name);
 #else
@@ -174,11 +197,11 @@ INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name) {
 #endif
 }
 
-INTERNAL_HIDDEN INLINE CONST bool is_pow2(uint64_t sz) {
+bool is_pow2(uint64_t sz) {
     return (sz & (sz - 1)) == 0;
 }
 
-INTERNAL_HIDDEN INLINE CONST size_t next_pow2(size_t sz) {
+size_t next_pow2(size_t sz) {
     sz |= sz >> 1;
     sz |= sz >> 2;
     sz |= sz >> 4;
@@ -195,7 +218,7 @@ const uint32_t _log_table[32] = {
     19, 27, 23, 6, 26, 5, 4, 31};
 
 /* Fast log2() implementation for 32 bit integers */
-INTERNAL_HIDDEN uint32_t _log2(uint32_t v) {
+uint32_t _log2(uint32_t v) {
     v |= v >> 1;
     v |= v >> 2;
     v |= v >> 4;
