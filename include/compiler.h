@@ -38,6 +38,13 @@
 #endif
 #endif
 
+#if DONT_USE_NEON == 0 && __ARM_NEON
+#include <arm_neon.h>
+#define USE_NEON 1
+#else
+#define USE_NEON 0
+#endif
+
 #if defined(__SANITIZE_ADDRESS__)
 static_assert(ENABLE_ASAN == 1, "ENABLE_ASAN should be 1 to enable asan instead");
 #endif

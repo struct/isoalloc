@@ -164,7 +164,12 @@ assert(sizeof(size_t) >= 64)
 #define BITS_PER_QWORD 64
 #define BITS_PER_QWORD_SHIFT 6
 
+#define BITS_PER_ODWORD 128
+#define BITS_PER_ODWORD_SHIFT 7
+
 #define CANARY_SIZE 8
+
+#define USED_BIT_VECTOR 0x5555555555555555
 
 /* All chunks are 8 byte aligned */
 #define CHUNK_ALIGNMENT 8

@@ -67,6 +67,10 @@ This thread local cache speeds up the free hot path by quarantining chunks until
 
 Zones are linked by their `next_sz_index` member which tells the allocator where in the `_root->zones` array it can find the next zone that holds the same size chunks. This lookup table helps us find the first zone that holds a specific size in O(1) time. This is achieved by placing a zone's index value at that zones size index in the table, e.g. `zone_lookup_table[zone->size] = zone->index`, from there we just need to use the next zone's index member and walk it like a singly linked list to find other zones of that size. Zones are added to the front of the list as they are created.
 
+## ARM NEON
+
+IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile.
+
 ## Tests
 
 I've spent a good amount of time testing IsoAlloc to ensure its reasonably fast compared to glibc/ptmalloc. But it is impossible for me to model or simulate all the different states a program that uses IsoAlloc may be in. This section briefly covers the existing performance related tests for IsoAlloc and the data I have collected so far.

@@ -224,6 +224,10 @@ PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 ## incurs a small performance cost
 MASK_PTRS = -DMASK_PTRS=1
 
+## IsoAlloc uses ARM64 Neon instructions where possible. You can
+## explicitly disable that here
+DONT_USE_NEON = -DDONT_USE_NEON=1
+
 ## We start with the standard C++ specifics but giving
 ## the liberty to choose the gnu++* variants and/or
 ## higher than C++17
@@ -315,7 +319,7 @@ CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEA
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
 	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
-	$(PERM_FREE_REALLOC) $(ARM_MTE)
+	$(PERM_FREE_REALLOC) $(ARM_MTE) $(DONT_USE_NEON)
 CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) $(HOOKS)
 
 EXE_CFLAGS = -fPIE
