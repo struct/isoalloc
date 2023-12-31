@@ -67,6 +67,10 @@ This thread local cache speeds up the free hot path by quarantining chunks until
 
 Zones are linked by their `next_sz_index` member which tells the allocator where in the `_root->zones` array it can find the next zone that holds the same size chunks. This lookup table helps us find the first zone that holds a specific size in O(1) time. This is achieved by placing a zone's index value at that zones size index in the table, e.g. `zone_lookup_table[zone->size] = zone->index`, from there we just need to use the next zone's index member and walk it like a singly linked list to find other zones of that size. Zones are added to the front of the list as they are created.
 
+## ARM NEON
+
+IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile.
+
 ## Tests
 
 I've spent a good amount of time testing IsoAlloc to ensure its reasonably fast compared to glibc/ptmalloc. But it is impossible for me to model or simulate all the different states a program that uses IsoAlloc may be in. This section briefly covers the existing performance related tests for IsoAlloc and the data I have collected so far.
@@ -201,7 +205,7 @@ realloc/free 1441616 tests completed in 0.597936 seconds
 
 ```
 
-The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for some benchmarks but clearly falls behind in the Redis benchmark. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators.
+The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for some benchmarks but clearly falls behind in the Redis benchmark. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators. Please note these are 'best case' measurements, not averages.
 
 ```
 # benchmark allocator elapsed rss user sys page-faults page-reclaims
@@ -232,7 +236,7 @@ redis       mimalloc    4.487 29204 2.07 0.20 0 6825
 redis       smimalloc   4.909 30992 2.28 0.20 0 7410
 redis       tcmalloc    4.675 37336 2.17 0.20 0 8682
 redis       scudo       6.105 36968 2.85 0.23 0 8623
-redis       isoalloc    8.658 62088 4.06 0.32 0 18099
+redis       iso         7.967 105332 3.48 0.54 0 112953
 
 cache-thrash1 jemalloc    01.28 3648 1.27 0.00 1 240
 cache-thrash1 mimalloc    01.28 3408 1.28 0.00 0 197

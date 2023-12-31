@@ -678,31 +678,105 @@ INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
 /* Iterate through a zone bitmap a qword at
  * a time looking for empty slots */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
+
+#if USE_NEON
     const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t max = (zone->max_bitmap_idx & ~(2 - 1));
+
+    for(int i = 0; i < max; i += 2) {
+        int64x2_t im = vld1q_s64(&bm[i]);
+
+        if(vgetq_lane_s64(im, 0) == 0x0) {
+            return (i << BITS_PER_QWORD_SHIFT);
+        }
+        if(vgetq_lane_s64(im, 1) == 0x0) {
+            return ((i + 1) << BITS_PER_QWORD_SHIFT);
+        }
+    }
+#elif __SIZEOF_INT128__
+    const __int128 *bm = (__int128 *) zone->bitmap_start;
+    const size_t max = (zone->max_bitmap_idx >> 1);
+    for(size_t i = 0; i < max; i++) {
+        if(bm[i] == 0x0) {
+            return (i << BITS_PER_ODWORD_SHIFT);
+        }
+    }
+#else
+    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t max = zone->max_bitmap_idx;
 
     /* Iterate the entire bitmap a qword at a time */
-    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
-        /* If the byte is 0 then there are some free
-         * slots we can use at this location */
+    for(bitmap_index_t i = 0; i < max; i++) {
         if(bm[i] == 0x0) {
             return (i << BITS_PER_QWORD_SHIFT);
         }
     }
+#endif
 
     return BAD_BIT_SLOT;
 }
 
 /* This function scans an entire bitmap bit-by-bit
  * and returns the first free bit position. In a heavily
- * used zone this function will be slow to search. */
+ * used zone this function may be slow to search. */
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) {
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    size_t max = 0;
+    bitmap_index_t *bm;
 
-    for(bitmap_index_t i = 0; i < zone->max_bitmap_idx; i++) {
+#if USE_NEON
+    bm = (bitmap_index_t *) zone->bitmap_start;
+    max = (zone->max_bitmap_idx & ~(2 - 1));
+
+    for(bitmap_index_t i = 0; i < max; i += 2) {
+        int64x2_t im = vld1q_s64(&bm[i]);
+        int64_t i0 = vgetq_lane_s64(im, 0);
+
+        if(i0 != USED_BIT_VECTOR) {
+            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+                if((GET_BIT(i0, j)) == 0) {
+                    return ((i << BITS_PER_QWORD_SHIFT) + j);
+                }
+            }
+        }
+
+        int64_t i1 = vgetq_lane_s64(im, 1);
+
+        if(i1 != USED_BIT_VECTOR) {
+            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
+                if((GET_BIT(i1, j)) == 0) {
+                    return (((i + 1) << BITS_PER_QWORD_SHIFT) + j);
+                }
+            }
+        }
+    }
+
+    if(max == zone->max_bitmap_idx) {
+        return BAD_BIT_SLOT;
+    }
+#elif __SIZEOF_INT128__
+    const __int128 *ebm = (__int128 *) zone->bitmap_start;
+    max = (zone->max_bitmap_idx >> 1);
+
+    for(size_t i = 0; i < max; i++) {
+        __int128_t bts = ebm[i];
+
+        for(int64_t j = 0; j < BITS_PER_ODWORD; j += BITS_PER_CHUNK) {
+            if((GET_BIT(bts, j)) == 0) {
+                return ((i << BITS_PER_ODWORD_SHIFT) + j);
+            }
+        }
+    }
+#endif
+    bm = (bitmap_index_t *) zone->bitmap_start;
+
+    for(bitmap_index_t i = max; i < zone->max_bitmap_idx; i++) {
         bit_slot_t bts = bm[i];
 
+        if(bts != USED_BIT_VECTOR) {
+            continue;
+        }
+
         for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            /* Check each bit to see if its available */
             if((GET_BIT(bts, j)) == 0) {
                 return ((i << BITS_PER_QWORD_SHIFT) + j);
             }

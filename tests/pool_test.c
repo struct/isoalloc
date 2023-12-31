@@ -13,7 +13,6 @@ static const uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048, 40
 int allocate(size_t array_size, size_t allocation_size) {
     iso_alloc_zone_handle *zone = iso_alloc_new_zone(allocation_size);
     size_t total_chunks = iso_zone_chunk_count(zone);
-    int32_t alloc_count = 0;
 
     /* We can treat private zones like pools of chunks
      * that don't need to be freed. Instead we can just
@@ -25,10 +24,8 @@ int allocate(size_t array_size, size_t allocation_size) {
 
         if(p == NULL) {
             LOG_AND_ABORT("Failed to allocate %ld bytes after %d total allocations from zone with %d total chunks",
-                          allocation_size, alloc_count, total_chunks);
+                          allocation_size, i, total_chunks);
         }
-
-        alloc_count++;
     }
 
     iso_alloc_destroy_zone(zone);
