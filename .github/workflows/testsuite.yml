@@ -47,6 +47,11 @@ jobs:
       - run: apk update && apk add build-base bash musl-dev linux-headers
       - run: make tests CC=gcc CXX=g++
       - run: make cpp_tests CC=gcc CXX=g++
-
-
-
+  testsuite-mte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install clang-12 make qemu qemu-system-arm qemu-user-static
+      - run: sed -i s/-DDISABLE_CANARY=0/-DDISABLE_CANARY=1/ Makefile
+      - run: sed -i s/\#ARM_MTE/ARM_MTE/ Makefile
+      - run: make mte_test
