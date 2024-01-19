@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <array>
+#include <vector>
 #if THREAD_SUPPORT
 #include <thread>
 #endif
@@ -62,8 +63,8 @@ class Derived : Base {
 };
 
 int allocate(size_t array_size, size_t allocation_size) {
-    void *p[array_size];
-    memset(p, 0x0, array_size);
+    std::vector<void *> p(array_size);
+    memset(p.data(), 0x0, p.size());
 
     for(size_t i = 0; i < array_size; i++) {
         if(allocation_size == 0) {
