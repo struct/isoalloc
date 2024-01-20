@@ -24,7 +24,7 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
     }
 
     _mtp += (chunk_offset / zone->chunk_size);
-    ;
+
     return *_mtp;
 #else
     return 0;
