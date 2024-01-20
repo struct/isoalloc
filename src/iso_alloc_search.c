@@ -11,6 +11,12 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
     uint8_t *end = NULL;
     const size_t zones_used = _root->zones_used;
 
+#if MEMORY_TAGGING || (ARM_MTE == 1)
+    /* It should be safe to clear these upper bits even
+     * if the pointer wasn't returned by IsoAlloc. */
+    n = (void *) ((uintptr_t) n & TAGGED_PTR_MASK);
+#endif
+
     for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
