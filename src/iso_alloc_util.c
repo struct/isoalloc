@@ -157,7 +157,7 @@ void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
         LOG_AND_ABORT("Failed to mmap rw pages");
     }
 
-#if __linux__ && MAP_HUGETLB && HUGE_PAGES && MADV_HUGEPAGE
+#if __linux__ && MAP_HUGETLB && HUGE_PAGES && THP_PAGES && MADV_HUGEPAGE
     if(sz == ZONE_USER_SIZE || sz == (ZONE_USER_SIZE >> 1)) {
         madvise(p, sz, MADV_HUGEPAGE);
     }
