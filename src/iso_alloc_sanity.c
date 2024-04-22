@@ -142,18 +142,36 @@ struct uffdio_api _uffd_api;
 int64_t _uf_fd;
 
 INTERNAL_HIDDEN void _iso_alloc_setup_userfaultfd(void) {
-    _uf_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+    int flags = O_CLOEXEC | O_NONBLOCK;
+
+#ifdef UFFD_USER_MODE_ONLY
+    /* Below, the syscall fails not necessarily because lack of kernel support.
+     * By default, the `unprivileged_userfaultfd` flag is disabled.
+     * From Linux 5.11 however, we can handle pages registered from the user-space. */
+    flags |= UFFD_USER_MODE_ONLY;
+#endif
+    _uf_fd = syscall(__NR_userfaultfd, flags);
 
     if(_uf_fd == ERR) {
-        LOG_AND_ABORT("This kernel does not support userfaultfd");
+        LOG_AND_ABORT("This kernel does not support userfaultfd or is disallowed in the user-space");
     }
 
     _uffd_api.api = UFFD_API;
     _uffd_api.features = 0;
 
+#if THREAD_SUPPORT
+    _uffd_api.features |= UFFD_FEATURE_THREAD_ID;
+#endif
+
     if(ioctl(_uf_fd, UFFDIO_API, &_uffd_api) == ERR) {
         LOG_AND_ABORT("Failed to setup userfaultfd with ioctl");
     }
+
+#if THREAD_SUPPORT
+    if(!(_uffd_api.features & UFFD_FEATURE_THREAD_ID)) {
+        LOG_AND_ABORT("Failed to setup userfaultfd with thread id report");
+    }
+#endif
 
     if(_page_fault_thread == 0) {
         int32_t s = pthread_create(&_page_fault_thread, NULL, _page_fault_thread_handler, NULL);
@@ -220,8 +238,12 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
                 reg.range.len = g_page_size;
             }
 
-            if((ioctl(_uf_fd, UFFDIO_UNREGISTER, &reg.range)) == ERR) {
+            if(UNLIKELY((ioctl(_uf_fd, UFFDIO_UNREGISTER, &reg.range)) == ERR)) {
+#if THREAD_SUPPORT
+                LOG_AND_ABORT("Failed to unregister address %p, thread %u", umsg.arg.pagefault.address, umsg.arg.pagefault.feat.ptid);
+#else
                 LOG_AND_ABORT("Failed to unregister address %p", umsg.arg.pagefault.address);
+#endif
             }
 
             UNLOCK_SANITY_CACHE();
@@ -230,7 +252,11 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 
         /* Detects a read of an uninitialized page */
         if((umsg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) == 0) {
+#ifdef THREAD_SUPPORT
+            LOG_AND_ABORT("Uninitialized read detected on page %p, thread %u", umsg.arg.pagefault.address, umsg.arg.pagefault.feat.ptid);
+#else
             LOG_AND_ABORT("Uninitialized read detected on page %p", umsg.arg.pagefault.address);
+#endif
         }
 
         UNLOCK_SANITY_CACHE();
