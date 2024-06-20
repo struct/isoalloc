@@ -254,7 +254,7 @@ assert(sizeof(size_t) >= 64)
 #define BIG_ZONE_USER_PAGE_COUNT 2
 #define BIG_ZONE_USER_PAGE_COUNT_SHIFT 1
 
-#if MEMORY_TAGGING
+#if MEMORY_TAGGING || (ARM_MTE == 1)
 #define TAGGED_PTR_MASK 0x00ffffffffffffff
 #define IS_TAGGED_PTR_MASK 0xff00000000000000
 #define UNTAGGED_BITS 56
