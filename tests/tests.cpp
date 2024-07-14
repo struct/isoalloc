@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
         Derived::operator delete(d, ptr);
     }
 
-#if THREAD_SUPPORT
+#if THREAD_SUPPORT && __linux__
     for(size_t i = 0; i < 4; i++) {
         std::array<std::thread, 4> t;
         for(size_t z = 0; z < 4; z++) {
