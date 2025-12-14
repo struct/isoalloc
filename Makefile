@@ -301,8 +301,8 @@ ifneq ($(MEMORY_TAGGING), -DMEMORY_TAGGING=0)
 $(error "Disable software tagging before continuing")
 endif
 
-CC = clang-12
-CXX = clang++-12
+CC = clang-18
+CXX = clang++-18
 endif
 
 HOOKS = $(MALLOC_HOOK)
@@ -487,10 +487,10 @@ install:
 	cp -pR build/$(LIBNAME) /usr/lib/
 
 format:
-	clang-format-12 $(SRC_DIR)/*.* tests/*.* include/*.h -i
+	clang-format-18 $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 format-ci:
-	clang-format-12 --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
+	clang-format-18 --Werror --dry-run $(SRC_DIR)/*.* tests/*.* include/*.h -i
 
 clean:
 	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out \

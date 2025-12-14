@@ -813,7 +813,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t 
      * chunks smaller than ZONE_1024 */
     if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
         return NULL;
-    } 
+    }
     if(size <= ZONE_1024 && zone->chunk_size > ZONE_1024) {
         return NULL;
     }

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [12, 13, 14, 15]
+        version: [15, 16, 17, 18]
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -20,17 +20,17 @@ jobs:
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ matrix.version }} 100
       - run: make tests
       - run: make cpp_tests
-  testsuite-clang12-perf:
+  testsuite-clang18-perf:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt install clang-12
+      - run: sudo apt install clang-18
       - run: make malloc_cmp_test
   testsuite-clang-format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt install clang clang-format-12
+      - run: sudo apt install clang clang-format-18
       - run: make format-ci
   testsuite-gcc:
     runs-on: ubuntu-latest

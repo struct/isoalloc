@@ -130,8 +130,8 @@ typedef struct {
      * that holds a specific size in O(1) time */
     zone_lookup_table_t zone_lookup_table[ZONE_LOOKUP_TABLE_SZ];
     /* For chunk sizes >= 1024 our bitmap size is smaller
-    * than a page. This optimization preallocates pages to
-    * hold multiple bitmaps for these zones */
+     * than a page. This optimization preallocates pages to
+     * hold multiple bitmaps for these zones */
     iso_alloc_bitmap_t bitmaps[sizeof(small_bitmap_sizes) / sizeof(int)];
     uint64_t zone_handle_mask;
     uint64_t big_zone_next_mask;
