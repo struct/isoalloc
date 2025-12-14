@@ -5,7 +5,7 @@
 
 /* The majority of this code is adapted from Scudos implementation
  * of ARM MTE support. That code can be found here:
- * https://android.googlesource.com/platform/external/scudo/+/refs/tags/android-14.0.0_r1/standalone/ 
+ * https://android.googlesource.com/platform/external/scudo/+/refs/tags/android-14.0.0_r1/standalone/
  * Its license (The LLVM Project is under the Apache License v2.0 with LLVM Exceptions) can be found here
  * https://android.googlesource.com/platform/external/scudo/+/refs/tags/android-14.0.0_r1/LICENSE.TXT */
 
