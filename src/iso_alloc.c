@@ -603,15 +603,19 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
                 }
             }
         } else {
-            for(uint64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-                if((GET_BIT(bts, j)) == 0) {
-                    free_bit_slots[free_bit_slots_index] = (bm_idx_shf + j);
-                    free_bit_slots_index++;
+            /* Use ctzll to skip directly to each free slot instead
+             * of iterating all 32 even-bit positions */
+            uint64_t free_mask = ~(uint64_t) bts & USED_BIT_VECTOR;
 
-                    if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
-                        break;
-                    }
+            while(free_mask) {
+                free_bit_slots[free_bit_slots_index] = (bm_idx_shf + __builtin_ctzll(free_mask));
+                free_bit_slots_index++;
+
+                if(UNLIKELY(free_bit_slots_index >= ZONE_FREE_LIST_SZ)) {
+                    break;
                 }
+
+                free_mask &= free_mask - 1; /* clear lowest set bit */
             }
         }
     }
@@ -729,24 +733,19 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
 
     for(bitmap_index_t i = 0; i < max; i += 2) {
         int64x2_t im = vld1q_s64(&bm[i]);
-        int64_t i0 = vgetq_lane_s64(im, 0);
 
-        if(i0 != USED_BIT_VECTOR) {
-            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-                if((GET_BIT(i0, j)) == 0) {
-                    return ((i << BITS_PER_QWORD_SHIFT) + j);
-                }
-            }
+        /* Use ctzll to find the first free slot in O(1) instead of
+         * scanning bit-by-bit. USED_BIT_VECTOR selects even-position
+         * bits (one per chunk); inverting gives 1s where chunks are
+         * free (use bitwise ops on multiple values) */
+        uint64_t free_mask0 = ~(uint64_t) vgetq_lane_s64(im, 0) & USED_BIT_VECTOR;
+        if(free_mask0) {
+            return ((i << BITS_PER_QWORD_SHIFT) + __builtin_ctzll(free_mask0));
         }
 
-        int64_t i1 = vgetq_lane_s64(im, 1);
-
-        if(i1 != USED_BIT_VECTOR) {
-            for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-                if((GET_BIT(i1, j)) == 0) {
-                    return (((i + 1) << BITS_PER_QWORD_SHIFT) + j);
-                }
-            }
+        uint64_t free_mask1 = ~(uint64_t) vgetq_lane_s64(im, 1) & USED_BIT_VECTOR;
+        if(free_mask1) {
+            return (((i + 1) << BITS_PER_QWORD_SHIFT) + __builtin_ctzll(free_mask1));
         }
     }
 
@@ -758,28 +757,26 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
     max = (zone->max_bitmap_idx >> 1);
 
     for(size_t i = 0; i < max; i++) {
-        __int128_t bts = ebm[i];
+        unsigned __int128 bts = (unsigned __int128) ebm[i];
 
-        for(int64_t j = 0; j < BITS_PER_ODWORD; j += BITS_PER_CHUNK) {
-            if((GET_BIT(bts, j)) == 0) {
-                return ((i << BITS_PER_ODWORD_SHIFT) + j);
-            }
+        /* Split 128-bit word into two 64-bit halves and use ctzll */
+        uint64_t free_lo = ~(uint64_t) bts & USED_BIT_VECTOR;
+        if(free_lo) {
+            return ((i << BITS_PER_ODWORD_SHIFT) + __builtin_ctzll(free_lo));
+        }
+
+        uint64_t free_hi = ~(uint64_t) (bts >> 64) & USED_BIT_VECTOR;
+        if(free_hi) {
+            return ((i << BITS_PER_ODWORD_SHIFT) + 64 + __builtin_ctzll(free_hi));
         }
     }
 #endif
     bm = (bitmap_index_t *) zone->bitmap_start;
 
     for(bitmap_index_t i = max; i < zone->max_bitmap_idx; i++) {
-        bit_slot_t bts = bm[i];
-
-        if(bts != USED_BIT_VECTOR) {
-            continue;
-        }
-
-        for(int64_t j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            if((GET_BIT(bts, j)) == 0) {
-                return ((i << BITS_PER_QWORD_SHIFT) + j);
-            }
+        uint64_t free_mask = ~(uint64_t) bm[i] & USED_BIT_VECTOR;
+        if(free_mask) {
+            return ((i << BITS_PER_QWORD_SHIFT) + __builtin_ctzll(free_mask));
         }
     }
 
@@ -1130,11 +1127,13 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
             /* Hot Path: Check the zone cache for a zone this
              * thread recently used for an alloc/free operation.
              * It's likely we are allocating a similar size chunk
-             * and this will speed up that operation */
+             * and this will speed up that operation.
+             * Scan newest-to-oldest (LIFO) since the most recently
+             * used zone is most likely to have free slots available. */
             size_t _zone_cache_count = zone_cache_count;
             _tzc *tzc = zone_cache;
 
-            for(size_t i = 0; i < _zone_cache_count; i++) {
+            for(size_t i = _zone_cache_count; i-- > 0;) {
                 if(tzc[i].chunk_size >= size) {
                     iso_alloc_zone_t *_zone = tzc[i].zone;
                     if(is_zone_usable(_zone, size) != NULL) {
@@ -1415,15 +1414,15 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
 #else
     const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
 #endif
-
-    const size_t chunk_number = (chunk_offset / zone->chunk_size);
+    const size_t chunk_size = zone->chunk_size;
+    const size_t chunk_number = (chunk_offset / chunk_size);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
 
     /* Ensure the pointer is a multiple of chunk size. */
-    if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
+    if(UNLIKELY((chunk_offset % chunk_size) != 0)) {
         LOG_AND_ABORT("Chunk %d at 0x%p is not a multiple of zone[%d] chunk size %d. Off by %lu bits",
-                      chunk_offset, p, zone->index, zone->chunk_size, (chunk_offset & (zone->chunk_size - 1)));
+                      chunk_offset, p, zone->index, chunk_size, (chunk_offset & (chunk_size - 1)));
     }
 
     if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
@@ -1455,10 +1454,10 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
         UNSET_BIT(b, which_bit);
         insert_free_bit_slot(zone, bit_slot);
 #if !ENABLE_ASAN && SANITIZE_CHUNKS
-        __iso_memset(p, POISON_BYTE, zone->chunk_size);
+        __iso_memset(p, POISON_BYTE, chunk_size);
 #endif
     } else {
-        __iso_memset(p, POISON_BYTE, zone->chunk_size);
+        __iso_memset(p, POISON_BYTE, chunk_size);
     }
 
     bm[dwords_to_bit_slot] = b;
@@ -1475,14 +1474,14 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
     if((chunk_number + 1) != zone->chunk_count) {
         const bit_slot_t bit_slot_over = ((chunk_number + 1) << BITS_PER_CHUNK_SHIFT);
         if((GET_BIT(bm[(bit_slot_over >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_over) + 1))) == 1) {
-            check_canary(zone, p + zone->chunk_size);
+            check_canary(zone, p + chunk_size);
         }
     }
 
     if(chunk_number != 0) {
         const bit_slot_t bit_slot_under = ((chunk_number - 1) << BITS_PER_CHUNK_SHIFT);
         if((GET_BIT(bm[(bit_slot_under >> BITS_PER_QWORD_SHIFT)], (WHICH_BIT(bit_slot_under) + 1))) == 1) {
-            check_canary(zone, p - zone->chunk_size);
+            check_canary(zone, p - chunk_size);
         }
     }
 #endif
