@@ -80,219 +80,98 @@ The `malloc_cmp_test` build target will build 2 different versions of the test/t
 The following test was run in an Ubuntu 20.04.3 LTS (Focal Fossa) for ARM64 docker container with libc version 2.31-0ubuntu9.2 on a MacOS host. The kernel used was `Linux f7f23ca7dc44 5.10.76-linuxkit`.
 
 ```
-Running IsoAlloc Performance Test
-
+IsoAlloc
 build/tests
-iso_alloc/iso_free 1441616 tests completed in 0.168293 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.171274 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.231350 seconds
+iso_alloc/iso_free 1834784 tests completed in 0.081202 seconds
+iso_calloc/iso_free 1834784 tests completed in 1.041517 seconds
+iso_realloc/iso_free 1834784 tests completed in 0.828665 seconds
 
-Running glibc/ptmalloc Performance Test
+jemalloc
+LD_PRELOAD=./libjemalloc.so build/tests
+iso_alloc/iso_free 1834784 tests completed in 0.084586 seconds
+iso_calloc/iso_free 1834784 tests completed in 1.461562 seconds
+iso_realloc/iso_free 1834784 tests completed in 0.779396 seconds
 
-malloc/free 1441616 tests completed in 0.166813 seconds
-calloc/free 1441616 tests completed in 0.223232 seconds
-realloc/free 1441616 tests completed in 0.306684 seconds
+scudo
+LD_PRELOAD=./libscudo.so build/malloc_tests
+malloc/free 1834784 tests completed in 0.717936 seconds
+calloc/free 1834784 tests completed in 2.706141 seconds
+realloc/free 1834784 tests completed in 1.840283 seconds
 
-Running jemalloc Performance Test
+system malloc
+malloc/free 1834784 tests completed in 0.662565 seconds
+calloc/free 1834784 tests completed in 2.728955 seconds
+realloc/free 1834784 tests completed in 1.943556 seconds
 
-LD_PRELOAD=/code/mimalloc-bench/extern/jemalloc/lib/libjemalloc.so build/malloc_tests
-malloc/free 1441616 tests completed in 0.064520 seconds
-calloc/free 1441616 tests completed in 0.178228 seconds
-realloc/free 1441616 tests completed in 0.271620 seconds
-
-Running mimalloc Performance Test
-
-LD_PRELOAD=/code/mimalloc-bench/extern/mimalloc/out/release/libmimalloc.so build/malloc_tests
-malloc/free 1441616 tests completed in 0.085471 seconds
-calloc/free 1441616 tests completed in 0.099644 seconds
-realloc/free 1441616 tests completed in 0.143821 seconds
-
-Running mimalloc-secure Performance Test
-
-LD_PRELOAD=/code/mimalloc-bench/extern/mimalloc/out/secure/libmimalloc-secure.so build/malloc_tests
-malloc/free 1441616 tests completed in 0.128479 seconds
-calloc/free 1441616 tests completed in 0.148797 seconds
-realloc/free 1441616 tests completed in 0.191719 seconds
-
-Running tcmalloc Performance Test
-
-LD_PRELOAD=/code/mimalloc-bench/extern/gperftools/.libs/libtcmalloc_minimal.so build/malloc_tests
-malloc/free 1441616 tests completed in 0.093779 seconds
-calloc/free 1441616 tests completed in 0.103634 seconds
-realloc/free 1441616 tests completed in 0.131152 seconds
-
-Running scudo Performance Test
-
-LD_PRELOAD=/code/mimalloc-bench/extern/scudo/compiler-rt/lib/scudo/standalone/libscudo.so build/malloc_tests
-malloc/free 1441616 tests completed in 0.227757 seconds
-calloc/free 1441616 tests completed in 0.204610 seconds
-realloc/free 1441616 tests completed in 0.258962 seconds
-
-```
-
-The same test run on an AWS t2.xlarge Ubuntu 20.04 instance with 4 `Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz` CPUs and 16 gb of memory:
-
-```
-Running IsoAlloc Performance Test
-
-iso_alloc/iso_free 1441616 tests completed in 0.147336 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.161482 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.244981 seconds
-
-Running glibc malloc Performance Test
-
-malloc/free 1441616 tests completed in 0.182437 seconds
-calloc/free 1441616 tests completed in 0.246065 seconds
-realloc/free 1441616 tests completed in 0.332292 seconds
-```
-
-Here is the same test as above on Mac OS 12.1
-
-```
-Running IsoAlloc Performance Test
-
-build/tests
-iso_alloc/iso_free 1441616 tests completed in 0.149818 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.183772 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.274413 seconds
-
-Running system malloc Performance Test
-
-build/malloc_tests
-malloc/free 1441616 tests completed in 0.084803 seconds
-calloc/free 1441616 tests completed in 0.194901 seconds
-realloc/free 1441616 tests completed in 0.240934 seconds
 ```
 
 This same test can be used with the `perf` utility to measure basic stats like page faults and CPU utilization using both heap implementations. The output below is on the same AWS t2.xlarge instance as above.
 
 ```
-$ perf stat build/tests
+$ sudo perf stat build/tests
 
-iso_alloc/iso_free 1441616 tests completed in 0.416603 seconds
-iso_calloc/iso_free 1441616 tests completed in 0.575822 seconds
-iso_realloc/iso_free 1441616 tests completed in 0.679546 seconds
+iso_alloc/iso_free 1834784 tests completed in 0.075247 seconds
+iso_calloc/iso_free 1834784 tests completed in 1.100221 seconds
+iso_realloc/iso_free 1834784 tests completed in 0.901481 seconds
 
  Performance counter stats for 'build/tests':
 
-           1709.07 msec task-clock                #    1.000 CPUs utilized
-                 7      context-switches          #    0.004 K/sec
-                 0      cpu-migrations            #    0.000 K/sec
-            145562      page-faults               #    0.085 M/sec
+     2,082,958,624      task-clock                       #    0.874 CPUs utilized             
+                26      context-switches                 #   12.482 /sec                      
+                 0      cpu-migrations                   #    0.000 /sec                      
+           576,000      page-faults                      #  276.530 K/sec                     
+     <not counted>      armv8_pmuv3_0/instructions/                                             (0.00%)
+    10,522,826,144      armv8_pmuv3_1/instructions/      #    1.33  insn per cycle            
+                                                  #    0.61  stalled cycles per insn   
+     <not counted>      armv8_pmuv3_0/cycles/                                                   (0.00%)
+     7,910,463,871      armv8_pmuv3_1/cycles/            #    3.798 GHz                       
+     <not counted>      armv8_pmuv3_0/stalled-cycles-frontend/                                        (0.00%)
+       149,093,549      armv8_pmuv3_1/stalled-cycles-frontend/ #    1.88% frontend cycles idle      
+     <not counted>      armv8_pmuv3_0/stalled-cycles-backend/                                        (0.00%)
+     6,432,153,136      armv8_pmuv3_1/stalled-cycles-backend/ #   81.31% backend cycles idle       
+     <not counted>      armv8_pmuv3_0/branches/                                                 (0.00%)
+     1,914,734,216      armv8_pmuv3_1/branches/          #  919.238 M/sec                     
+     <not counted>      armv8_pmuv3_0/branch-misses/                                            (0.00%)
+         3,870,559      armv8_pmuv3_1/branch-misses/     #    0.20% of all branches           
 
-       1.709414837 seconds time elapsed
+       2.382450831 seconds time elapsed
 
-       1.405068000 seconds user
-       0.304239000 seconds sys
-
-$ perf stat build/malloc_tests
-
-malloc/free 1441616 tests completed in 0.359380 seconds
-calloc/free 1441616 tests completed in 0.569044 seconds
-realloc/free 1441616 tests completed in 0.597936 seconds
-
- Performance counter stats for 'build/malloc_tests':
-
-           1528.51 msec task-clock                #    1.000 CPUs utilized
-                 5      context-switches          #    0.003 K/sec
-                 0      cpu-migrations            #    0.000 K/sec
-            433055      page-faults               #    0.283 M/sec
-
-       1.528795324 seconds time elapsed
-
-       0.724352000 seconds user
-       0.804371000 seconds sys
-
+       1.325971000 seconds user
+       1.055181000 seconds sys
 ```
 
-The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with jemalloc, tcmalloc, and glibc/ptmalloc for some benchmarks but clearly falls behind in the Redis benchmark. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators. Please note these are 'best case' measurements, not averages.
+The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with other allocators for some benchmarks but clearly falls behind on others. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators. Please note these are 'best case' measurements, not averages.
 
 ```
-# benchmark allocator elapsed rss user sys page-faults page-reclaims
+#------------------------------------------------------------------
+# test    alloc   time  rss    user  sys  page-faults page-reclaims
+cfrac       je    02.99 4912 2.99 0.00 0 454
+cfrac       mi    03.01 2484 3.00 0.00 0 346
+cfrac       iso   05.84 26616 5.75 0.09 0 6502
 
-cfrac       jemalloc    03.47 3948 3.46 0.00 0 422
-cfrac       mimalloc    03.19 2688 3.18 0.00 0 337
-cfrac       smimalloc   03.57 2860 3.56 0.00 0 375
-cfrac       tcmalloc    03.25 7392 3.24 0.00 0 1325
-cfrac       scudo       06.00 3920 5.99 0.00 0 561
-cfrac       isoalloc    05.69 12920 5.58 0.10 0 3016
+espresso    je    02.52 4872 2.50 0.01 0 538
+espresso    mi    02.46 3060 2.45 0.01 0 3637
+espresso    iso   03.65 69876 3.56 0.09 0 21695
 
-espresso    jemalloc    03.61 4508 3.56 0.00 5 553
-espresso    mimalloc    03.43 3828 3.40 0.01 1 1299
-espresso    smimalloc   03.65 5760 3.60 0.01 0 2682
-espresso    tcmalloc    03.43 8132 3.39 0.01 0 1485
-espresso    scudo       04.53 4028 4.49 0.01 0 514
-espresso    isoalloc    04.59 48984 4.49 0.07 0 24276
+barnes      je    01.62 60268 1.59 0.02 0 16687
+barnes      mi    01.71 57672 1.68 0.02 0 16550
+barnes      iso   01.66 74628 1.62 0.03 0 20851
 
-barnes      jemalloc    01.93 59412 1.91 0.01 3 16646
-barnes      mimalloc    01.91 57860 1.89 0.01 0 16539
-barnes      smimalloc   01.98 57928 1.96 0.01 0 16557
-barnes      tcmalloc    01.91 62664 1.89 0.01 0 17515
-barnes      scudo       01.92 58940 1.91 0.01 0 16595
-barnes      isoalloc    01.92 58328 1.91 0.01 0 16714
+gs          je    00.16 37592 0.15 0.01 0 5808
+gs          mi    00.16 32588 0.13 0.02 0 5109
+gs          iso   00.23 71152 0.16 0.07 0 19698
 
-redis       jemalloc    5.019 31280 2.37 0.17 0 7268
-redis       mimalloc    4.487 29204 2.07 0.20 0 6825
-redis       smimalloc   4.909 30992 2.28 0.20 0 7410
-redis       tcmalloc    4.675 37336 2.17 0.20 0 8682
-redis       scudo       6.105 36968 2.85 0.23 0 8623
-redis       iso         7.967 105332 3.48 0.54 0 112953
+larsonN     je    1.171 266596 98.81 0.92 0 409842
+larsonN     mi    1.016 299768 99.38 0.44 0 83755
+larsonN     iso   918.582 126528 99.64 0.37 0 31368
 
-cache-thrash1 jemalloc    01.28 3648 1.27 0.00 1 240
-cache-thrash1 mimalloc    01.28 3408 1.28 0.00 0 197
-cache-thrash1 smimalloc   01.28 3256 1.27 0.00 0 202
-cache-thrash1 tcmalloc    01.27 7100 1.26 0.00 0 1127
-cache-thrash1 scudo       01.27 3240 1.26 0.00 0 200
-cache-thrash1 isoalloc    01.26 3460 1.26 0.00 0 363
+rocksdb     je    02.48 162424 2.05 0.63 0 38384
+rocksdb     mi    02.48 159812 2.04 0.66 0 37464
+rocksdb     iso   02.74 197220 2.49 0.55 0 46815
 
-cache-thrashN jemalloc    00.21 3936 1.64 0.00 0 360
-cache-thrashN mimalloc    00.21 3516 1.63 0.00 0 239
-cache-thrashN smimalloc   00.22 3584 1.68 0.01 0 249
-cache-thrashN tcmalloc    02.74 6992 20.36 0.00 0 1151
-cache-thrashN scudo       00.61 3164 2.53 0.00 0 237
-cache-thrashN isoalloc    00.71 4032 5.63 0.00 0 472
-
-larsonN     jemalloc    4.892 84172 39.71 0.20 1 52478
-larsonN     mimalloc    4.360 98504 39.61 0.17 0 26372
-larsonN     smimalloc   6.546 105724 39.77 0.16 3 27432
-larsonN     tcmalloc    4.450 63464 39.57 0.21 0 15299
-larsonN     scudo       44.707 33104 28.92 4.80 0 7826
-larsonN     isoalloc    249.791 63996 7.09 17.51 0 15567
-
-larsonN-sized jemalloc    4.872 84428 39.56 0.22 1 52874
-larsonN-sized mimalloc    4.335 95388 39.82 0.13 0 25625
-larsonN-sized smimalloc   6.332 106372 39.71 0.17 0 27642
-larsonN-sized tcmalloc    4.230 64956 39.59 0.15 0 15669
-larsonN-sized scudo       44.601 32900 28.68 4.65 0 7793
-larsonN-sized isoalloc    363.176 70240 39.59 0.29 0 17222
-
-mstressN    jemalloc    00.92 139772 2.10 1.76 1 984466
-mstressN    mimalloc    00.43 352132 1.56 0.15 0 88171
-mstressN    smimalloc   00.62 352204 1.85 0.67 0 95538      
-mstressN    tcmalloc    00.51 147680 1.80 0.25 0 37111
-mstressN    scudo       01.38 142068 3.23 1.63 0 616639
-mstressN    isoalloc    03.11 225352 4.90 5.91 0 722991
-
-xmalloc-testN jemalloc    2.307 64460 25.13 5.14 1 22975
-xmalloc-testN mimalloc    0.513 82212 36.03 1.05 0 26689
-xmalloc-testN smimalloc   0.857 73504 36.58 1.05 0 28285
-xmalloc-testN tcmalloc    6.055 40824 9.31 18.77 0 9642
-xmalloc-testN scudo       13.416 56708 10.06 14.30 0 16560
-xmalloc-testN isoalloc    10.049 15268 7.19 20.91 0 3668
-
-glibc-simple jemalloc    01.96 2984 1.95 0.00 1 313
-glibc-simple mimalloc    01.50 1900 1.49 0.00 0 212
-glibc-simple smimalloc   01.77 2032 1.76 0.00 0 229
-glibc-simple tcmalloc    01.52 6880 1.52 0.00 0 1212
-glibc-simple scudo       04.58 2776 4.58 0.00 0 281
-glibc-simple isoalloc    04.21 10892 4.12 0.09 0 4674
-
-glibc-thread jemalloc    6.772 4160 15.98 0.00 1 457
-glibc-thread mimalloc    3.759 3320 15.98 0.00 0 585
-glibc-thread smimalloc   9.012 17144 15.89 0.02 0 4018
-glibc-thread tcmalloc    10.434 8508 15.99 0.00 0 1580
-glibc-thread scudo       80.979 4076 15.90 0.01 0 582
-glibc-thread isoalloc    374.692 2240 2.56 5.14 0 348
+redis       je    3.180 9496 0.14 0.02 0 1538
+redis       mi    3.080 7088 0.12 0.03 0 1256
+redis       iso   6.880 52816 0.31 0.05 0 16317
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads. However it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surfaces. These environments have threat models similar to what IsoAlloc was designed for.
