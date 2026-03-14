@@ -24,13 +24,17 @@
 #pragma GCC diagnostic ignored "-Wattribute-alias"
 #endif
 #define ISO_FORWARD(fun) __attribute__((alias(#fun), used, visibility("default"), copy(fun)));
-#define ISO_FORWARD0(fun, x)       ISO_FORWARD(fun)
-#define ISO_FORWARD1(fun, x)       ISO_FORWARD(fun)
-#define ISO_FORWARD2(fun, x, y)    ISO_FORWARD(fun)
+#define ISO_FORWARD0(fun, x) ISO_FORWARD(fun)
+#define ISO_FORWARD1(fun, x) ISO_FORWARD(fun)
+#define ISO_FORWARD2(fun, x, y) ISO_FORWARD(fun)
 #define ISO_FORWARD3(fun, x, y, z) ISO_FORWARD(fun)
 #else
-#define ISO_FORWARD0(fun, x)       { fun(x); }
-#define ISO_FORWARD1(fun, x)       { return fun(x); }
-#define ISO_FORWARD2(fun, x, y)    { return fun(x, y); }
-#define ISO_FORWARD3(fun, x, y, z) { return fun(x, y, z); }
+#define ISO_FORWARD0(fun, x) \
+    { fun(x); }
+#define ISO_FORWARD1(fun, x) \
+    { return fun(x); }
+#define ISO_FORWARD2(fun, x, y) \
+    { return fun(x, y); }
+#define ISO_FORWARD3(fun, x, y, z) \
+    { return fun(x, y, z); }
 #endif

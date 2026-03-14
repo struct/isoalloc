@@ -5,6 +5,7 @@
  * alias targets (iso_alloc, iso_free, etc.) are defined in the same
  * translation unit. When compiled directly the guard
  * below produces an empty translation unit with no effect. */
+// clang-format off
 #if !defined(ISO_IN_INTERFACES_C)
 #error "malloc_hook.c must be included from iso_alloc_interfaces.c (so aliases can work)"
 #endif
@@ -121,3 +122,4 @@ void (*__free_hook)(void *, const void *) = &libc_free;
 void *(*__memalign_hook)(size_t, size_t, const void *) = &libc_memalign;
 #endif
 #endif
+// clang-format on
