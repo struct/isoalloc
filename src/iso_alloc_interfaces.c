@@ -319,3 +319,9 @@ EXTERNAL_API FLATTEN void iso_alloc_search_stack(void *p) {
     _iso_alloc_search_stack(p);
 }
 #endif
+
+/* Include malloc hooks here so alias targets (iso_alloc, iso_free, etc.)
+ * are defined in the same translation unit. See malloc_hook.c for details. */
+#define ISO_IN_INTERFACES_C
+#include "malloc_hook.c"
+#undef ISO_IN_INTERFACES_C

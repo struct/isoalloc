@@ -170,6 +170,10 @@ NAMED_MAPPINGS = -DNAMED_MAPPINGS=0
 ## Abort when the allocator cannot return a valid chunk
 ABORT_ON_NULL = -DABORT_ON_NULL=0
 
+## Abort when we detect a pointer not owned by IsoAlloc
+## Recommend setting this to 0 when using LD_PRELOAD
+ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=1
+
 ## Enable protection against misusing 0 sized allocations
 NO_ZERO_ALLOCATIONS = -DNO_ZERO_ALLOCATIONS=1
 
@@ -316,7 +320,7 @@ BUILD_ERROR_FLAGS := $(BUILD_ERROR_FLAGS) -Wno-attributes -Wno-unused-variable
 endif
 CFLAGS += $(COMMON_CFLAGS) $(DISABLE_CANARY) $(BUILD_ERROR_FLAGS) $(HOOKS) $(HEAP_PROFILER) -fvisibility=hidden \
 	-std=$(STDC) $(SANITIZER_SUPPORT) $(ALLOC_SANITY) $(MEMCPY_SANITY) $(UNINIT_READ_SANITY) $(CPU_PIN) $(SCHED_GETCPU) \
-	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(NO_ZERO_ALLOCATIONS) \
+	$(EXPERIMENTAL) $(UAF_PTR_PAGE) $(VERIFY_FREE_BIT_SLOTS) $(NAMED_MAPPINGS) $(ABORT_ON_NULL) $(ABORT_ON_UNOWNED_PTR) $(NO_ZERO_ALLOCATIONS) \
 	$(ABORT_NO_ENTROPY) $(ISO_DTOR_CLEANUP) $(RANDOMIZE_FREELIST) $(USE_SPINLOCK) $(HUGE_PAGES) ${THP_PAGES} $(USE_MLOCK) \
 	$(MEMORY_TAGGING) $(STRONG_SIZE_ISOLATION) $(MEMSET_SANITY) $(AUTO_CTOR_DTOR) $(SIGNAL_HANDLER) \
 	$(BIG_ZONE_META_DATA_GUARD) $(BIG_ZONE_GUARD) $(PROTECT_UNUSED_BIG_ZONE) $(MASK_PTRS) $(SANITIZE_CHUNKS) $(FUZZ_MODE) \
@@ -328,7 +332,7 @@ GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
 PERF_FLAGS = -pg -DPERF_TEST_BUILD=1
 LIBRARY = -fPIC -shared
 SRC_DIR = src
-C_SRCS = $(SRC_DIR)/*.c
+C_SRCS = $(filter-out $(SRC_DIR)/malloc_hook.c, $(wildcard $(SRC_DIR)/*.c))
 CXX_SRCS = $(SRC_DIR)/*.cpp
 ISO_ALLOC_PRINTF_SRC = $(SRC_DIR)/iso_alloc_printf.c
 BUILD_DIR = build
@@ -339,6 +343,16 @@ all: tests
 ## Build a release version of the library
 library: clean
 	@echo "make library"
+	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
+	$(STRIP)
+
+## Build a release library suitable for LD_PRELOAD use.
+## ABORT_ON_UNOWNED_PTR=0 silently drops pointers not owned by isoalloc
+## (e.g. those allocated by libc before the isoalloc constructor fires)
+## instead of aborting. All other flags are identical to 'library'.
+library_perf: ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=0
+library_perf: clean
+	@echo "make library_perf"
 	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 	$(STRIP)
 
@@ -409,6 +423,7 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/sized_free.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/sized_free $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/pool_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/pool_test $(LDFLAGS)
 	utils/run_tests.sh
+
 
 mte_test: clean
 	@echo "make mte_test"

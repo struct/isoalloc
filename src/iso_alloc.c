@@ -1615,7 +1615,11 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
 
         if(UNLIKELY(big_zone == NULL)) {
+#if ABORT_ON_UNOWNED_PTR
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
+#else
+            return;
+#endif
         }
 
         if(UNLIKELY(big_zone->size < size)) {
@@ -1631,7 +1635,12 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
+#if ABORT_ON_UNOWNED_PTR
         LOG_AND_ABORT("Could not find zone for 0x%p", p);
+#else
+        UNLOCK_ROOT();
+        return;
+#endif
     }
 
     /* We can't check for an exact size match because
@@ -1724,7 +1733,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, true);
 
         if(UNLIKELY(big_zone == NULL)) {
+#if ABORT_ON_UNOWNED_PTR
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
+#else
+            return NULL;
+#endif
         }
 
         iso_free_big_zone(big_zone, permanent);
@@ -2044,7 +2057,6 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
 
     LOCK_ROOT();
 
-    /* We cannot return NULL here, we abort instead */
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
@@ -2052,7 +2064,11 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, false);
 
         if(UNLIKELY(big_zone == NULL)) {
+#if ABORT_ON_UNOWNED_PTR
             LOG_AND_ABORT("Could not find any zone for allocation at 0x%p", p);
+#else
+            return 0;
+#endif
         }
 
         return big_zone->size;
