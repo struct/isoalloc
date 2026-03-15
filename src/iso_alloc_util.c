@@ -153,6 +153,22 @@ void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
 
     p = mmap(p, sz, prot, flags, fd, 0);
 
+#if __linux__ && MAP_HUGETLB && HUGE_PAGES
+    /* If the huge page allocation failed, retry with regular pages.
+     * This can happen when /proc/sys/vm/nr_hugepages is 0 or
+     * exhausted, which is common in LD_PRELOAD environments. */
+    if(p == MAP_FAILED && (flags & MAP_HUGETLB)) {
+        flags &= ~MAP_HUGETLB;
+        p = mmap(p, sz, prot, flags, fd, 0);
+    }
+#elif __APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB && HUGE_PAGES
+    /* Same fallback for macOS superpage allocations */
+    if(p == MAP_FAILED && fd == VM_FLAGS_SUPERPAGE_SIZE_2MB) {
+        fd = -1;
+        p = mmap(p, sz, prot, flags, fd, 0);
+    }
+#endif
+
     if(p == MAP_FAILED) {
         LOG_AND_ABORT("Failed to mmap rw pages");
     }

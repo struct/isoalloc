@@ -361,6 +361,19 @@ library_less_strict: clean
 	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 	$(STRIP)
 
+## Build a performance-optimized library with the most expensive security
+## features disabled. Intended for benchmarking and performance measurement.
+## All other flags inherit from the top-level defaults.
+library_benchmark: DISABLE_CANARY = -DDISABLE_CANARY=1
+library_benchmark: PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
+library_benchmark: RANDOMIZE_FREELIST = -DRANDOMIZE_FREELIST=0
+library_benchmark: MASK_PTRS = -DMASK_PTRS=0
+library_benchmark: ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=0
+library_benchmark: clean
+	@echo "make library_benchmark"
+	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
+	$(STRIP)
+
 ## Build a debug version of the library
 library_debug: clean
 	@echo "make library debug"

@@ -153,35 +153,37 @@ iso_realloc/iso_free 1834784 tests completed in 0.901481 seconds
 The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with other allocators for some benchmarks but clearly falls behind on others. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators. Please note these are 'best case' measurements, not averages.
 
 ```
+make library_benchmark
+
 #------------------------------------------------------------------
 # test    alloc   time  rss    user  sys  page-faults page-reclaims
-cfrac       je    03.07 4560 3.06 0.00 0 455
-cfrac       mi    02.92 2676 2.92 0.00 0 348
-cfrac       iso   05.16 30764 5.08 0.08 0 7497
+cfrac       je    03.07 4552 3.06 0.00 0 454
+cfrac       mi    02.97 2484 2.96 0.00 0 347
+cfrac       iso   04.78 30612 4.69 0.09 0 7503
 
-espresso    je    02.49 5032 2.48 0.00 0 550
-espresso    mi    02.47 3004 2.45 0.01 0 3636
-espresso    iso   03.25 69124 3.16 0.09 0 30105
+espresso    je    02.51 4872 2.50 0.01 0 540
+espresso    mi    02.43 3032 2.42 0.01 0 3630
+espresso    iso   03.16 69608 3.07 0.07 0 30334
 
-barnes      je    01.71 59916 1.68 0.02 0 16684
-barnes      mi    01.64 57864 1.61 0.02 0 16550
-barnes      iso   01.65 74968 1.61 0.03 0 20851
+barnes      je    01.71 59900 1.67 0.03 0 16686
+barnes      mi    01.65 57672 1.62 0.02 0 16550
+barnes      iso   01.65 74812 1.62 0.03 0 20849
 
-gs          je    00.15 37756 0.13 0.01 0 5812
-gs          mi    00.15 33668 0.14 0.01 0 5110
-gs          iso   00.23 67960 0.16 0.06 0 18846
+gs          je    00.17 37748 0.15 0.01 0 5814
+gs          mi    00.16 33888 0.14 0.01 0 5109
+gs          iso   00.22 68136 0.15 0.06 0 18916
 
-larsonN     je    1.153 269184 98.81 1.00 0 419378
-larsonN     mi    1.037 301044 99.34 0.41 0 83267
-larsonN     iso   1304.061 121072 6.10 70.16 0 30031
+larsonN     je    1.188 261884 98.91 0.92 0 421848
+larsonN     mi    1.016 299752 99.53 0.38 0 80202
+larsonN     iso   1328.904 121096 6.15 69.78 0 30219
 
-rocksdb     je    02.49 162976 2.09 0.60 0 38215
-rocksdb     mi    02.22 160392 1.86 0.54 0 37563
-rocksdb     iso   02.87 197548 2.58 0.59 0 46899
+rocksdb     je    02.46 162340 2.05 0.63 0 38383
+rocksdb     mi    02.33 160156 1.92 0.63 0 37585
+rocksdb     iso   02.96 195948 2.64 0.66 0 46584
 
-redis       je    3.319 9484 0.14 0.02 0 1540
-redis       mi    2.840 7124 0.12 0.02 0 1254
-redis       iso   7.340 49712 0.34 0.04 0 14959
+redis       je    3.160 9492 0.13 0.02 0 1528
+redis       mi    2.780 7084 0.12 0.02 0 1257
+redis       iso   7.579 50516 0.35 0.05 0 15187
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads. However it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surfaces. These environments have threat models similar to what IsoAlloc was designed for.

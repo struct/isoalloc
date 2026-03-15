@@ -95,13 +95,13 @@ EXTERNAL_API FLATTEN NO_DISCARD REALLOC_SIZE ASSUME_ALIGNED void *iso_realloc(vo
 }
 
 EXTERNAL_API FLATTEN NO_DISCARD MALLOC_ATTR REALLOC_SIZE ASSUME_ALIGNED void *iso_reallocarray(void *p, size_t nmemb, size_t size) {
-    unsigned int res;
+    size_t res;
 
-    if(__builtin_mul_overflow(nmemb, size, &res)) {
+    if(__builtin_mul_overflow(nmemb, size, &res) || res > BIG_SZ_MAX) {
         return NULL;
     }
 
-    return iso_realloc(p, nmemb * size);
+    return iso_realloc(p, res);
 }
 
 EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strdup(const char *str) {

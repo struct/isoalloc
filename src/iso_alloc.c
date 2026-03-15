@@ -577,7 +577,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
     }
 
     bit_slot_t *free_bit_slots = zone->free_bit_slots;
-    __iso_memset(free_bit_slots, BAD_BIT_SLOT, ZONE_FREE_LIST_SZ);
+    __iso_memset(free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
     zone->free_bit_slots_usable = 0;
     free_bit_slot_t free_bit_slots_index;
 
@@ -668,9 +668,9 @@ INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t
     zone->is_full = false;
 }
 
-INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN INLINE bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone) {
     if(zone->free_bit_slots_usable >= ZONE_FREE_LIST_SZ ||
-       zone->free_bit_slots_usable > zone->free_bit_slots_index) {
+       zone->free_bit_slots_usable >= zone->free_bit_slots_index) {
         return BAD_BIT_SLOT;
     }
 
@@ -783,7 +783,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
     return BAD_BIT_SLOT;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
+INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
 #if CPU_PIN
     if(zone->cpu_core != _iso_getcpu()) {
         return false;
@@ -947,7 +947,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     return NULL;
 }
 
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
+INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
     const bitmap_index_t dwords_to_bit_slot = (bitslot >> BITS_PER_QWORD_SHIFT);
     const int64_t which_bit = WHICH_BIT(bitslot);
 
@@ -1019,7 +1019,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
         _zone_cache_count++;
     } else {
         /* Evict oldest entry (index 0) via FIFO: shift all entries down by one */
-        memmove(&tzc[0], &tzc[1], (ZONE_CACHE_SZ - 1) * sizeof(_tzc));
+        __iso_memmove(&tzc[0], &tzc[1], (ZONE_CACHE_SZ - 1) * sizeof(_tzc));
         _zone_cache_count = ZONE_CACHE_SZ - 1;
         tzc[_zone_cache_count].zone = zone;
         tzc[_zone_cache_count].chunk_size = zone->chunk_size;
@@ -1030,7 +1030,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
-    unsigned int res;
+    size_t res;
 
     if(size < SMALLEST_CHUNK_SZ) {
         size = SMALLEST_CHUNK_SZ;
@@ -1038,24 +1038,22 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
         size = ALIGN_SZ_UP(size);
     }
 
-    size_t sz = nmemb * size;
-
-    if(sz < size || UNLIKELY(__builtin_mul_overflow(nmemb, size, &res))) {
-        LOG("Call to calloc() will overflow nmemb=%d size=%d = %u", nmemb, size, nmemb * size);
+    if(UNLIKELY(__builtin_mul_overflow(nmemb, size, &res)) || UNLIKELY(res > BIG_SZ_MAX)) {
+        LOG("Call to calloc() will overflow nmemb=%zu size=%zu", nmemb, size);
         return NULL;
     }
 
-    void *p = _iso_alloc(NULL, sz);
+    void *p = _iso_alloc(NULL, res);
 
 #if NO_ZERO_ALLOCATIONS
     /* Without this check we would immediately segfault in
      * the call to __iso_memset() to zeroize the chunk */
-    if(UNLIKELY(sz == 0)) {
+    if(UNLIKELY(res == 0)) {
         return p;
     }
 #endif
 
-    __iso_memset(p, 0x0, sz);
+    __iso_memset(p, 0x0, res);
     return p;
 }
 
@@ -1120,8 +1118,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
     }
 
 #if ALLOC_SANITY
-    /* We don't sample if we are allocating from a private zone */
-    if(zone != NULL && zone->internal == true) {
+    /* We only sample if a zone was not directly passed */
+    if(zone != NULL) {
         if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
@@ -1760,7 +1758,8 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
     LOCK_BIG_ZONE_USED();
 
     if(_root->big_zone_used == NULL) {
-        LOG_AND_ABORT("There are no big zones allocated");
+        UNLOCK_BIG_ZONE_USED();
+        return NULL;
     }
 
     iso_alloc_big_zone_t *big_zone = _root->big_zone_used;
