@@ -415,6 +415,15 @@ INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *restrict dest, const void *restr
     char *p_dest = (char *) dest;
     char const *p_src = (char const *) src;
 
+#if USE_NEON
+    while(n >= 16) {
+        vst1q_u8((uint8_t *) p_dest, vld1q_u8((const uint8_t *) p_src));
+        p_dest += 16;
+        p_src += 16;
+        n -= 16;
+    }
+#endif
+
     while(n--) {
         *p_dest++ = *p_src++;
     }
@@ -462,8 +471,19 @@ INTERNAL_HIDDEN INLINE void *__iso_memmove(void *dest, const void *src, size_t n
     }
 
     if(p_src < p_dest) {
+        /* Overlapping: copy backwards to avoid clobbering src */
         p_dest += n;
         p_src += n;
+
+#if USE_NEON
+        while(n >= 16) {
+            p_dest -= 16;
+            p_src -= 16;
+            vst1q_u8((uint8_t *) p_dest, vld1q_u8((const uint8_t *) p_src));
+            n -= 16;
+        }
+#endif
+
         while(n--) {
             *--p_dest = *--p_src;
         }
@@ -507,6 +527,15 @@ INTERNAL_HIDDEN void *_iso_alloc_memmove(void *dest, const void *src, size_t n) 
 INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n) {
 #if MEMSET_SANITY
     char *p_dest = (char *) dest;
+
+#if USE_NEON
+    uint8x16_t vec = vdupq_n_u8((uint8_t) b);
+    while(n >= 16) {
+        vst1q_u8((uint8_t *) p_dest, vec);
+        p_dest += 16;
+        n -= 16;
+    }
+#endif
 
     while(n--) {
         *p_dest++ = b;

@@ -61,7 +61,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * A chunk can be permanently free'd with a call to `iso_free_permanently`.
 * If `SANITIZE_CHUNKS` is set all user chunks are cleared when passed to `iso_free` with the constant `0xde`.
 * When freeing a chunk the canary in adjacent chunks above/below are verified.
-* Some important zone metadata pointers are masked in-between `iso_alloc` and `iso_free` operations.
+* When `MASK_PTRS` is enabled (default) the `user_pages_start` and `bitmap_start` pointers stored in zone metadata are XOR'd with a per-zone random secret between alloc and free operations, making them useless to an attacker who reads or corrupts zone metadata.
 * Passing a pointer to `iso_free` that was not allocated with `iso_alloc` will abort.
 * Pointers passed to `iso_free` must be 8 byte aligned, and a multiple of the zone chunk size.
 * The free bit slot cache provides a chunk quarantine or delayed free mechanism.
@@ -76,6 +76,7 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * Randomized hints are passed to `mmap` to ensure contiguous page ranges are not allocated.
 * When `ABORT_ON_NULL` is enabled IsoAlloc will abort instead of returning `NULL`.
 * By default `NO_ZERO_ALLOCATIONS` will return a pointer to a page marked `PROT_NONE` for all `0` sized allocations.
+* When `ABORT_ON_UNOWNED_PTR` is enabled (default) IsoAlloc will abort whenever it is passed a pointer it does not own.
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
 * When `RANDOMIZE_FREELIST` is enabled IsoAlloc will randomize the free list upon creation. May have a perf hit.
 * Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`.
@@ -93,6 +94,8 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 The Makefile targets are very simple:
 
 `make library` - Builds a release version of the library without C++ support
+
+`make library_less_strict` - Builds a release library with `ABORT_ON_UNOWNED_PTR=0`. Recommended when using IsoAlloc via `LD_PRELOAD`.
 
 `make library_debug` - Builds a debug version of the library
 

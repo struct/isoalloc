@@ -300,6 +300,14 @@ extern uint32_t g_page_size_shift;
 static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
 static_assert(SMALL_SIZE_MAX <= 131072, "SMALL_SIZE_MAX is too big, cannot exceed 131072");
 
+/* bitmap_size = (ZONE_USER_SIZE / SMALLEST_CHUNK_SZ) * BITS_PER_CHUNK / BITS_PER_BYTE
+ * max_bitmap_idx = bitmap_size / sizeof(uint64_t)
+ * Both fields are uint16_t in iso_alloc_zone_t, so verify they fit. */
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ) <= UINT16_MAX,
+              "bitmap_size overflows uint16_t: SMALLEST_CHUNK_SZ is too small (must be > 16)");
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ / sizeof(uint64_t)) <= UINT16_MAX,
+              "max_bitmap_idx overflows uint16_t: SMALLEST_CHUNK_SZ is too small");
+
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
 extern atomic_flag root_busy_flag;
@@ -368,7 +376,7 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove);
-INTERNAL_HIDDEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
+INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
@@ -377,7 +385,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p);
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *p);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN INLINE bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone);
@@ -408,7 +416,7 @@ INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison);
 INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed);

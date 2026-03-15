@@ -229,9 +229,14 @@ PROTECT_FREE_BIG_ZONES = -DPROTECT_FREE_BIG_ZONES=0
 ## incurs a small performance cost
 MASK_PTRS = -DMASK_PTRS=1
 
-## IsoAlloc uses ARM64 Neon instructions where possible. You can
-## explicitly disable that here
+## IsoAlloc uses ARM64 Neon instructions where possible. Automatically
+## enabled on ARM/AArch64 hosts, disabled everywhere else.
+ARCH := $(shell uname -m)
+ifneq ($(filter aarch64 arm%,$(ARCH)),)
+DONT_USE_NEON = -DDONT_USE_NEON=0
+else
 DONT_USE_NEON = -DDONT_USE_NEON=1
+endif
 
 ## We start with the standard C++ specifics but giving
 ## the liberty to choose the gnu++* variants and/or
@@ -350,9 +355,22 @@ library: clean
 ## ABORT_ON_UNOWNED_PTR=0 silently drops pointers not owned by isoalloc
 ## (e.g. those allocated by libc before the isoalloc constructor fires)
 ## instead of aborting. All other flags are identical to 'library'.
-library_perf: ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=0
-library_perf: clean
-	@echo "make library_perf"
+library_less_strict: ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=0
+library_less_strict: clean
+	@echo "make library_less_strict"
+	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
+	$(STRIP)
+
+## Build a performance-optimized library with the most expensive security
+## features disabled. Intended for benchmarking and performance measurement.
+## All other flags inherit from the top-level defaults.
+library_benchmark: DISABLE_CANARY = -DDISABLE_CANARY=1
+library_benchmark: PRE_POPULATE_PAGES = -DPRE_POPULATE_PAGES=1
+library_benchmark: RANDOMIZE_FREELIST = -DRANDOMIZE_FREELIST=0
+library_benchmark: MASK_PTRS = -DMASK_PTRS=0
+library_benchmark: ABORT_ON_UNOWNED_PTR = -DABORT_ON_UNOWNED_PTR=0
+library_benchmark: clean
+	@echo "make library_benchmark"
 	$(CC) $(CFLAGS) $(LIBRARY) $(OPTIMIZE) $(OS_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME)
 	$(STRIP)
 
@@ -456,7 +474,7 @@ libc_sanity_tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memcpy_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memcpy_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/memmove_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/memmove_sanity $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bzero_sanity.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bzero_sanity $(LDFLAGS)
-	build/memset_sanity ; build/memcpy_sanity; build/memmove_sanity; build/bzero_sanity ;
+	LD_LIBRARY_PATH=build/ build/memset_sanity ; LD_LIBRARY_PATH=build/ build/memcpy_sanity; LD_LIBRARY_PATH=build/ build/memmove_sanity; LD_LIBRARY_PATH=build/ build/bzero_sanity
 
 fuzz_test: clean library_debug_unit_tests
 	@echo "make fuzz_test"

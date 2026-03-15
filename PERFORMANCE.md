@@ -34,6 +34,16 @@ If you know your program will not require multi-threaded access to IsoAlloc you 
 
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance and RSS.
 
+`MASK_PTRS` is enabled by default and causes the `user_pages_start` and `bitmap_start` pointers stored in every zone's metadata to be XOR'd with a per-zone random secret between alloc and free operations. This protects against attackers who can read or corrupt zone metadata. Each alloc and free pays a small cost for these XOR operations. Setting `MASK_PTRS=0` removes this overhead at the cost of this security property.
+
+`CANARY_COUNT_DIV` in `conf.h` controls what fraction of chunks in a zone are reserved as canaries. It is used as a right-shift on the total chunk count: `chunk_count >> CANARY_COUNT_DIV`. The default value of 7 reserves less than 1% of chunks. Increasing this value reduces canary density and frees more chunks for user allocations; decreasing it increases security coverage at the cost of usable memory.
+
+`ZONE_ALLOC_RETIRE` in `conf.h` controls how frequently zones are retired and replaced. A zone is retired once it has completed `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone` total alloc/free cycles. Lowering this value causes zones to be replaced more often, reducing the window for use-after-free exploitation but increasing the frequency of zone creation. `BIG_ZONE_ALLOC_RETIRE` is the equivalent for big zones.
+
+`SMALL_MEM_STARTUP` reduces the number and size of default zones created at startup. This decreases initial RSS at the cost of more frequent zone creation for programs with diverse allocation sizes.
+
+`STRONG_SIZE_ISOLATION` enforces stricter isolation by size class. When enabled, chunk sizes are rounded up to a smaller set of buckets which increases isolation between differently-sized allocations. This may increase per-allocation waste but reduces cross-size heap exploitation primitives.
+
 By default IsoAlloc will attempt to use Huge Pages (for both Linux and Mac OS) for any allocations that are a multiple of 2 mb in size. This is the default huge page size on most systems but it might not be on yours. On Linux you can check the value for your system by running the following command:
 
 ```
@@ -143,35 +153,37 @@ iso_realloc/iso_free 1834784 tests completed in 0.901481 seconds
 The following benchmarks were collected from [mimalloc-bench](https://github.com/daanx/mimalloc-bench) with the default configuration of IsoAlloc. As you can see from the data IsoAlloc is competitive with other allocators for some benchmarks but clearly falls behind on others. For any benchmark that IsoAlloc scores poorly on I was able to tweak its build to improve the CPU time and memory consumption. It's worth noting that IsoAlloc was able to stay competitive even with performing many security checks not present in other allocators. Please note these are 'best case' measurements, not averages.
 
 ```
+make library_benchmark
+
 #------------------------------------------------------------------
 # test    alloc   time  rss    user  sys  page-faults page-reclaims
-cfrac       je    02.99 4912 2.99 0.00 0 454
-cfrac       mi    03.01 2484 3.00 0.00 0 346
-cfrac       iso   05.84 26616 5.75 0.09 0 6502
+cfrac       je    03.07 4552 3.06 0.00 0 454
+cfrac       mi    02.97 2484 2.96 0.00 0 347
+cfrac       iso   04.78 30612 4.69 0.09 0 7503
 
-espresso    je    02.52 4872 2.50 0.01 0 538
-espresso    mi    02.46 3060 2.45 0.01 0 3637
-espresso    iso   03.65 69876 3.56 0.09 0 21695
+espresso    je    02.51 4872 2.50 0.01 0 540
+espresso    mi    02.43 3032 2.42 0.01 0 3630
+espresso    iso   03.16 69608 3.07 0.07 0 30334
 
-barnes      je    01.62 60268 1.59 0.02 0 16687
-barnes      mi    01.71 57672 1.68 0.02 0 16550
-barnes      iso   01.66 74628 1.62 0.03 0 20851
+barnes      je    01.71 59900 1.67 0.03 0 16686
+barnes      mi    01.65 57672 1.62 0.02 0 16550
+barnes      iso   01.65 74812 1.62 0.03 0 20849
 
-gs          je    00.16 37592 0.15 0.01 0 5808
-gs          mi    00.16 32588 0.13 0.02 0 5109
-gs          iso   00.23 71152 0.16 0.07 0 19698
+gs          je    00.17 37748 0.15 0.01 0 5814
+gs          mi    00.16 33888 0.14 0.01 0 5109
+gs          iso   00.22 68136 0.15 0.06 0 18916
 
-larsonN     je    1.171 266596 98.81 0.92 0 409842
-larsonN     mi    1.016 299768 99.38 0.44 0 83755
-larsonN     iso   918.582 126528 99.64 0.37 0 31368
+larsonN     je    1.188 261884 98.91 0.92 0 421848
+larsonN     mi    1.016 299752 99.53 0.38 0 80202
+larsonN     iso   1328.904 121096 6.15 69.78 0 30219
 
-rocksdb     je    02.48 162424 2.05 0.63 0 38384
-rocksdb     mi    02.48 159812 2.04 0.66 0 37464
-rocksdb     iso   02.74 197220 2.49 0.55 0 46815
+rocksdb     je    02.46 162340 2.05 0.63 0 38383
+rocksdb     mi    02.33 160156 1.92 0.63 0 37585
+rocksdb     iso   02.96 195948 2.64 0.66 0 46584
 
-redis       je    3.180 9496 0.14 0.02 0 1538
-redis       mi    3.080 7088 0.12 0.03 0 1256
-redis       iso   6.880 52816 0.31 0.05 0 16317
+redis       je    3.160 9492 0.13 0.02 0 1528
+redis       mi    2.780 7084 0.12 0.02 0 1257
+redis       iso   7.579 50516 0.35 0.05 0 15187
 ```
 
 IsoAlloc isn't quite ready for performance sensitive server workloads. However it's more than fast enough for client side mobile/desktop applications with risky C/C++ attack surfaces. These environments have threat models similar to what IsoAlloc was designed for.

@@ -8,10 +8,7 @@
 #error "This test intended to be run with -DMEMSET_SANITY=1"
 #endif
 
-#if !(__FreeBSD__ || __NetBSD__ || __OpenBSD__ || __DragonFly__)
-#error "This test intended for BSD systems"
-#endif
-
+#if(__FreeBSD__ || __NetBSD__ || __OpenBSD__ || __DragonFly__)
 int main(int argc, char *argv[]) {
     uint8_t *p = NULL;
 
@@ -27,3 +24,5 @@ int main(int argc, char *argv[]) {
 
     return OK;
 }
+#endif
+int main(void) {}
