@@ -12,7 +12,7 @@
 #define SZ_TO_ZONE_LOOKUP_IDX(size) size >> 4
 
 #define CHUNK_TO_ZONE_TABLE_SZ (65535 * sizeof(uint16_t))
-#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 32) & 0xffff)
+#define ADDR_TO_CHUNK_TABLE(p) (((uintptr_t) p >> 22) & 0xffff)
 
 typedef int64_t bit_slot_t;
 typedef int64_t bitmap_index_t;
@@ -36,7 +36,7 @@ typedef struct {
     int64_t next_free_bit_slot;            /* The last bit slot returned by get_next_free_bit_slot */
     uint64_t canary_secret;                /* Each zone has its own canary secret */
     uint64_t pointer_mask;                 /* Each zone has its own pointer protection secret */
-    bitmap_index_t max_bitmap_idx;         /* Max bitmap index for this bitmap */
+    uint16_t max_bitmap_idx;               /* Max bitmap index for this bitmap */
     uint32_t chunk_size;                   /* Size of chunks managed by this zone */
     free_bit_slot_t free_bit_slots_usable; /* The oldest members of the free cache are served first */
     free_bit_slot_t free_bit_slots_index;  /* Tracks how many entries in the cache are filled */
@@ -50,7 +50,7 @@ typedef struct {
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
     /* Warm/cold fields: accessed less frequently */
-    uint32_t bitmap_size;   /* Size of the bitmap in bytes */
+    uint16_t bitmap_size;   /* Size of the bitmap in bytes */
     uint32_t af_count;      /* Increment/Decrement with each alloc/free operation */
     uint32_t chunk_count;   /* Total number of chunks in this zone */
     uint32_t alloc_count;   /* Total number of lifetime allocations */
@@ -133,9 +133,12 @@ typedef struct {
      * it can find the next zone that holds the same size
      * chunks. The lookup table helps us find the first zone
      * that holds a specific size in O(1) time */
-    zone_lookup_table_t zone_lookup_table[ZONE_LOOKUP_TABLE_SZ];
+    /* Array sized to cover indices 0..(SMALL_SIZE_MAX>>4) inclusive, then
+     * rounded to a multiple of 4 entries so the array occupies a whole
+     * number of 8-byte words and bitmaps[] remains naturally aligned. */
+    zone_lookup_table_t zone_lookup_table[(SMALL_SIZE_MAX >> 4) + 4];
     /* For chunk sizes >= 1024 our bitmap size is smaller
-     * than a page. This optimization preallocates pages to
+     * than a page. This optimization preallocates pages tog
      * hold multiple bitmaps for these zones */
     iso_alloc_bitmap_t bitmaps[sizeof(small_bitmap_sizes) / sizeof(int)];
     uint64_t zone_handle_mask;

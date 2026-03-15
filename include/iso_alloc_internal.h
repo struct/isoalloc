@@ -300,6 +300,14 @@ extern uint32_t g_page_size_shift;
 static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
 static_assert(SMALL_SIZE_MAX <= 131072, "SMALL_SIZE_MAX is too big, cannot exceed 131072");
 
+/* bitmap_size = (ZONE_USER_SIZE / SMALLEST_CHUNK_SZ) * BITS_PER_CHUNK / BITS_PER_BYTE
+ * max_bitmap_idx = bitmap_size / sizeof(uint64_t)
+ * Both fields are uint16_t in iso_alloc_zone_t, so verify they fit. */
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ) <= UINT16_MAX,
+              "bitmap_size overflows uint16_t: SMALLEST_CHUNK_SZ is too small (must be > 16)");
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ / sizeof(uint64_t)) <= UINT16_MAX,
+              "max_bitmap_idx overflows uint16_t: SMALLEST_CHUNK_SZ is too small");
+
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
 extern atomic_flag root_busy_flag;

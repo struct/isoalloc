@@ -1018,9 +1018,12 @@ INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
         tzc[_zone_cache_count].chunk_size = zone->chunk_size;
         _zone_cache_count++;
     } else {
-        _zone_cache_count = 0;
+        /* Evict oldest entry (index 0) via FIFO: shift all entries down by one */
+        memmove(&tzc[0], &tzc[1], (ZONE_CACHE_SZ - 1) * sizeof(_tzc));
+        _zone_cache_count = ZONE_CACHE_SZ - 1;
         tzc[_zone_cache_count].zone = zone;
         tzc[_zone_cache_count].chunk_size = zone->chunk_size;
+        _zone_cache_count++;
     }
 
     zone_cache_count = _zone_cache_count;
@@ -1073,6 +1076,24 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d, only %d", zone->index, size, zone->chunk_size);
     }
 
+    /* Pre-lock hot path: scan the thread-local zone cache using only
+     * thread-local data (chunk_size comparison and pointer read). No
+     * zone struct fields are dereferenced here. Validation happens
+     * under the lock via is_zone_usable(). */
+    iso_alloc_zone_t *cached_zone = NULL;
+
+    if(LIKELY(zone == NULL && size <= SMALL_SIZE_MAX)) {
+        size_t _zone_cache_count = zone_cache_count;
+        _tzc *tzc = zone_cache;
+
+        for(size_t i = _zone_cache_count; i-- > 0;) {
+            if(tzc[i].chunk_size >= size) {
+                cached_zone = tzc[i].zone;
+                break;
+            }
+        }
+    }
+
     LOCK_ROOT();
 
     if(UNLIKELY(_root == NULL)) {
@@ -1100,7 +1121,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
 #if ALLOC_SANITY
     /* We don't sample if we are allocating from a private zone */
-    if(zone != NULL) {
+    if(zone != NULL && zone->internal == true) {
         if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
@@ -1124,23 +1145,12 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         _verify_all_zones();
 #endif
         if(LIKELY(zone == NULL)) {
-            /* Hot Path: Check the zone cache for a zone this
-             * thread recently used for an alloc/free operation.
-             * It's likely we are allocating a similar size chunk
-             * and this will speed up that operation.
-             * Scan newest-to-oldest (LIFO) since the most recently
-             * used zone is most likely to have free slots available. */
-            size_t _zone_cache_count = zone_cache_count;
-            _tzc *tzc = zone_cache;
-
-            for(size_t i = _zone_cache_count; i-- > 0;) {
-                if(tzc[i].chunk_size >= size) {
-                    iso_alloc_zone_t *_zone = tzc[i].zone;
-                    if(is_zone_usable(_zone, size) != NULL) {
-                        zone = _zone;
-                        break;
-                    }
-                }
+            /* Hot Path: Validate the zone candidate selected pre-lock.
+             * The size comparison already happened outside the critical
+             * section; only the shared zone struct access (is_zone_usable)
+             * needs to be under the lock. */
+            if(cached_zone != NULL && is_zone_usable(cached_zone, size) != NULL) {
+                zone = cached_zone;
             }
         }
 
@@ -2150,10 +2160,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #endif
 
     for(uint16_t i = 0; i < zones_used; i++) {
-        iso_alloc_zone_t *zone = &_root->zones[i];
-        _verify_zone(zone);
+#if DEBUG || FUZZ_MODE
+        _verify_zone(&_root->zones[i]);
+#endif
 #if ISO_DTOR_CLEANUP
-        _iso_alloc_destroy_zone_unlocked(zone, false, false);
+        _iso_alloc_destroy_zone_unlocked(&_root->zones[i], false, false);
 #endif
     }
 
