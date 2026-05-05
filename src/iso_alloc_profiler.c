@@ -165,7 +165,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
                 in_use_low &= in_use_low - 1;
 
                 int64_t bit_two = GET_BIT(bts, (j + 1));
-                bit_slot_t bit_slot = (((bitmap_index_t)(i + k)) * BITS_PER_QWORD) + j;
+                bit_slot_t bit_slot = (((bitmap_index_t) (i + k)) * BITS_PER_QWORD) + j;
                 const void *leak = (zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
 
                 if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {

@@ -137,7 +137,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
         while(mask1) {
             int j = __builtin_ctzll(mask1);
             mask1 &= mask1 - 1;
-            bit_slot = ((bit_slot_t)(i + 1) << BITS_PER_QWORD_SHIFT) + j;
+            bit_slot = ((bit_slot_t) (i + 1) << BITS_PER_QWORD_SHIFT) + j;
             const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
             check_canary(zone, p);
         }
