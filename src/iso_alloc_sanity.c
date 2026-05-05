@@ -103,47 +103,25 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
         }
     }
 
+    /* A chunk needs canary verification when the high bit of its 2-bit
+     * slot is set (was-used-now-free=01 or canary=11) — the odd-bit mask. */
+    const uint64_t CANARY_BIT_VECTOR = ~(uint64_t) USED_BIT_VECTOR;
     const bitmap_index_t max = zone->max_bitmap_idx;
 
+    for(bitmap_index_t i = 0; i < max;) {
 #if USE_NEON
-    /* A chunk needs its canary verified when the high bit of its 2-bit
-     * slot is set (was-used-now-free=01 or canary=11). The mask of all
-     * odd bit positions is ~USED_BIT_VECTOR. We process two qwords at a
-     * time and quick-reject any pair that has no odd bits set, then walk
-     * just the set odd-bit positions with ctz instead of checking all 32. */
-    const uint64_t CANARY_BIT_VECTOR = ~(uint64_t) USED_BIT_VECTOR;
-    bitmap_index_t i = 0;
-    const bitmap_index_t max_pair = max & ~(bitmap_index_t) 1;
-
-    for(; i < max_pair; i += 2) {
-        int64x2_t v = vld1q_s64((const int64_t *) &bm[i]);
-        const uint64_t lo = (uint64_t) vgetq_lane_s64(v, 0);
-        const uint64_t hi = (uint64_t) vgetq_lane_s64(v, 1);
-
-        if(((lo | hi) & CANARY_BIT_VECTOR) == 0) {
-            continue;
+        /* Two-qword quick-reject: skip 64 chunk slots when none of them
+         * have the high bit set (no canaries to verify in this range). */
+        if(i + 1 < max) {
+            int64x2_t v = vld1q_s64((const int64_t *) &bm[i]);
+            uint64_t lo = (uint64_t) vgetq_lane_s64(v, 0);
+            uint64_t hi = (uint64_t) vgetq_lane_s64(v, 1);
+            if(((lo | hi) & CANARY_BIT_VECTOR) == 0) {
+                i += 2;
+                continue;
+            }
         }
-
-        uint64_t mask0 = lo & CANARY_BIT_VECTOR;
-        while(mask0) {
-            int j = __builtin_ctzll(mask0);
-            mask0 &= mask0 - 1;
-            bit_slot = ((bit_slot_t) i << BITS_PER_QWORD_SHIFT) + j;
-            const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
-            check_canary(zone, p);
-        }
-
-        uint64_t mask1 = hi & CANARY_BIT_VECTOR;
-        while(mask1) {
-            int j = __builtin_ctzll(mask1);
-            mask1 &= mask1 - 1;
-            bit_slot = ((bit_slot_t) (i + 1) << BITS_PER_QWORD_SHIFT) + j;
-            const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
-            check_canary(zone, p);
-        }
-    }
-
-    for(; i < max; i++) {
+#endif
         uint64_t mask = (uint64_t) bm[i] & CANARY_BIT_VECTOR;
         while(mask) {
             int j = __builtin_ctzll(mask);
@@ -152,22 +130,8 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
             const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
             check_canary(zone, p);
         }
+        i++;
     }
-#else
-    for(bitmap_index_t i = 0; i < max; i++) {
-        bit_slot_t bsl = bm[i];
-        for(int64_t j = 1; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-            /* If this bit is set it is either a free chunk or
-             * a canary chunk. Either way it should have a set
-             * of canaries we can verify */
-            if((GET_BIT(bsl, j)) == 1) {
-                bit_slot = (i << BITS_PER_QWORD_SHIFT) + j;
-                const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
-                check_canary(zone, p);
-            }
-        }
-    }
-#endif
 
     MASK_ZONE_PTRS(zone);
 }

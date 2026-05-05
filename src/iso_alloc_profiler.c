@@ -125,71 +125,30 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
     uint32_t was_used = 0;
     int64_t bms = zone->bitmap_size / sizeof(bitmap_index_t);
 
+    for(int64_t i = 0; i < bms;) {
 #if USE_NEON
-    /* Process the bitmap two qwords at a time. The common case is that a
-     * qword is entirely zero (every chunk in those 32 slots is free and
-     * never used) — vectorising the zero-check lets us skip both qwords at
-     * once. For each non-zero qword we popcount the was_used pattern in
-     * O(1) and walk only the chunks whose low bit is set with ctz, instead
-     * of scanning all 32 pairs. */
-    int64_t i = 0;
-    const int64_t bms_pair = bms & ~(int64_t) 1;
-
-    for(; i < bms_pair; i += 2) {
-        int64x2_t v = vld1q_s64((const int64_t *) &bm[i]);
-        const uint64_t lane0 = (uint64_t) vgetq_lane_s64(v, 0);
-        const uint64_t lane1 = (uint64_t) vgetq_lane_s64(v, 1);
-
-        if((lane0 | lane1) == 0) {
-            continue;
-        }
-
-        const uint64_t lanes[2] = {lane0, lane1};
-        for(int k = 0; k < 2; k++) {
-            uint64_t bts = lanes[k];
-            if(bts == 0) {
+        /* Two-qword quick-reject: load 16 bytes of bitmap and skip both
+         * qwords when every chunk in those 64 slots is free and never used. */
+        if(i + 1 < bms) {
+            int64x2_t v = vld1q_s64((const int64_t *) &bm[i]);
+            if((vgetq_lane_s64(v, 0) | vgetq_lane_s64(v, 1)) == 0) {
+                i += 2;
                 continue;
             }
-
-            /* was_used: chunks encoded 01 (low=0, high=1). The mask of
-             * odd-bit positions whose paired even bit is clear is
-             * (~bts) & (bts >> 1) & USED_BIT_VECTOR. */
-            uint64_t was_used_mask = (~bts) & (bts >> 1) & USED_BIT_VECTOR;
-            was_used += __builtin_popcountll(was_used_mask);
-
-            /* Chunks with low bit set are either in-use (10) or canary
-             * (11). Walk just those positions to verify canaries. */
-            uint64_t in_use_low = bts & USED_BIT_VECTOR;
-            while(in_use_low) {
-                int j = __builtin_ctzll(in_use_low);
-                in_use_low &= in_use_low - 1;
-
-                int64_t bit_two = GET_BIT(bts, (j + 1));
-                bit_slot_t bit_slot = (((bitmap_index_t) (i + k)) * BITS_PER_QWORD) + j;
-                const void *leak = (zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
-
-                if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
-                    continue;
-                } else {
-                    in_use++;
-
-                    if(profile == false) {
-                        LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %d)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
-                    }
-                }
-            }
         }
-    }
-
-    for(; i < bms; i++) {
+#endif
         uint64_t bts = (uint64_t) bm[i];
         if(bts == 0) {
+            i++;
             continue;
         }
 
-        uint64_t was_used_mask = (~bts) & (bts >> 1) & USED_BIT_VECTOR;
-        was_used += __builtin_popcountll(was_used_mask);
+        /* was_used (encoding 01: low=0, high=1) — popcount the odd-bit
+         * positions whose paired even bit is clear. */
+        was_used += __builtin_popcountll((~bts) & (bts >> 1) & USED_BIT_VECTOR);
 
+        /* Chunks with low bit set are either in-use (10) or canary (11).
+         * Walk just those positions with ctz instead of testing all 32. */
         uint64_t in_use_low = bts & USED_BIT_VECTOR;
         while(in_use_low) {
             int j = __builtin_ctzll(in_use_low);
@@ -209,45 +168,8 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
                 }
             }
         }
+        i++;
     }
-#else
-    for(bitmap_index_t i = 0; i < bms; i++) {
-        for(int j = 0; j < BITS_PER_QWORD; j += BITS_PER_CHUNK) {
-
-            if(bm[i] == 0) {
-                continue;
-            }
-
-            int64_t bit = GET_BIT(bm[i], j);
-            int64_t bit_two = GET_BIT(bm[i], (j + 1));
-
-            /* Chunk was used but is now free */
-            if(bit == 0 && bit_two == 1) {
-                was_used++;
-            }
-
-            if(bit == 1) {
-                /* Theres no difference between a leaked and previously
-                 * used chunk (11) and a canary chunk (11). So in order
-                 * to accurately report on leaks we need to verify the
-                 * canary value. If it doesn't validate then we assume
-                 * its a true leak and increment the in_use counter */
-                bit_slot_t bit_slot = (i * BITS_PER_QWORD) + j;
-                const void *leak = (zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
-
-                if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
-                    continue;
-                } else {
-                    in_use++;
-
-                    if(profile == false) {
-                        LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %d)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
-                    }
-                }
-            }
-        }
-    }
-#endif
 
     if(profile == false) {
         LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use = %d", zone->index, zone->chunk_size, zone->chunk_count,
