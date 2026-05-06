@@ -418,7 +418,9 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
 INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
-INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison);
+#if UAF_PTR_PAGE
+INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n);
+#endif
 INTERNAL_HIDDEN INLINE uint64_t us_rand_uint64(uint64_t *seed);
 INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void);
 INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone);

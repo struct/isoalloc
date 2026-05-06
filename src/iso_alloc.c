@@ -1727,7 +1727,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
 
 #if UAF_PTR_PAGE
         if(UNLIKELY((us_rand_uint64(&_root->seed) % UAF_PTR_PAGE_ODDS) == 1)) {
-            _iso_alloc_ptr_search(p, true);
+            _iso_alloc_ptr_search(p);
         }
 #endif
 
