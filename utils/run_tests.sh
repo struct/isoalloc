@@ -7,6 +7,7 @@ tests=("tests" "big_tests" "interfaces_test" "thread_tests" "pool_test"
        "rand_freelist")
 failure=0
 succeeded=0
+start=$SECONDS
 
 $(ulimit -c 0)
 
@@ -52,6 +53,7 @@ done
 
 echo "$succeeded Tests passed"
 echo "$failure Tests failed"
+echo "Total runtime: $((SECONDS - start))s"
 
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD

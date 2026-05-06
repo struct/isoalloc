@@ -285,8 +285,18 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
 
 INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p) {
     const uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
+    int32_t qwords = (int32_t) (g_page_size / sizeof(uint64_t));
 
-    for(int32_t i = 0; i < (g_page_size / sizeof(uint64_t)); i++) {
+#if USE_NEON
+    const uint64x2_t cv = vdupq_n_u64(canary);
+    while(qwords >= 2) {
+        vst1q_u64((uint64_t *) p, cv);
+        p += sizeof(uint64x2_t);
+        qwords -= 2;
+    }
+#endif
+
+    while(qwords--) {
         *(uint64_t *) p = canary;
         p += sizeof(uint64_t);
     }
@@ -305,15 +315,52 @@ INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc) 
         start = sane_alloc->address + sane_alloc->orig_size;
     }
 
-    while(start < end) {
+    const uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
+
+    /* orig_size is unaligned in general, so [start, end) may begin or
+     * end mid-qword. The expected byte at offset (p & 7) is that byte
+     * within the canary qword, since write_sanity_canary stored qwords
+     * starting at the page base. Walk the partial bytes at the head
+     * until start is 8-aligned. */
+    while(start < end && ((uintptr_t) start & 7)) {
+        uint8_t expected = (uint8_t) (canary >> (((uintptr_t) start & 7) << 3));
+        if(UNLIKELY(*(uint8_t *) start != expected)) {
+            LOG_AND_ABORT("Sanity canary byte at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, *(uint8_t *) start, expected);
+        }
+        start++;
+    }
+
+#if USE_NEON
+    /* Compare two qwords at a time and reduce. On any mismatch, fall
+     * through to the scalar loop which will pinpoint and abort. */
+    const uint64x2_t cv = vdupq_n_u64(canary);
+    while((start + sizeof(uint64x2_t)) <= end) {
+        uint64x2_t v = vld1q_u64((const uint64_t *) start);
+        if(UNLIKELY(vmaxvq_u32(vreinterpretq_u32_u64(veorq_u64(v, cv))) != 0)) {
+            break;
+        }
+        start += sizeof(uint64x2_t);
+    }
+#endif
+
+    while((start + sizeof(uint64_t)) <= end) {
         uint64_t v = *((uint64_t *) start);
-        uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
 
         if(UNLIKELY(v != canary)) {
             LOG_AND_ABORT("Sanity canary at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, v, canary);
         }
 
         start += sizeof(uint64_t);
+    }
+
+    /* Tail: 0–7 partial bytes when end isn't 8-aligned (right-aligned
+     * sample with unaligned orig_size). */
+    while(start < end) {
+        uint8_t expected = (uint8_t) (canary >> (((uintptr_t) start & 7) << 3));
+        if(UNLIKELY(*(uint8_t *) start != expected)) {
+            LOG_AND_ABORT("Sanity canary byte at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, *(uint8_t *) start, expected);
+        }
+        start++;
     }
 }
 

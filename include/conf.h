@@ -42,10 +42,9 @@
 #endif
 
 /* If you're using the UAF_PTR_PAGE functionality and
- * want to change the frequency it is triggered or the
- * magic value that is written */
+ * want to change the frequency it is triggered */
 #if UAF_PTR_PAGE
-#define UAF_PTR_PAGE_ODDS 1000000
+#define UAF_PTR_PAGE_ODDS 250000
 #endif
 
 /* Zones can be retired after a certain number of

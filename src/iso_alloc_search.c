@@ -3,10 +3,11 @@
 
 #include "iso_alloc_internal.h"
 
-/* Search all zones for either the first instance of a pointer
- * value and return it or overwrite the first potentially
- * dangling pointer with the address of an unmapped page */
-INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
+#if UAF_PTR_PAGE
+/* Search all zones for the first 8-byte sequence equal to n and overwrite
+ * it with the address of the PROT_NONE uaf_ptr_page so the next deref
+ * faults at a known address. Sampled from the free path. */
+INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n) {
     uint8_t *search = NULL;
     uint8_t *end = NULL;
     const size_t zones_used = _root->zones_used;
@@ -17,30 +18,58 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n, bool poison) {
     n = (void *) ((uintptr_t) n & TAGGED_PTR_MASK);
 #endif
 
+#if USE_NEON
+    /* Per-call invariants — n is fixed for the entire search, so broadcast
+     * the two pre-filter bytes once instead of once per zone. */
+    const uint8x16_t b0 = vdupq_n_u8((uint8_t) (uintptr_t) n);
+    const uint8x16_t b1 = vdupq_n_u8((uint8_t) ((uintptr_t) n >> 8));
+#endif
+
     for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
         search = UNMASK_USER_PTR(zone);
         end = search + ZONE_USER_SIZE;
 
-        while(search <= (uint8_t *) (end - sizeof(uint64_t))) {
-            if(LIKELY((uint64_t) * (uint64_t *) search != (uint64_t) n)) {
-                search++;
-            } else {
-                if(poison == false) {
-                    return search;
-                } else {
-#if UAF_PTR_PAGE
+#if USE_NEON
+        /* A u64 at byte position k can match n only if bytes[k] == n[0]
+         * AND bytes[k+1] == n[1]. AND the two shifted byte-equality
+         * vectors before reducing — collapses false positives 256x and
+         * keeps the filter useful when chunks are filled with POISON_BYTE
+         * (which would defeat a single-byte filter when n[0] == 0xde).
+         * Stop 23 bytes before end so the last candidate u64 read fits. */
+        uint8_t *neon_end = end - 23;
+        while(search <= neon_end) {
+            uint8x16_t eq = vandq_u8(vceqq_u8(vld1q_u8(search), b0),
+                                     vceqq_u8(vld1q_u8(search + 1), b1));
+            if(LIKELY(vmaxvq_u8(eq) == 0)) {
+                search += 16;
+                continue;
+            }
+            uint8_t *win_end = search + 16;
+            while(search < win_end) {
+                if(UNLIKELY(*(uint64_t *) search == (uint64_t) n)) {
                     *(uint64_t *) search = (uint64_t) (_root->uaf_ptr_page);
                     return search;
-#endif
                 }
+                search++;
             }
+        }
+#endif
+
+        uint8_t *tail_end = end - sizeof(uint64_t);
+        while(search <= tail_end) {
+            if(UNLIKELY((uint64_t) * (uint64_t *) search == (uint64_t) n)) {
+                *(uint64_t *) search = (uint64_t) (_root->uaf_ptr_page);
+                return search;
+            }
+            search++;
         }
     }
 
     return NULL;
 }
+#endif
 
 #if EXPERIMENTAL
 /* These functions are all experimental and subject to change */
