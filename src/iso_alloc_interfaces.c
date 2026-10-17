@@ -119,13 +119,16 @@ EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strdup_from_zone(iso_al
         UNMASK_ZONE_HANDLE(zone);
     }
 
-    char *p = (char *) _iso_alloc(zone, size);
+    /* Allocate room for the NUL byte. Chunk contents are not
+     * guaranteed to be zeroed so we must write it ourselves */
+    char *p = (char *) _iso_alloc(zone, size + 1);
 
     if(p == NULL) {
         return NULL;
     }
 
     _iso_alloc_memcpy(p, str, size);
+    p[size] = '\0';
     return p;
 }
 
@@ -138,25 +141,27 @@ EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_a
         return NULL;
     }
 
-    size_t s_size = strlen(str);
+    /* POSIX strndup copies at most n bytes from a string that is
+     * not required to be NUL terminated within those n bytes, so
+     * we can't call strlen() on it. memchr is a bounded scan */
+    const char *end = memchr(str, '\0', n);
+    size_t copy_len = (end != NULL) ? (size_t)(end - str) : n;
 
     if(zone != NULL) {
         UNMASK_ZONE_HANDLE(zone);
     }
 
-    char *p = (char *) _iso_alloc(zone, n);
+    /* Allocate room for the NUL byte. Chunk contents are not
+     * guaranteed to be zeroed so we must write it ourselves. For
+     * n == 0 this is a 1 byte allocation holding just the NUL */
+    char *p = (char *) _iso_alloc(zone, copy_len + 1);
 
     if(p == NULL) {
         return NULL;
     }
 
-    if(s_size > n) {
-        _iso_alloc_memcpy(p, str, n);
-        p[n - 1] = '\0';
-    } else {
-        _iso_alloc_memcpy(p, str, s_size);
-    }
-
+    _iso_alloc_memcpy(p, str, copy_len);
+    p[copy_len] = '\0';
     return p;
 }
 
