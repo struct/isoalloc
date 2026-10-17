@@ -491,8 +491,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     create_guard_page(user_pages_guard_above);
 
-    /* We created a new zone, we did not replace a retired one */
-    if(index > 0) {
+    /* A zone that replaces a retired one (index >= 0, including
+     * index 0) keeps the index of the zone it replaces. Only a
+     * brand new zone gets the next unused index */
+    if(index >= 0) {
         new_zone->index = index;
     } else {
         new_zone->index = _root->zones_used;
@@ -518,18 +520,23 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
 
-    /* The lookup table is never used for private zones */
-    if(LIKELY(internal == true)) {
+    /* The lookup table is never used for private zones.
+     * Replacement zones (index >= 0) inherit their predecessors
+     * place in the table and its next_sz_index chain which we
+     * preserved above, so only brand new zones are inserted here.
+     * Note zone 0's table entry is indistinguishable from the
+     * empty sentinel value 0 so a replacement must not re-insert
+     * itself or it would orphan its preserved chain */
+    if(LIKELY(internal == true) && index < 0) {
         /* If no other zones of this size exist then set the
          * index in the zone lookup table to its index */
         if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
             _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = 0;
-        } else if(index < 0) {
-            /* If the index is < 0 then this is a brand new zone and
-             * not a replacement which means we need to add it to the
-             * zone_lookup_table. We prepend it to the start of the
-             * list ensuring it is checked first on alloc path */
+        } else {
+            /* Zones of this size already exist so we prepend this
+             * one to the start of the list ensuring it is checked
+             * first on the alloc path */
             int32_t current_idx = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
             _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = current_idx;
