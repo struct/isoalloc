@@ -3,7 +3,7 @@
 # examples of code that should crash
 $(echo '' > test_output.txt)
 
-tests=("tests" "big_tests" "interfaces_test" "thread_tests" "pool_test"
+tests=("tests" "big_tests" "big_zone_chunksz" "interfaces_test" "thread_tests" "pool_test"
        "rand_freelist")
 failure=0
 succeeded=0

@@ -1779,19 +1779,23 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
         check_big_canary(big_zone);
         /* Only an exact match of the address is valid */
         if(p == big_zone->user_pages_start) {
-            if(remove == true && prev != NULL) {
-                prev->next = big_zone->next;
+            /* A lookup (remove == false) must not modify the list */
+            if(remove == true) {
+                if(prev != NULL) {
+                    prev->next = big_zone->next;
+                }
+
+                _root->big_zone_used_count--;
+
+                /* If this is our first iteration then we are returning the
+                 * used list head. Set its new value to the next entry */
+                if(prev == NULL) {
+                    _root->big_zone_used = big_zone->next;
+                }
+
+                big_zone->next = NULL;
             }
 
-            _root->big_zone_used_count--;
-
-            /* If this is our first iteration then we are returning the
-             * used list head. Set its new value to the next entry */
-            if(prev == NULL) {
-                _root->big_zone_used = big_zone->next;
-            }
-
-            big_zone->next = NULL;
             UNLOCK_BIG_ZONE_USED();
             return big_zone;
         }
