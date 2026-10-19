@@ -145,7 +145,7 @@ EXTERNAL_API FLATTEN NO_DISCARD ASSUME_ALIGNED char *iso_strndup_from_zone(iso_a
      * not required to be NUL terminated within those n bytes, so
      * we can't call strlen() on it. memchr is a bounded scan */
     const char *end = memchr(str, '\0', n);
-    size_t copy_len = (end != NULL) ? (size_t)(end - str) : n;
+    size_t copy_len = (end != NULL) ? (size_t) (end - str) : n;
 
     if(zone != NULL) {
         UNMASK_ZONE_HANDLE(zone);

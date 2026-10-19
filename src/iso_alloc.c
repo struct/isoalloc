@@ -1440,7 +1440,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
                       chunk_offset, p, zone->index, chunk_size, (chunk_offset & (chunk_size - 1)));
     }
 
-    if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
+    /* max_bitmap_idx is a count of qwords in the bitmap so the
+     * largest valid index is max_bitmap_idx - 1 */
+    if(UNLIKELY(dwords_to_bit_slot >= zone->max_bitmap_idx)) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
@@ -1517,6 +1519,20 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
         p = _untag_ptr(p, zone);
     }
 #endif
+
+    /* The caller chose this zone so we can't trust that p
+     * belongs to it. The bitmap index derived from p is only
+     * meaningful if p is within this zones user pages */
+    const void *user_pages_start = UNMASK_USER_PTR(zone);
+#if ARM_MTE
+    const void *up = iso_mte_untag_ptr(p);
+#else
+    const void *up = p;
+#endif
+
+    if(UNLIKELY(up < user_pages_start || up >= (user_pages_start + ZONE_USER_SIZE))) {
+        LOG_AND_ABORT("Chunk at 0x%p does not belong to zone[%d] for chunk size %d", p, zone->index, zone->chunk_size);
+    }
 
     LOCK_ROOT();
     _iso_free_internal_unlocked(p, permanent, zone);
