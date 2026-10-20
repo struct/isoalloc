@@ -1126,7 +1126,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
 #if ALLOC_SANITY
     /* We only sample if a zone was not directly passed */
-    if(zone != NULL) {
+    if(zone == NULL) {
         if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
@@ -1510,6 +1510,17 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
     if(p == NULL || zone == NULL) {
         return;
     }
+
+#if ALLOC_SANITY
+    /* A sampled chunk lives in its own guarded page and
+     * not in any zone, so this must run before we validate
+     * p against the zones user pages */
+    int32_t r = _iso_alloc_free_sane_sample(p);
+
+    if(r == OK) {
+        return;
+    }
+#endif
 
 #if MEMORY_TAGGING
     /* Its possible that we were passed a tagged pointer */
