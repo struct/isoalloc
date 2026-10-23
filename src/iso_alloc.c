@@ -491,8 +491,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     create_guard_page(user_pages_guard_above);
 
-    /* We created a new zone, we did not replace a retired one */
-    if(index > 0) {
+    /* A zone that replaces a retired one (index >= 0, including
+     * index 0) keeps the index of the zone it replaces. Only a
+     * brand new zone gets the next unused index */
+    if(index >= 0) {
         new_zone->index = index;
     } else {
         new_zone->index = _root->zones_used;
@@ -518,18 +520,23 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
 
-    /* The lookup table is never used for private zones */
-    if(LIKELY(internal == true)) {
+    /* The lookup table is never used for private zones.
+     * Replacement zones (index >= 0) inherit their predecessors
+     * place in the table and its next_sz_index chain which we
+     * preserved above, so only brand new zones are inserted here.
+     * Note zone 0's table entry is indistinguishable from the
+     * empty sentinel value 0 so a replacement must not re-insert
+     * itself or it would orphan its preserved chain */
+    if(LIKELY(internal == true) && index < 0) {
         /* If no other zones of this size exist then set the
          * index in the zone lookup table to its index */
         if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
             _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = 0;
-        } else if(index < 0) {
-            /* If the index is < 0 then this is a brand new zone and
-             * not a replacement which means we need to add it to the
-             * zone_lookup_table. We prepend it to the start of the
-             * list ensuring it is checked first on alloc path */
+        } else {
+            /* Zones of this size already exist so we prepend this
+             * one to the start of the list ensuring it is checked
+             * first on the alloc path */
             int32_t current_idx = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
             _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
             new_zone->next_sz_index = current_idx;
@@ -1119,7 +1126,7 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 
 #if ALLOC_SANITY
     /* We only sample if a zone was not directly passed */
-    if(zone != NULL) {
+    if(zone == NULL) {
         if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
@@ -1433,7 +1440,9 @@ INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *rest
                       chunk_offset, p, zone->index, chunk_size, (chunk_offset & (chunk_size - 1)));
     }
 
-    if(UNLIKELY(dwords_to_bit_slot > zone->max_bitmap_idx)) {
+    /* max_bitmap_idx is a count of qwords in the bitmap so the
+     * largest valid index is max_bitmap_idx - 1 */
+    if(UNLIKELY(dwords_to_bit_slot >= zone->max_bitmap_idx)) {
         LOG_AND_ABORT("Cannot calculate this chunks location in the bitmap 0x%p", p);
     }
 
@@ -1502,6 +1511,17 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
         return;
     }
 
+#if ALLOC_SANITY
+    /* A sampled chunk lives in its own guarded page and
+     * not in any zone, so this must run before we validate
+     * p against the zones user pages */
+    int32_t r = _iso_alloc_free_sane_sample(p);
+
+    if(r == OK) {
+        return;
+    }
+#endif
+
 #if MEMORY_TAGGING
     /* Its possible that we were passed a tagged pointer */
     if(UNLIKELY(zone->tagged == true && ((uintptr_t) p & IS_TAGGED_PTR_MASK) != 0)) {
@@ -1510,6 +1530,20 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
         p = _untag_ptr(p, zone);
     }
 #endif
+
+    /* The caller chose this zone so we can't trust that p
+     * belongs to it. The bitmap index derived from p is only
+     * meaningful if p is within this zones user pages */
+    const void *user_pages_start = UNMASK_USER_PTR(zone);
+#if ARM_MTE
+    const void *up = iso_mte_untag_ptr(p);
+#else
+    const void *up = p;
+#endif
+
+    if(UNLIKELY(up < user_pages_start || up >= (user_pages_start + ZONE_USER_SIZE))) {
+        LOG_AND_ABORT("Chunk at 0x%p does not belong to zone[%d] for chunk size %d", p, zone->index, zone->chunk_size);
+    }
 
     LOCK_ROOT();
     _iso_free_internal_unlocked(p, permanent, zone);
@@ -1779,19 +1813,23 @@ INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
         check_big_canary(big_zone);
         /* Only an exact match of the address is valid */
         if(p == big_zone->user_pages_start) {
-            if(remove == true && prev != NULL) {
-                prev->next = big_zone->next;
+            /* A lookup (remove == false) must not modify the list */
+            if(remove == true) {
+                if(prev != NULL) {
+                    prev->next = big_zone->next;
+                }
+
+                _root->big_zone_used_count--;
+
+                /* If this is our first iteration then we are returning the
+                 * used list head. Set its new value to the next entry */
+                if(prev == NULL) {
+                    _root->big_zone_used = big_zone->next;
+                }
+
+                big_zone->next = NULL;
             }
 
-            _root->big_zone_used_count--;
-
-            /* If this is our first iteration then we are returning the
-             * used list head. Set its new value to the next entry */
-            if(prev == NULL) {
-                _root->big_zone_used = big_zone->next;
-            }
-
-            big_zone->next = NULL;
             UNLOCK_BIG_ZONE_USED();
             return big_zone;
         }
