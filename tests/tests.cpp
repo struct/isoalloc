@@ -4,6 +4,9 @@
 #include <memory>
 #include <array>
 #include <vector>
+#include <new>
+#include <cstdint>
+#include <cstring>
 #if THREAD_SUPPORT
 #include <thread>
 #endif
@@ -20,6 +23,124 @@ static const uint32_t array_sizes[] = {16, 32, 64, 128, 256, 512, 1024,
                                        2048, 4096, 8192, 16384, 32768, 65536};
 
 int32_t alloc_count;
+int32_t new_handler_calls;
+
+struct alignas(256) Aligned256 {
+    uint8_t data[300];
+};
+
+struct alignas(4096) AlignedPage {
+    uint8_t data[100];
+};
+
+static void check_alignment(void *p, size_t alignment) {
+    if(p == NULL) {
+        LOG_AND_ABORT("Aligned new returned NULL for alignment %d", alignment);
+    }
+
+    if((reinterpret_cast<uintptr_t>(p) & (alignment - 1)) != 0) {
+        LOG_AND_ABORT("Pointer %p is not %d byte aligned", p, alignment);
+    }
+}
+
+/* The aligned new operators previously ignored the requested
+ * alignment, and the throwing operators could return NULL
+ * instead of calling the new handler and throwing bad_alloc */
+static void aligned_new_tests(void) {
+    auto *a = new Aligned256();
+    check_alignment(a, alignof(Aligned256));
+    memset(a->data, 0x41, sizeof(a->data));
+    delete a;
+
+    auto *aa = new Aligned256[8];
+    check_alignment(aa, alignof(Aligned256));
+
+    for(size_t i = 0; i < 8; i++) {
+        check_alignment(&aa[i], alignof(Aligned256));
+        memset(aa[i].data, 0x41, sizeof(aa[i].data));
+    }
+
+    delete[] aa;
+
+    auto *pg = new AlignedPage();
+    check_alignment(pg, alignof(AlignedPage));
+    delete pg;
+
+    /* Alignments larger than a page go through the big zone path */
+    const size_t big_alignment = (1 << 20);
+    void *b = ::operator new(1000, std::align_val_t(big_alignment));
+    check_alignment(b, big_alignment);
+    memset(b, 0x41, 1000);
+    ::operator delete(b, std::align_val_t(big_alignment));
+
+    void *n = ::operator new(100, std::align_val_t(512), std::nothrow);
+    check_alignment(n, 512);
+    ::operator delete(n, std::align_val_t(512), std::nothrow);
+
+    /* A throwing new must throw bad_alloc rather than return NULL.
+     * These impossible sizes make the allocator log a failed big
+     * zone allocation for each attempt, which is expected */
+    LOG("The following big zone allocation failures are expected");
+    static volatile size_t huge = (SIZE_MAX >> 1);
+    bool caught = false;
+
+    try {
+        auto *h = new uint8_t[huge];
+        delete[] h;
+    } catch(const std::bad_alloc &) {
+        caught = true;
+    }
+
+    if(caught == false) {
+        LOG_AND_ABORT("new did not throw bad_alloc for an impossible size");
+    }
+
+    caught = false;
+
+    try {
+        void *h = ::operator new(huge, std::align_val_t(4096));
+        ::operator delete(h, std::align_val_t(4096));
+    } catch(const std::bad_alloc &) {
+        caught = true;
+    }
+
+    if(caught == false) {
+        LOG_AND_ABORT("aligned new did not throw bad_alloc for an impossible size");
+    }
+
+    /* The nothrow variants return NULL instead */
+    if(new(std::nothrow) uint8_t[huge] != NULL) {
+        LOG_AND_ABORT("nothrow new returned memory for an impossible size");
+    }
+
+    if(::operator new(huge, std::align_val_t(4096), std::nothrow) != NULL) {
+        LOG_AND_ABORT("nothrow aligned new returned memory for an impossible size");
+    }
+
+    /* An installed new handler must be called once before
+     * bad_alloc is thrown. The handler uninstalls itself so
+     * the retry fails and the exception follows */
+    new_handler_calls = 0;
+    std::set_new_handler([]() {
+        new_handler_calls++;
+        std::set_new_handler(nullptr);
+    });
+
+    caught = false;
+
+    try {
+        auto *h = new uint8_t[huge];
+        delete[] h;
+    } catch(const std::bad_alloc &) {
+        caught = true;
+    }
+
+    std::set_new_handler(nullptr);
+
+    if(caught == false || new_handler_calls != 1) {
+        LOG_AND_ABORT("new handler was called %d times, bad_alloc caught = %d", new_handler_calls, caught);
+    }
+}
 
 class Base {
   public:
@@ -131,6 +252,8 @@ int main(int argc, char *argv[]) {
         }
     }
 #endif
+
+    aligned_new_tests();
 
     iso_verify_zones();
 

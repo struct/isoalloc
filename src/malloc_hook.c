@@ -48,16 +48,17 @@ EXTERNAL_API void *__libc_reallocarray(void *p, size_t n, size_t s) ISO_FORWARD3
 EXTERNAL_API void *reallocarray(void *p, size_t n, size_t s) ISO_FORWARD3(iso_reallocarray, p, n, s)
 
 EXTERNAL_API int __posix_memalign(void **r, size_t a, size_t s) {
-    if(is_pow2(a) == false) {
+    if(r == NULL) {
+        return EINVAL;
+    }
+
+    /* POSIX requires a power of 2 that is a multiple of sizeof(void *) */
+    if(a == 0 || (a % sizeof(void *)) != 0 || is_pow2(a) == false) {
         *r = NULL;
         return EINVAL;
     }
 
-    if(s < a) {
-        s = a;
-    }
-
-    *r = iso_alloc(s);
+    *r = _iso_alloc_aligned(s, a);
 
     if(*r != NULL) {
         return 0;
@@ -70,19 +71,21 @@ EXTERNAL_API int posix_memalign(void **r, size_t alignment, size_t s) {
     return __posix_memalign(r, alignment, s);
 }
 
+EXTERNAL_API void *memalign(size_t alignment, size_t s) {
+    if(alignment == 0 || is_pow2(alignment) == false) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return _iso_alloc_aligned(s, alignment);
+}
+
 EXTERNAL_API void *__libc_memalign(size_t alignment, size_t s) {
-    /* All iso_alloc allocations are 8 byte aligned */
-    return iso_alloc(s);
+    return memalign(alignment, s);
 }
 
 EXTERNAL_API void *aligned_alloc(size_t alignment, size_t s) {
-    /* All iso_alloc allocations are 8 byte aligned */
-    return iso_alloc(s);
-}
-
-EXTERNAL_API void *memalign(size_t alignment, size_t s) {
-    /* All iso_alloc allocations are 8 byte aligned */
-    return iso_alloc(s);
+    return memalign(alignment, s);
 }
 
 #if __ANDROID__ || __FreeBSD__

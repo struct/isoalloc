@@ -214,7 +214,7 @@ int32_t name_mapping(void *p, size_t sz, const char *name) {
 }
 
 bool is_pow2(uint64_t sz) {
-    return (sz & (sz - 1)) == 0;
+    return sz != 0 && (sz & (sz - 1)) == 0;
 }
 
 size_t next_pow2(size_t sz) {

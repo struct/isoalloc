@@ -867,6 +867,44 @@ INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone,
     }
 }
 
+/* Walks the lookup table chain for internal zones whose
+ * chunk size is exactly size and returns the first usable
+ * one, or NULL if none of them can hold another chunk */
+INTERNAL_HIDDEN iso_alloc_zone_t *find_exact_fit_zone(size_t size) {
+    int32_t i = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
+
+    if(i == 0) {
+        return NULL;
+    }
+
+    const size_t zones_used = _root->zones_used;
+
+    for(; i < zones_used;) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+
+        if(zone->chunk_size != size) {
+            LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, size);
+        }
+
+        if(zone->internal == false) {
+            LOG_AND_ABORT("Lookup table should never contain private zones");
+        }
+
+        if(is_zone_usable(zone, size) != NULL) {
+            return zone;
+        }
+
+        if(zone->next_sz_index != 0) {
+            i = zone->next_sz_index;
+        } else {
+            /* We have reached the end of our linked zones */
+            break;
+        }
+    }
+
+    return NULL;
+}
+
 /* Finds a zone that can fit this allocation request */
 INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     iso_alloc_zone_t *zone = NULL;
@@ -891,37 +929,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
     }
 #endif
 
-    /* Fast path via lookup table */
-    if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] != 0) {
-        i = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
+    /* Fast path via lookup table. If this fails to find a
+     * usable zone we fall through and iterate through all
+     * zones, including ones we may have skipped over, to
+     * find a suitable candidate instead of creating a new one */
+    zone = find_exact_fit_zone(size);
 
-        for(; i < zones_used;) {
-            iso_alloc_zone_t *zone = &_root->zones[i];
-
-            if(zone->chunk_size != size) {
-                LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, size);
-            }
-
-            if(zone->internal == false) {
-                LOG_AND_ABORT("Lookup table should never contain private zones");
-            }
-
-            if(is_zone_usable(zone, size) != NULL) {
-                return zone;
-            }
-
-            if(zone->next_sz_index != 0) {
-                i = zone->next_sz_index;
-            } else {
-                /* We have reached the end of our linked zones. The
-                 * lookup table failed to find us a usable zone.
-                 * Instead of creating a new one we will break out
-                 * of this loop and try iterating through all zones,
-                 * including ones we may have skipped over, to find
-                 * a suitable candidate. */
-                break;
-            }
-        }
+    if(zone != NULL) {
+        return zone;
     }
 
 #if SMALL_MEM_STARTUP
@@ -1235,8 +1250,100 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
             LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone (%d)", size, SMALL_SIZE_MAX, zone->chunk_size);
         }
 
-        return _iso_big_alloc(size);
+        return _iso_big_alloc(size, g_page_size);
     }
+}
+
+/* Allocates a chunk aligned to alignment bytes, which must be
+ * a power of 2. Every chunk is at least SZ_ALIGNMENT aligned.
+ * Stronger alignments are satisfied by rounding the size up to
+ * a multiple of the alignment and allocating from an internal
+ * zone whose chunk size is exactly that. Chunks are laid out
+ * at multiples of the chunk size from a page aligned base so
+ * this guarantees the alignment for anything up to a page.
+ * Larger alignments and sizes use the big zone path */
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alignment) {
+    if(UNLIKELY(is_pow2(alignment) == false)) {
+        return NULL;
+    }
+
+    /* Every chunk is already SZ_ALIGNMENT aligned, and any
+     * smaller power of 2 divides SZ_ALIGNMENT */
+    if(alignment <= SZ_ALIGNMENT) {
+        return _iso_alloc(NULL, size);
+    }
+
+    if(size == 0) {
+        size = alignment;
+    }
+
+    const size_t s = ((size + (alignment - 1)) & ~(alignment - 1));
+
+    if(UNLIKELY(s < size)) {
+        return NULL;
+    }
+
+    LOCK_ROOT();
+
+    if(UNLIKELY(_root == NULL)) {
+#if AUTO_CTOR_DTOR
+        g_page_size = sysconf(_SC_PAGESIZE);
+        g_page_size_shift = _log2(g_page_size);
+        iso_alloc_initialize_global_root();
+#else
+        LOG_AND_ABORT("Root never initialized!");
+#endif
+    }
+
+#if HEAP_PROFILER
+    _iso_alloc_profile(s);
+#endif
+
+    if(alignment > g_page_size || s > SMALL_SIZE_MAX) {
+        /* The big zone path uses a different lock */
+        UNLOCK_ROOT();
+
+        /* Big zones must be at least SMALL_SIZE_MAX bytes. That
+         * is a power of 2 so rounding up to it keeps the size a
+         * multiple of any smaller alignment */
+        return _iso_big_alloc((s < SMALL_SIZE_MAX) ? SMALL_SIZE_MAX : s, alignment);
+    }
+
+    iso_alloc_zone_t *zone = find_exact_fit_zone(s);
+
+    if(zone == NULL) {
+        zone = _iso_new_zone(s, true, -1);
+
+        if(UNLIKELY(zone == NULL)) {
+            LOG_AND_ABORT("Failed to create a zone for aligned allocation of %zu bytes", s);
+        }
+    }
+
+    bit_slot_t free_bit_slot = zone->next_free_bit_slot;
+
+    if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
+        UNLOCK_ROOT();
+#if ABORT_ON_NULL
+        LOG_AND_ABORT("isoalloc configured to abort on NULL");
+#endif
+        return NULL;
+    }
+
+    UNMASK_ZONE_PTRS(zone);
+
+    zone->next_free_bit_slot = BAD_BIT_SLOT;
+    void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
+
+    MASK_ZONE_PTRS(zone);
+    UNLOCK_ROOT();
+    populate_zone_cache(zone);
+
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        return iso_mte_set_tag_range(p, zone->chunk_size);
+    }
+#endif
+    return p;
 }
 
 INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *restrict p) {
@@ -1597,7 +1704,13 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 #endif
 
 #if HEAP_PROFILER
+    /* The alloc side profiles with the root locked. The
+     * free profiler updates the same globals so it needs
+     * the same protection or racing frees can push the
+     * backtrace count past the end of the array */
+    LOCK_ROOT();
     _iso_free_profile();
+    UNLOCK_ROOT();
 #endif
 
 #if ARM_MTE
@@ -1747,14 +1860,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
          * be refreshed then just generate a new tag for this chunk */
         if(zone->tagged == true) {
             if(_refresh_zone_mem_tags(zone) == false) {
-                /* We only need to refresh this single tag */
-                void *user_pages_start = UNMASK_USER_PTR(zone);
-                uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-                uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
-                _mtp += (chunk_offset / zone->chunk_size);
-
-                /* Generate and write a new tag for this chunk */
-                *_mtp = (uint8_t) us_rand_uint64(&_root->seed);
+                /* We only need to refresh this single tag. The
+                 * new tag is guaranteed to differ from the old one
+                 * so a stale tagged pointer to p can never verify */
+                _iso_alloc_refresh_chunk_tag(p, zone);
             }
         }
 #endif
@@ -1909,8 +2018,12 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
     }
 }
 
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
+/* alignment must be a power of 2. Every big zone mapping is
+ * page aligned so only alignments larger than a page need
+ * any special handling */
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment) {
     const size_t new_size = ROUND_UP_PAGE(size);
+    const bool aligned = (alignment > g_page_size);
 
     if(new_size < size || new_size > BIG_SZ_MAX || size < SMALL_SIZE_MAX) {
 #if ABORT_ON_NULL
@@ -1950,7 +2063,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
             check_big_canary(big);
 
             /* We found a suitable big zone we can reuse */
-            if(big->size >= size && (big->size - size) <= BIG_ZONE_WASTE * 2) {
+            if(big->size >= size && (big->size - size) <= BIG_ZONE_WASTE * 2 &&
+               (aligned == false || ((uintptr_t) big->user_pages_start & (alignment - 1)) == 0)) {
                 big->free = false;
                 _root->big_zone_free_count--;
                 UNPOISON_BIG_ZONE(big);
@@ -2000,21 +2114,33 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
     UNLOCK_BIG_ZONE_FREE();
 
     /* The free list contained no usable entries
-     * so we need to create a new one */
+     * so we need to create a new one. An alignment
+     * larger than a page is satisfied by mapping an
+     * extra alignment bytes and trimming both ends */
+    size_t map_size = size;
+
+    if(aligned == true) {
+        map_size += alignment;
+
+        if(UNLIKELY(map_size < size)) {
+            return NULL;
+        }
+    }
+
     void *user_pages = NULL;
 #if ARM_MTE
 #if BIG_ZONE_GUARD
-    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    user_pages = mmap_guarded_rw_pages(map_size, false, BIG_ZONE_UD_NAME);
 #else
     if(_root->arm_mte_enabled == true) {
-        user_pages = mmap_rw_mte_pages(size, false, BIG_ZONE_UD_NAME);
+        user_pages = mmap_rw_mte_pages(map_size, false, BIG_ZONE_UD_NAME);
     }
 #endif
 #else
 #if BIG_ZONE_GUARD
-    user_pages = mmap_guarded_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    user_pages = mmap_guarded_rw_pages(map_size, false, BIG_ZONE_UD_NAME);
 #else
-    user_pages = mmap_rw_pages(size, false, BIG_ZONE_UD_NAME);
+    user_pages = mmap_rw_pages(map_size, false, BIG_ZONE_UD_NAME);
 #endif
 #endif
 
@@ -2023,6 +2149,31 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size) {
         LOG_AND_ABORT("IsoAlloc configured to abort on NULL");
 #endif
         return NULL;
+    }
+
+    if(aligned == true) {
+        void *aligned_pages = (void *) (((uintptr_t) user_pages + (alignment - 1)) & ~(alignment - 1));
+        const size_t head = (size_t) (aligned_pages - user_pages);
+        const size_t tail = (alignment - head);
+#if BIG_ZONE_GUARD
+        /* Move the guard pages so they sit directly below and
+         * above the aligned range, then release everything else.
+         * The upper munmap also covers the original upper guard */
+        if(head != 0) {
+            munmap(user_pages - g_page_size, head);
+            mprotect_pages(aligned_pages - g_page_size, g_page_size, PROT_NONE);
+        }
+
+        mprotect_pages(aligned_pages + size, g_page_size, PROT_NONE);
+        munmap(aligned_pages + size + g_page_size, tail);
+#else
+        if(head != 0) {
+            munmap(user_pages, head);
+        }
+
+        munmap(aligned_pages + size, tail);
+#endif
+        user_pages = aligned_pages;
     }
 
     /* We only need a single page for big zone meta data */
