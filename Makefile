@@ -21,7 +21,7 @@ PERM_FREE_REALLOC = -DPERM_FREE_REALLOC=0
 ## 1 byte tag per addressable chunk of memory. These tags can
 ## be retrieved and verified. This feature will likely interfere
 ## with ARM MTE and PAC. See MEMORY_TAGGING.md for more information
-MEMORY_TAGGING = -DMEMORY_TAGGING=0
+MEMORY_TAGGING = -DMEMORY_TAGGING=1
 
 ## Enable abort() when isoalloc can't gather enough entropy.
 ABORT_NO_ENTROPY = -DABORT_NO_ENTROPY=1
@@ -90,8 +90,12 @@ THP_PAGES = -DTHP_PAGES=1
 ## program. This file encodes the heap usage patterns of
 ## the target. This file can be consumed by the profiler
 ## CLI utility. See PROFILER.md for the format of this file
-#HEAP_PROFILER = -DHEAP_PROFILER=1 -fno-omit-frame-pointer \
-#				-fno-optimize-sibling-calls -ldl
+#HEAP_PROFILER = $(HEAP_PROFILER_FLAGS)
+
+## Flags required to build with the heap profiler. Backtraces
+## are collected by walking frame pointers so they must be kept
+HEAP_PROFILER_FLAGS = -DHEAP_PROFILER=1 -fno-omit-frame-pointer \
+				-fno-optimize-sibling-calls
 
 ## Enable CPU pinning support on a per-zone basis. This is
 ## a minor security feature which introduces an allocation
@@ -425,6 +429,7 @@ tests: clean library_debug_unit_tests
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) $(UNIT_TESTING) tests/uaf.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/interfaces_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/interfaces_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/aligned_alloc_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/aligned_alloc_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/thread_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/thread_tests $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) $(UNIT_TESTING) tests/big_canary_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_canary_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/big_tests.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/big_tests $(LDFLAGS)
@@ -463,8 +468,18 @@ tagging_tests: clean cpp_library_debug
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/uaf_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/uaf_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/bad_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/bad_tag_ptr_test $(LDFLAGS)
 	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/verify_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/verify_tag_ptr_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/valid_tag_ptr_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/valid_tag_ptr_test $(LDFLAGS)
+	$(CC) $(CFLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/tag_refresh_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tag_refresh_test $(LDFLAGS)
 	$(CXX) -DMEMORY_TAGGING=1 $(CXXFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(EXE_CFLAGS) $(OS_FLAGS) tests/tagged_ptr_test.cpp $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/tagged_ptr_test_cpp $(LDFLAGS)
 	utils/run_tagging_tests.sh
+
+## Build the library with the heap profiler and run its test.
+## The profiler data file is checked by the runner script
+profiler_tests: clean
+	@echo "make profiler_tests"
+	$(CC) $(CFLAGS) $(HEAP_PROFILER_FLAGS) $(LIBRARY) $(OS_FLAGS) $(UNIT_TESTING) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(C_SRCS) -o $(BUILD_DIR)/$(LIBNAME) -ldl
+	$(CC) $(CFLAGS) $(HEAP_PROFILER_FLAGS) $(EXE_CFLAGS) $(DEBUG_LOG_FLAGS) $(GDB_FLAGS) $(OS_FLAGS) tests/profiler_test.c $(ISO_ALLOC_PRINTF_SRC) -o $(BUILD_DIR)/profiler_test $(LDFLAGS) -ldl
+	utils/run_profiler_tests.sh
 
 init_test: clean library_debug_unit_tests
 	@echo "make init_test"
@@ -530,6 +545,6 @@ format-ci:
 
 clean:
 	rm -rf build/* tests_perf_analysis.txt big_tests_perf_analysis.txt gmon.out \
-		tagging_test_output.txt test_output.txt *.dSYM core* iso_alloc_profiler.data
+		tagging_test_output.txt test_output.txt profiler_test_output.txt *.dSYM core* iso_alloc_profiler.data
 	rm -rf android/libs android/obj
 	mkdir -p build/

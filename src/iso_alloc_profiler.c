@@ -13,6 +13,19 @@
 
 #include <dlfcn.h>
 
+#if HEAP_PROFILER
+uint64_t _alloc_count;
+uint64_t _free_count;
+uint64_t _alloc_sampled_count;
+uint64_t _free_sampled_count;
+int32_t profiler_fd;
+zone_profiler_map_t _zone_profiler_map[SMALL_SIZE_MAX + 1];
+iso_alloc_traces_t _alloc_bts[BACKTRACE_DEPTH_SZ];
+size_t _alloc_bts_count;
+iso_free_traces_t _free_bts[BACKTRACE_DEPTH_SZ];
+size_t _free_bts_count;
+#endif
+
 INTERNAL_HIDDEN uint64_t _iso_alloc_detect_leaks_in_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
     uint64_t leaks = _iso_alloc_zone_leak_detector(zone, false);
@@ -173,7 +186,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
 
     if(profile == false) {
         LOG("Zone[%d] Total number of %d byte chunks(%d) used and free'd (%d) (%d percent), in use = %d", zone->index, zone->chunk_size, zone->chunk_count,
-            was_used, (int32_t) ((float) was_used / zone->chunk_count) * 100, in_use);
+            was_used, (int32_t) (((float) was_used / zone->chunk_count) * 100), in_use);
     }
 
     MASK_ZONE_PTRS(zone);
@@ -184,8 +197,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
      * the total number of allocations both currently
      * in use and previously used by this zone */
     if(profile == true) {
-        uint64_t total = (in_use + was_used);
-        return (uint64_t) ((float) (total / zone->chunk_count) * 100.0);
+        return (uint64_t) (in_use + was_used);
     }
 #endif
     return in_use;
@@ -253,16 +265,16 @@ INTERNAL_HIDDEN uint64_t __iso_alloc_big_zone_mem_usage(iso_alloc_big_zone_t *he
  * be used to interpret allocation patterns */
 INTERNAL_HIDDEN size_t _iso_get_alloc_traces(iso_alloc_traces_t *traces_out) {
     LOCK_ROOT();
-    __iso_memcpy(traces_out, _alloc_bts, sizeof(iso_alloc_traces_t));
     size_t sz = _alloc_bts_count;
+    __iso_memcpy(traces_out, _alloc_bts, sz * sizeof(iso_alloc_traces_t));
     UNLOCK_ROOT();
     return sz;
 }
 
 INTERNAL_HIDDEN size_t _iso_get_free_traces(iso_free_traces_t *traces_out) {
     LOCK_ROOT();
-    __iso_memcpy(traces_out, _free_bts, sizeof(iso_free_traces_t));
     size_t sz = _free_bts_count;
+    __iso_memcpy(traces_out, _free_bts, sz * sizeof(iso_free_traces_t));
     UNLOCK_ROOT();
     return sz;
 }
@@ -276,61 +288,60 @@ INTERNAL_HIDDEN void _iso_alloc_reset_traces(void) {
     UNLOCK_ROOT();
 }
 
-#define UPDATE_BT_HASH(frame, hash)                         \
-    if(__builtin_frame_address(frame)) {                    \
-        hash ^= (uint64_t) __builtin_return_address(frame); \
-    } else {                                                \
-        return hash;                                        \
+/* Walks the frame pointer chain. Both x86_64 and aarch64
+ * save the previous frame pointer at fp[0] and the return
+ * address at fp[1] when built with frame pointers. We walk
+ * the chain ourselves because __builtin_return_address(n)
+ * for n > 0 is a constant 0 on aarch64 gcc, which left the
+ * profiler without any backtraces on that target. The walk
+ * stops at the first frame that is NULL, misaligned, or does
+ * not sit above the current one on the stack */
+static INLINE uintptr_t *_next_frame(uintptr_t *fp) {
+    uintptr_t *next = (uintptr_t *) fp[0];
+
+    if(next <= fp || ((uintptr_t) next & (sizeof(uintptr_t) * 2 - 1)) != 0) {
+        return NULL;
     }
+
+    return next;
+}
 
 INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(void) {
     uint64_t hash = 0;
-    UPDATE_BT_HASH(1, hash);
-    UPDATE_BT_HASH(2, hash);
-    UPDATE_BT_HASH(3, hash);
-    UPDATE_BT_HASH(4, hash);
-    UPDATE_BT_HASH(5, hash);
-    UPDATE_BT_HASH(6, hash);
-    UPDATE_BT_HASH(7, hash);
-    UPDATE_BT_HASH(8, hash);
+    uintptr_t *fp = (uintptr_t *) __builtin_frame_address(0);
+
+    for(size_t i = 0; i < BACKTRACE_DEPTH && fp != NULL; i++) {
+        hash ^= (uint64_t) fp[1];
+        fp = _next_frame(fp);
+    }
+
     return hash;
 }
 
-#define SAVE_BACKTRACE_FRAME(frame, bts)                                          \
-    if(__builtin_frame_address(frame)) {                                          \
-        uint64_t r = (uint64_t) __builtin_return_address(frame);                  \
-        if(r > 0x1000) {                                                          \
-            bts->callers[frame - 1] = (uint64_t) __builtin_return_address(frame); \
-        }                                                                         \
-    } else {                                                                      \
-        return;                                                                   \
+/* Stores up to BACKTRACE_DEPTH return addresses in callers */
+static INLINE void _save_backtrace_frames(uint64_t *callers) {
+    uintptr_t *fp = (uintptr_t *) __builtin_frame_address(0);
+
+    for(size_t i = 0; i < BACKTRACE_DEPTH && fp != NULL; i++) {
+        uint64_t r = (uint64_t) fp[1];
+
+        if(r > 0x1000) {
+            callers[i] = r;
+        }
+
+        fp = _next_frame(fp);
     }
+}
 
 INTERNAL_HIDDEN INLINE void _save_alloc_backtrace(iso_alloc_traces_t *abts) {
-    SAVE_BACKTRACE_FRAME(1, abts);
-    SAVE_BACKTRACE_FRAME(2, abts);
-    SAVE_BACKTRACE_FRAME(3, abts);
-    SAVE_BACKTRACE_FRAME(4, abts);
-    SAVE_BACKTRACE_FRAME(5, abts);
-    SAVE_BACKTRACE_FRAME(6, abts);
-    SAVE_BACKTRACE_FRAME(7, abts);
-    SAVE_BACKTRACE_FRAME(8, abts);
-    return;
+    _save_backtrace_frames(abts->callers);
 }
 
 INTERNAL_HIDDEN INLINE void _save_free_backtrace(iso_free_traces_t *fbts) {
-    SAVE_BACKTRACE_FRAME(1, fbts);
-    SAVE_BACKTRACE_FRAME(2, fbts);
-    SAVE_BACKTRACE_FRAME(3, fbts);
-    SAVE_BACKTRACE_FRAME(4, fbts);
-    SAVE_BACKTRACE_FRAME(5, fbts);
-    SAVE_BACKTRACE_FRAME(6, fbts);
-    SAVE_BACKTRACE_FRAME(7, fbts);
-    SAVE_BACKTRACE_FRAME(8, fbts);
-    return;
+    _save_backtrace_frames(fbts->callers);
 }
 
-INTERNAL_HIDDEN void _iso_output_profile() {
+INTERNAL_HIDDEN void _iso_output_profile(void) {
     _iso_alloc_printf(profiler_fd, "allocated=%d\n", _alloc_count);
     _iso_alloc_printf(profiler_fd, "alloc_sampled=%d\n", _alloc_sampled_count);
     _iso_alloc_printf(profiler_fd, "freed=%d\n", _free_count);
@@ -351,10 +362,9 @@ INTERNAL_HIDDEN void _iso_output_profile() {
                 continue;
             }
 
-            Dl_info dl;
-            dladdr((void *) abts->callers[j], &dl);
+            Dl_info dl = {0};
 
-            if(dl.dli_sname != NULL) {
+            if(dladdr((void *) abts->callers[j], &dl) != 0 && dl.dli_sname != NULL) {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", abts->callers[j], dl.dli_sname, dl.dli_fname);
             } else {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> [?]\n", abts->callers[j]);
@@ -372,10 +382,9 @@ INTERNAL_HIDDEN void _iso_output_profile() {
                 continue;
             }
 
-            Dl_info dl;
-            dladdr((void *) fbts->callers[j], &dl);
+            Dl_info dl = {0};
 
-            if(dl.dli_sname != NULL) {
+            if(dladdr((void *) fbts->callers[j], &dl) != 0 && dl.dli_sname != NULL) {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> %s %s\n", fbts->callers[j], dl.dli_sname, dl.dli_fname);
             } else {
                 _iso_alloc_printf(profiler_fd, "\t0x%x -> [?]\n", fbts->callers[j]);
@@ -383,7 +392,7 @@ INTERNAL_HIDDEN void _iso_output_profile() {
         }
     }
 
-    for(int i = 0; i < SMALL_SIZE_MAX; i++) {
+    for(int i = 0; i <= SMALL_SIZE_MAX; i++) {
         if(_zone_profiler_map[i].count != 0) {
             _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
         }
@@ -418,7 +427,8 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
             used = _iso_alloc_zone_leak_detector(zone, true);
         }
 
-        used = (int32_t) ((float) (used / zone->chunk_count) * 100.0);
+        /* Convert the chunk count to a percentage of the zone */
+        used = (uint32_t) (((float) used / zone->chunk_count) * 100.0f);
 
         if(used > CHUNK_USAGE_THRESHOLD) {
             _zone_profiler_map[zone->chunk_size].count++;
@@ -458,6 +468,8 @@ INTERNAL_HIDDEN void _iso_alloc_profile(size_t size) {
     }
 }
 
+/* Must be called with the root locked, it touches
+ * the profiler globals and the root seed */
 INTERNAL_HIDDEN void _iso_free_profile(void) {
     _free_count++;
 

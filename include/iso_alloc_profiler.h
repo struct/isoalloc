@@ -18,29 +18,33 @@
 /* The IsoAlloc profiler is not thread local but these
  * globals should only ever be touched by internal
  * allocator functions when the root is locked */
-uint64_t _alloc_count;
-uint64_t _free_count;
-uint64_t _alloc_sampled_count;
-uint64_t _free_sampled_count;
-
-int32_t profiler_fd;
+extern uint64_t _alloc_count;
+extern uint64_t _free_count;
+extern uint64_t _alloc_sampled_count;
+extern uint64_t _free_sampled_count;
 
 typedef struct {
     uint64_t total;
     uint64_t count;
 } zone_profiler_map_t;
 
-zone_profiler_map_t _zone_profiler_map[SMALL_SIZE_MAX];
+/* These are defined once in iso_alloc_profiler.c. This
+ * header is included by several translation units so
+ * defining them here fails to link under -fno-common */
+extern int32_t profiler_fd;
+
+/* Indexed by chunk size, which can be exactly SMALL_SIZE_MAX */
+extern zone_profiler_map_t _zone_profiler_map[SMALL_SIZE_MAX + 1];
 
 /* iso_alloc_traces_t is a public structure, and
  * is defined in the public header iso_alloc.h */
-iso_alloc_traces_t _alloc_bts[BACKTRACE_DEPTH_SZ];
-size_t _alloc_bts_count;
+extern iso_alloc_traces_t _alloc_bts[BACKTRACE_DEPTH_SZ];
+extern size_t _alloc_bts_count;
 
 /* iso_free_traces_t is a public structure, and
  * is defined in the public header iso_alloc.h */
-iso_free_traces_t _free_bts[BACKTRACE_DEPTH_SZ];
-size_t _free_bts_count;
+extern iso_free_traces_t _free_bts[BACKTRACE_DEPTH_SZ];
+extern size_t _free_bts_count;
 
 INTERNAL_HIDDEN INLINE uint64_t _get_backtrace_hash(void);
 INTERNAL_HIDDEN INLINE void _save_backtrace(iso_alloc_traces_t *abts);

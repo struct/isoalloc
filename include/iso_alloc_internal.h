@@ -367,6 +367,10 @@ extern pthread_mutex_t root_busy_mutex;
 /* The global root */
 extern iso_alloc_root *_root;
 
+/* These are C functions and may be called from iso_alloc.cpp */
+#ifdef __cplusplus
+extern "C" {
+#endif
 INTERNAL_HIDDEN INLINE void check_big_canary(iso_alloc_big_zone_t *big);
 INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
@@ -377,6 +381,7 @@ INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove);
 INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
+INTERNAL_HIDDEN iso_alloc_zone_t *find_exact_fit_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
@@ -389,6 +394,7 @@ INTERNAL_HIDDEN INLINE bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone)
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void);
 INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void _iso_alloc_refresh_chunk_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone);
@@ -414,8 +420,9 @@ INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head);
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alignment);
 INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
 #if UAF_PTR_PAGE
@@ -430,6 +437,9 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p);
 INTERNAL_HIDDEN int64_t check_canary_no_abort(iso_alloc_zone_t *zone, const void *p);
 INTERNAL_HIDDEN void _iso_alloc_initialize(void);
 INTERNAL_HIDDEN void _iso_alloc_destroy(void);
+#ifdef __cplusplus
+}
+#endif
 
 #if ARM_MTE
 INLINE void *iso_mte_untag_ptr(void *p);

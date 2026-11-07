@@ -53,6 +53,10 @@ EXTERNAL_API FLATTEN size_t iso_chunksz(void *p) {
 }
 
 EXTERNAL_API FLATTEN NO_DISCARD size_t iso_zone_chunk_count(iso_alloc_zone_handle *zone) {
+    if(zone == NULL) {
+        return 0;
+    }
+
     UNMASK_ZONE_HANDLE(zone);
     iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
     size_t canaries = 0;
@@ -236,6 +240,13 @@ EXTERNAL_API FLATTEN void iso_alloc_destroy_zone(iso_alloc_zone_handle *zone) {
 
 EXTERNAL_API FLATTEN NO_DISCARD iso_alloc_zone_handle *iso_alloc_new_zone(size_t size) {
     iso_alloc_zone_handle *zone = (iso_alloc_zone_handle *) iso_new_zone(size, false);
+
+    /* A NULL must not be masked or the caller gets back
+     * a non-NULL handle that is really just the mask */
+    if(zone == NULL) {
+        return NULL;
+    }
+
     UNMASK_ZONE_HANDLE(zone);
     return zone;
 }

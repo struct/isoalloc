@@ -392,7 +392,11 @@ INTERNAL_HIDDEN int32_t _iso_alloc_free_sane_sample(void *p) {
     _sane_allocation_t *sane_alloc = _get_sane_alloc(p);
 
     if(sane_alloc != NULL) {
+#if !UNINIT_READ_SANITY
+        /* The canary is only written when we aren't using
+         * userfaultfd to detect uninitialized reads */
         check_sanity_canary(sane_alloc);
+#endif
         unmap_guarded_pages(sane_alloc->address, g_page_size);
         memset(sane_alloc, 0x0, sizeof(_sane_allocation_t));
         _sane_cache[SANE_CACHE_IDX(p)]--;
