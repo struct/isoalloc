@@ -79,7 +79,7 @@ Zones are linked by their `next_sz_index` member which tells the allocator where
 
 ## ARM NEON
 
-IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile.
+IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. This code requires AArch64 as it uses across vector reductions that do not exist on 32 bit ARM. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile. When `UAF_PTR_PAGE` is enabled the Neon version of the dangling pointer scan is fast enough that it runs 4x as often as the portable version, see `UAF_PTR_PAGE_ODDS` in `conf.h`.
 
 ## Tests
 

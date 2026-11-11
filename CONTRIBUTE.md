@@ -12,6 +12,10 @@ Contributing to IsoAlloc is a pretty standard process of forking the repo, makin
 
 `make cpp_tests` - Make sure all C++ tests still pass
 
+`make tagging_tests MEMORY_TAGGING=-DMEMORY_TAGGING=1` - Make sure the memory tagging tests still pass
+
+`make profiler_tests` - Make sure the heap profiler test still passes
+
 `make library` - Build a release version of the library
 
 `make cpp_library` - Build a release version of the library with C++ support

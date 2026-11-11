@@ -197,14 +197,21 @@ assert(sizeof(size_t) >= 64)
 #define ALIGN_SZ_UP(n) \
     ((n + SZ_ALIGNMENT - 1) & ~(SZ_ALIGNMENT - 1))
 
+/* Rounds n down to a multiple of SZ_ALIGNMENT. The previous
+ * definition rounded up and subtracted SZ_ALIGNMENT, which
+ * returned n - SZ_ALIGNMENT for an already aligned n and
+ * underflowed for 0 */
 #define ALIGN_SZ_DOWN(n) \
-    (((n + SZ_ALIGNMENT - 1) & ~(SZ_ALIGNMENT - 1)) - SZ_ALIGNMENT)
+    ((n) & ~((__typeof__(n)) (SZ_ALIGNMENT - 1)))
 
 #define ROUND_UP_PAGE(n) \
     ((((n + g_page_size) - 1) >> g_page_size_shift) * (g_page_size))
 
+/* Rounds n down to a page boundary. The previous definition
+ * rounded up and subtracted a page, which returned the page
+ * before n when n was already page aligned */
 #define ROUND_DOWN_PAGE(n) \
-    (ROUND_UP_PAGE(n) - g_page_size)
+    ((n) & ~((__typeof__(n)) (g_page_size - 1)))
 
 #if MASK_PTRS
 #define MASK_ZONE_PTRS(zone) \

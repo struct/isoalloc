@@ -302,6 +302,23 @@ INTERNAL_HIDDEN INLINE void write_sanity_canary(void *p) {
     }
 }
 
+/* Checks the canary bytes in [start, end) one byte at a time.
+ * The canary was written as whole qwords from the page base, so
+ * the expected byte at any address is byte (address & 7) of the
+ * canary value. That assumes little endian byte order, which is
+ * every target IsoAlloc supports */
+static INLINE void check_sanity_canary_bytes(const uint8_t *start, const uint8_t *end, uint64_t canary) {
+    while(start < end) {
+        const uint8_t expected = (uint8_t) (canary >> (((uintptr_t) start & 7) << 3));
+
+        if(UNLIKELY(*start != expected)) {
+            LOG_AND_ABORT("Sanity canary byte at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, (uint64_t) *start, (uint64_t) expected);
+        }
+
+        start++;
+    }
+}
+
 /* Verify the canary value in an allocation */
 INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc) {
     void *end = NULL;
@@ -317,18 +334,17 @@ INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc) 
 
     const uint64_t canary = (_sanity_canary & SANITY_CANARY_VALIDATE_MASK);
 
-    /* orig_size is unaligned in general, so [start, end) may begin or
-     * end mid-qword. The expected byte at offset (p & 7) is that byte
-     * within the canary qword, since write_sanity_canary stored qwords
-     * starting at the page base. Walk the partial bytes at the head
-     * until start is 8-aligned. */
-    while(start < end && ((uintptr_t) start & 7)) {
-        uint8_t expected = (uint8_t) (canary >> (((uintptr_t) start & 7) << 3));
-        if(UNLIKELY(*(uint8_t *) start != expected)) {
-            LOG_AND_ABORT("Sanity canary byte at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, *(uint8_t *) start, expected);
-        }
-        start++;
+    /* orig_size is unaligned in general, so [start, end) may begin
+     * or end mid-qword. Walk the partial bytes at the head until
+     * start is 8-aligned, then compare whole qwords */
+    void *head_end = (void *) (((uintptr_t) start + 7) & ~(uintptr_t) 7);
+
+    if(head_end > end) {
+        head_end = end;
     }
+
+    check_sanity_canary_bytes(start, head_end, canary);
+    start = head_end;
 
 #if USE_NEON
     /* Compare two qwords at a time and reduce. On any mismatch, fall
@@ -353,15 +369,8 @@ INTERNAL_HIDDEN INLINE void check_sanity_canary(_sane_allocation_t *sane_alloc) 
         start += sizeof(uint64_t);
     }
 
-    /* Tail: 0–7 partial bytes when end isn't 8-aligned (right-aligned
-     * sample with unaligned orig_size). */
-    while(start < end) {
-        uint8_t expected = (uint8_t) (canary >> (((uintptr_t) start & 7) << 3));
-        if(UNLIKELY(*(uint8_t *) start != expected)) {
-            LOG_AND_ABORT("Sanity canary byte at 0x%p has been corrupted! Value: 0x%x Expected: 0x%x", start, *(uint8_t *) start, expected);
-        }
-        start++;
-    }
+    /* Tail: 0 to 7 partial bytes when end isn't 8-aligned */
+    check_sanity_canary_bytes(start, end, canary);
 }
 
 /* Callers of this function should hold the sanity cache lock */

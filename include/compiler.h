@@ -38,7 +38,9 @@
 #endif
 #endif
 
-#if DONT_USE_NEON == 0 && __ARM_NEON
+/* The NEON paths use vmaxvq, an AArch64 only across
+ * vector reduction, so 32 bit ARM with NEON is excluded */
+#if DONT_USE_NEON == 0 && __ARM_NEON && __aarch64__
 #include <arm_neon.h>
 #define USE_NEON 1
 #else

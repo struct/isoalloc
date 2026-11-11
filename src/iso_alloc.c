@@ -65,7 +65,7 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 
     /* We mlock the root or every allocation would
      * result in a soft page fault */
-    MLOCK(&_root, sizeof(iso_alloc_root));
+    MLOCK(_root, sizeof(iso_alloc_root));
 
 #if ARM_MTE
     if(iso_is_mte_supported() == false) {
@@ -125,7 +125,8 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     name = PREALLOC_BITMAPS;
 #endif
 
-    const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1 - 1;
+    /* The trailing 0 in small_bitmap_sizes is not a bucket */
+    const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
 
     for(int i = 0; i < sbsi; i++) {
         _root->bitmaps[i].bitmap = mmap_rw_pages(g_page_size, false, name);
@@ -290,10 +291,14 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
     bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
     bit_slot_t bit_slot;
 
-    const bitmap_index_t max_bitmap_idx = (zone->max_bitmap_idx - 1);
+    const bitmap_index_t max_bitmap_idx = zone->max_bitmap_idx;
 
     /* Roughly %1 of the chunks in this zone will become a canary */
     const uint64_t canary_count = (zone->chunk_count >> CANARY_COUNT_DIV);
+
+    if(UNLIKELY(max_bitmap_idx == 0 || canary_count == 0)) {
+        return;
+    }
 
     /* This function is only ever called during zone
      * initialization so we don't need to check the
@@ -303,11 +308,11 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
      * with that collision as canary chunks only provide
      * a small probabilistic security guarantee */
     for(uint64_t i = 0; i < canary_count; i++) {
-        bitmap_index_t bm_idx = ALIGN_SZ_DOWN((us_rand_uint64(&_root->seed) % (max_bitmap_idx)));
-
-        if(0 > bm_idx) {
-            bm_idx = 0;
-        }
+        /* Any qword in the bitmap can hold a canary. Aligning
+         * this index down to SZ_ALIGNMENT restricted canaries
+         * to every 32nd qword which left most zones with only
+         * a handful of possible canary positions */
+        const bitmap_index_t bm_idx = (us_rand_uint64(&_root->seed) % max_bitmap_idx);
 
         /* We may have already chosen this index */
         if(GET_BIT(bm[bm_idx], 0)) {
@@ -387,7 +392,16 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
                     break;
                 }
 
+                /* A page holds more small bitmaps than in_use has
+                 * bits, especially with 16K pages, so cap the slice
+                 * count at the width of in_use. Shifting past it
+                 * is undefined and would hand out overlapping bitmaps */
                 int bits_available = g_page_size / new_zone->bitmap_size;
+                const int max_bits = (sizeof(_root->bitmaps[i].in_use) * BITS_PER_BYTE);
+
+                if(bits_available > max_bits) {
+                    bits_available = max_bits;
+                }
 
                 for(int z = 0; z < bits_available; z++) {
                     if((GET_BIT(_root->bitmaps[i].in_use, z)) == 0) {
@@ -792,8 +806,13 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
 
 INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
 #if CPU_PIN
-    if(zone->cpu_core != _iso_getcpu()) {
-        return false;
+    /* A negative value means this platform cannot report
+     * the current CPU, so pinning is disabled rather than
+     * every zone failing to match a core it never had */
+    const int cpu = _iso_getcpu();
+
+    if(cpu >= 0 && zone->cpu_core != cpu) {
+        return NULL;
     }
 #endif
 
@@ -922,7 +941,10 @@ INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
      * isolation primitives */
     while(size <= ZONE_1024) {
         if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
-            size += ALIGN_SZ_UP(size + 1);
+            /* Step to the next size class. Adding the aligned
+             * size to itself grew the step geometrically and
+             * skipped over classes that already had a zone */
+            size = ALIGN_SZ_UP(size + 1);
         } else {
             break;
         }
@@ -1066,6 +1088,10 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     }
 
     void *p = _iso_alloc(NULL, res);
+
+    if(UNLIKELY(p == NULL)) {
+        return NULL;
+    }
 
 #if NO_ZERO_ALLOCATIONS
     /* Without this check we would immediately segfault in
@@ -2010,10 +2036,14 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         munmap(big_zone->user_pages_start, big_zone->size);
 #endif
 
+        /* The meta data struct sits at a random offset inside
+         * its page so unmap from the page boundary, and with
+         * a length in bytes rather than a page count */
+        void *md_page = (void *) ROUND_DOWN_PAGE((uintptr_t) big_zone);
 #if BIG_ZONE_META_DATA_GUARD
-        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+        unmap_guarded_pages(md_page, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
 #else
-        munmap(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+        munmap(md_page, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
 #endif
     }
 }
@@ -2185,10 +2215,14 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignmen
 #endif
 
     /* The second page is for meta data and it is placed
-     * at a random offset from the start of the page */
-    uint32_t random_offset = ALIGN_SZ_DOWN(us_rand_uint64(&_root->seed));
-    size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
-    new_big = (iso_alloc_big_zone_t *) ((void *) new_big + ((random_offset * s) >> 32));
+     * at a random offset from the start of the page. The
+     * offset is reduced into range first and aligned after,
+     * aligning the raw random value before the reduction
+     * left the final offset with no alignment at all */
+    const uint64_t random_offset = (uint32_t) us_rand_uint64(&_root->seed);
+    const size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
+    const size_t offset = ((random_offset * s) >> 32);
+    new_big = (iso_alloc_big_zone_t *) ((void *) new_big + ALIGN_SZ_DOWN(offset));
     new_big->free = false;
     new_big->size = size;
     new_big->next = NULL;
@@ -2300,10 +2334,14 @@ INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head) {
         munmap(big_zone->user_pages_start, big_zone->size);
 #endif
 
+        /* The meta data struct sits at a random offset inside
+         * its page so unmap from the page boundary, and with
+         * a length in bytes rather than a page count */
+        void *md_page = (void *) ROUND_DOWN_PAGE((uintptr_t) big_zone);
 #if BIG_ZONE_META_DATA_GUARD
-        unmap_guarded_pages(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+        unmap_guarded_pages(md_page, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
 #else
-        munmap(big_zone, BIG_ZONE_META_DATA_PAGE_COUNT);
+        munmap(md_page, (g_page_size * BIG_ZONE_META_DATA_PAGE_COUNT));
 #endif
         big_zone = big;
     }
@@ -2372,7 +2410,11 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #if ISO_DTOR_CLEANUP
     unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
     unmap_guarded_pages(_root->chunk_quarantine, CHUNK_QUARANTINE_SZ * sizeof(uintptr_t));
+#if !THREAD_SUPPORT
+    /* With THREAD_SUPPORT the zone cache is thread local
+     * storage and was never mapped by us */
     unmap_guarded_pages(zone_cache, ZONE_CACHE_SZ * sizeof(_tzc));
+#endif
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
     UNLOCK_BIG_ZONE_FREE();
@@ -2392,7 +2434,9 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     UNLOCK_ROOT();
 
 #if ISO_DTOR_CLEANUP && THREAD_SUPPORT && !USE_SPINLOCK
+#if ALLOC_SANITY
     pthread_mutex_destroy(&sane_cache_mutex);
+#endif
     pthread_mutex_destroy(&root_busy_mutex);
 #endif
 }
