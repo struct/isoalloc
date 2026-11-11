@@ -42,9 +42,18 @@
 #endif
 
 /* If you're using the UAF_PTR_PAGE functionality and
- * want to change the frequency it is triggered */
+ * want to change the frequency it is triggered. Each
+ * trigger scans every zone under the root lock. The
+ * NEON scan is fast enough to run 4x as often, other
+ * targets keep the original frequency */
 #if UAF_PTR_PAGE
+/* This mirrors the USE_NEON condition in compiler.h, which
+ * is included after this file so USE_NEON is not visible yet */
+#if DONT_USE_NEON == 0 && __ARM_NEON && __aarch64__
 #define UAF_PTR_PAGE_ODDS 250000
+#else
+#define UAF_PTR_PAGE_ODDS 1000000
+#endif
 #endif
 
 /* Zones can be retired after a certain number of

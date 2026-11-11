@@ -40,7 +40,7 @@ These APIs can also be used in C, but this requires tagging and untagging pointe
 * All tag data is stored below user pages with a guard page allocated in between
 * A single 1 byte tag is generated per chunk in a private zone, this means the memory required to hold tags is larger for private zones holding smaller chunk sizes. For zones holding chunks 1024 byte or larger only a single of page of memory is required for tags as there are only 4096 possible 1024 byte chunks in 4mb IsoAlloc zone. The maximum amount of memory needed is for 16 byte chunks which requires 64 pages because there are 262144 possible chunks with a 4mb zone.
 * Tags are 1 byte in size and randomly chosen, they are added to the LSB of a pointer (e.g. tag value `0xed`, tagged pointer `0xed000b8066c1a000`, untagged pointer `0xb8066c1a000`)
-* Tags are refreshed whenever the private zone has reached %25 of 'retirement age' (defined in conf.h as `ZONE_ALLOC_RETIRE`) with 0 current allocations
+* Tags are refreshed each time the private zone has made allocations equal to %25 of 'retirement age' (defined in conf.h as `ZONE_ALLOC_RETIRE`) since the last refresh, and only while it has 0 current allocations
 
 ## Examples
 

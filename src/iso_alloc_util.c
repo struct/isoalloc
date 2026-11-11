@@ -22,13 +22,13 @@ int _iso_getcpu(void) {
     return (int) (a & 0xfff);
 #elif defined(__aarch64__)
 #if __APPLE__
-    /* unlike other operating systems, the tpidr_el0 register on macOs
-     * is unused data stored for the current thread is instead fetchable
-     * from "tpidrro_el0". */
-    uintptr_t a;
-    __asm__ volatile("mrs %x0, tpidrro_el0"
-                     : "=r"(a)::"memory");
-    return (int) ((a & 0x8));
+    /* Older versions of macOS stored the CPU number in the low
+     * bits of tpidrro_el0. Current versions do not, the low byte
+     * is constant across every core, and there is no supported
+     * user space interface for the current CPU. Returning -1
+     * disables pinning rather than pinning every zone to a
+     * number that is never the real core */
+    return -1;
 #else
     /* TODO most likely different register/making on other platforms */
     return -1;

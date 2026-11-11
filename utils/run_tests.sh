@@ -4,7 +4,7 @@
 $(echo '' > test_output.txt)
 
 tests=("tests" "big_tests" "big_zone_chunksz" "zone_retirement" "strdup_test" "interfaces_test" "thread_tests" "pool_test"
-       "rand_freelist" "aligned_alloc_test")
+       "rand_freelist" "aligned_alloc_test" "zone_internals_test" "printf_test")
 failure=0
 succeeded=0
 start=$SECONDS

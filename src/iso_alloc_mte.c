@@ -34,7 +34,7 @@ bool iso_is_mte_supported(void) {
 void *iso_mte_set_tag_range(void *p, size_t size) {
     void *tagged_ptr = iso_mte_create_tag(iso_mte_untag_ptr(p), 0x0);
 
-    for(int i = 0; i < size; i += MTE_GRANULE) {
+    for(size_t i = 0; i < size; i += MTE_GRANULE) {
         iso_mte_set_tag(tagged_ptr + i);
     }
 

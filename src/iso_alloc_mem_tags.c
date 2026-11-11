@@ -103,9 +103,16 @@ INTERNAL_HIDDEN void _iso_alloc_refresh_chunk_tag(void *p, iso_alloc_zone_t *zon
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
 #if MEMORY_TAGGING
     /* This implements a similar policy to zone retirement.
-     * The only difference is that we refresh all tags at
-     * %25 of the configured zone retirement age */
-    if(UNLIKELY(zone->af_count == 0 && zone->alloc_count > ((zone->chunk_count << _root->zone_retirement_shf) >> 2))) {
+     * The only difference is that we refresh all tags every
+     * time the zone has seen %25 of the configured zone
+     * retirement age in allocations since the last refresh.
+     * Without tracking the last refresh every free from an
+     * idle zone past the threshold would rewrite the entire
+     * tag array, which is a large cost on the free path */
+    const uint32_t since_refresh = (zone->alloc_count - zone->tags_refreshed_at);
+
+    if(UNLIKELY(zone->af_count == 0 && since_refresh > ((zone->chunk_count << _root->zone_retirement_shf) >> 2))) {
+        zone->tags_refreshed_at = zone->alloc_count;
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
         uint8_t *_mtp = (UNMASK_USER_PTR(zone) - g_page_size - s);
 

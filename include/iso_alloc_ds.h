@@ -50,10 +50,13 @@ typedef struct {
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
     /* Warm/cold fields: accessed less frequently */
-    uint16_t bitmap_size;   /* Size of the bitmap in bytes */
-    uint32_t af_count;      /* Increment/Decrement with each alloc/free operation */
-    uint32_t chunk_count;   /* Total number of chunks in this zone */
-    uint32_t alloc_count;   /* Total number of lifetime allocations */
+    uint16_t bitmap_size; /* Size of the bitmap in bytes */
+    uint32_t af_count;    /* Increment/Decrement with each alloc/free operation */
+    uint32_t chunk_count; /* Total number of chunks in this zone */
+    uint32_t alloc_count; /* Total number of lifetime allocations */
+#if MEMORY_TAGGING
+    uint32_t tags_refreshed_at; /* Value of alloc_count at the last whole zone tag refresh */
+#endif
     uint16_t index;         /* Zone index */
     uint16_t next_sz_index; /* What is the index of the next zone of this size */
     /* Large cold array: only accessed when refilling the free list */
@@ -101,7 +104,7 @@ const static int small_bitmap_sizes[] = {
 typedef struct {
     void *bitmap;
     /* Our bitmap has a bitmap */
-    uint32_t in_use;
+    uint64_t in_use; /* One bit per bitmap slice handed out from this page */
     /* Bucket value determines how many times we divy up
      * the bitmap page. eg For BITMAP_SIZE_16 its 256 times */
     uint32_t bucket;

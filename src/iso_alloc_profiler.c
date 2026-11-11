@@ -342,10 +342,10 @@ INTERNAL_HIDDEN INLINE void _save_free_backtrace(iso_free_traces_t *fbts) {
 }
 
 INTERNAL_HIDDEN void _iso_output_profile(void) {
-    _iso_alloc_printf(profiler_fd, "allocated=%d\n", _alloc_count);
-    _iso_alloc_printf(profiler_fd, "alloc_sampled=%d\n", _alloc_sampled_count);
-    _iso_alloc_printf(profiler_fd, "freed=%d\n", _free_count);
-    _iso_alloc_printf(profiler_fd, "free_sampled=%d\n", _free_sampled_count);
+    _iso_alloc_printf(profiler_fd, "allocated=%lu\n", _alloc_count);
+    _iso_alloc_printf(profiler_fd, "alloc_sampled=%lu\n", _alloc_sampled_count);
+    _iso_alloc_printf(profiler_fd, "freed=%lu\n", _free_count);
+    _iso_alloc_printf(profiler_fd, "free_sampled=%lu\n", _free_sampled_count);
 
     for(uint16_t i = 0; i < _root->zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
@@ -354,8 +354,8 @@ INTERNAL_HIDDEN void _iso_output_profile(void) {
 
     for(size_t i = 0; i < _alloc_bts_count; i++) {
         iso_alloc_traces_t *abts = &_alloc_bts[i];
-        _iso_alloc_printf(profiler_fd, "alloc_backtrace=%d,backtrace_hash=0x%x,calls=%d,lower_bound_size=%d,upper_bound_size=%d\n",
-                          i, abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size);
+        _iso_alloc_printf(profiler_fd, "alloc_backtrace=%lu,backtrace_hash=0x%x,calls=%lu,lower_bound_size=%lu,upper_bound_size=%lu\n",
+                          i, (uint64_t) abts->backtrace_hash, abts->call_count, abts->lower_bound_size, abts->upper_bound_size);
 
         for(int j = 0; j < BACKTRACE_DEPTH; j++) {
             if(abts->callers[j] < 0x1000) {
@@ -374,8 +374,8 @@ INTERNAL_HIDDEN void _iso_output_profile(void) {
 
     for(size_t i = 0; i < _free_bts_count; i++) {
         iso_free_traces_t *fbts = &_free_bts[i];
-        _iso_alloc_printf(profiler_fd, "free_backtrace=%d,backtrace_hash=0x%x,calls=%d\n",
-                          i, fbts->backtrace_hash, fbts->call_count);
+        _iso_alloc_printf(profiler_fd, "free_backtrace=%lu,backtrace_hash=0x%x,calls=%lu\n",
+                          i, (uint64_t) fbts->backtrace_hash, fbts->call_count);
 
         for(int j = 0; j < BACKTRACE_DEPTH; j++) {
             if(fbts->callers[j] < 0x1000) {
@@ -394,7 +394,7 @@ INTERNAL_HIDDEN void _iso_output_profile(void) {
 
     for(int i = 0; i <= SMALL_SIZE_MAX; i++) {
         if(_zone_profiler_map[i].count != 0) {
-            _iso_alloc_printf(profiler_fd, "%d,%d,%d\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
+            _iso_alloc_printf(profiler_fd, "%d,%lu,%lu\n", i, _zone_profiler_map[i].total, _zone_profiler_map[i].count);
         }
     }
 

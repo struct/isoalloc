@@ -34,7 +34,6 @@ INTERNAL_HIDDEN int32_t name_mapping(void *p, size_t sz, const char *name);
 INTERNAL_HIDDEN size_t next_pow2(size_t sz);
 INTERNAL_HIDDEN uint32_t _log2(uint32_t v);
 
-INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base);
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...);
 
 #if CPU_PIN

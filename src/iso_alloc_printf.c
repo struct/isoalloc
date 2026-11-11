@@ -4,38 +4,89 @@
 #include "iso_alloc_internal.h"
 #include <stdarg.h>
 
-#if __GNUC__ && !__clang__
-#pragma GCC diagnostic ignored "-Wstringop-truncation"
-#pragma GCC diagnostic ignored "-Wstringop-overflow"
-#endif
-
 #define INTERNAL_HIDDEN __attribute__((visibility("hidden")))
 
 /* This primitive printf implementation is only ever called
- * called from the LOG and LOG_AND_ABORT macros. We need to
- * be able to print basic log messages without invoking
- * malloc() or we run the risk of using a corrupted heap */
-static int8_t fmt_buf[64];
-static const int8_t asc_hex[] = "0123456789abcdef";
+ * from the LOG and LOG_AND_ABORT macros. We need to be able
+ * to print basic log messages without invoking malloc() or
+ * we run the risk of using a corrupted heap.
+ *
+ * The argument width consumed by each conversion is fixed
+ * and callers must match it:
+ *
+ *   %d        int32_t, printed signed
+ *   %u        uint32_t
+ *   %x %p     uint64_t, printed as hex. Never pass a narrower
+ *             type, it is promoted to int and the upper bytes
+ *             of the argument slot are garbage
+ *   %ld %zd   int64_t, printed signed
+ *   %lu %zu   uint64_t
+ *   %s        const char *, NULL prints as (null)
+ *   %%        a literal percent sign
+ *
+ * Output is bounded by the size of a stack buffer and is
+ * never written past it. Anything that does not fit is
+ * dropped */
 
-INTERNAL_HIDDEN int8_t *_fmt(uint64_t n, uint32_t base) {
-    int8_t *ptr;
-    uint32_t count = 0;
+#define PRINTF_BUF_SZ 4096
 
-    __builtin_memset(fmt_buf, 0x0, sizeof(fmt_buf));
-    ptr = &fmt_buf[63];
+/* Enough for a 64 bit value in base 10 plus a NUL */
+#define FMT_BUF_SZ 24
+
+static const char asc_hex[] = "0123456789abcdef";
+
+typedef struct {
+    char *out;
+    size_t len;
+    size_t max;
+} printf_buf_t;
+
+static void emit_char(printf_buf_t *b, char c) {
+    if(b->len < b->max) {
+        b->out[b->len++] = c;
+    }
+}
+
+static void emit_str(printf_buf_t *b, const char *s) {
+    while(*s != '\0' && b->len < b->max) {
+        b->out[b->len++] = *s++;
+    }
+}
+
+/* Formats n into buf and returns a pointer to the first
+ * character of the result, which is NUL terminated */
+static const char *fmt_uint(uint64_t n, uint32_t base, char *buf) {
+    char *ptr = &buf[FMT_BUF_SZ - 1];
+    *ptr = '\0';
+
+    if(n == 0) {
+        *--ptr = '0';
+        return ptr;
+    }
 
     while(n != 0) {
         *--ptr = asc_hex[n % base];
         n /= base;
-        count++;
-    };
-
-    if(count == 0) {
-        ptr = (int8_t *) "0";
     }
 
     return ptr;
+}
+
+static void emit_uint(printf_buf_t *b, uint64_t n, uint32_t base) {
+    char buf[FMT_BUF_SZ];
+    emit_str(b, fmt_uint(n, base, buf));
+}
+
+static void emit_int(printf_buf_t *b, int64_t n) {
+    uint64_t magnitude = (uint64_t) n;
+
+    if(n < 0) {
+        emit_char(b, '-');
+        /* Negating in unsigned space is defined for INT64_MIN */
+        magnitude = (~magnitude) + 1;
+    }
+
+    emit_uint(b, magnitude, 10);
 }
 
 INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
@@ -43,84 +94,68 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
         return;
     }
 
-    uint64_t i;
-    uint32_t j;
-    char *s;
+    char out[PRINTF_BUF_SZ];
+    printf_buf_t b = {.out = out, .len = 0, .max = sizeof(out)};
     va_list arg;
     va_start(arg, f);
-    char out[65535];
-    char *p = out;
-    __builtin_memset(p, 0x0, sizeof(out));
 
     for(const char *idx = f; *idx != '\0'; idx++) {
-        if(p >= (char *) (out + sizeof(out))) {
-            break;
-        }
-
-        while(*idx != '%' && *idx != '\0') {
-            *p = *idx;
-            p++;
-
-            if(*idx == '\n') {
-                break;
-            }
-
-            idx++;
+        if(*idx != '%') {
+            emit_char(&b, *idx);
+            continue;
         }
 
         idx++;
 
+        /* A lone trailing percent sign is printed as is */
         if(*idx == '\0') {
+            emit_char(&b, '%');
             break;
         }
 
-        if(*idx == 'x' || *idx == 'p') {
-            i = va_arg(arg, int64_t);
-            s = (char *) _fmt(i, 16);
-            __builtin_strncpy(p, s, strlen(s));
-            p += strlen(s);
-        } else if(*idx == 'd' || *idx == 'u') {
-            j = va_arg(arg, int32_t);
-
-            if(0 > j) {
-                j = -j;
-                *p = '-';
-                p++;
-            }
-
-            s = (char *) _fmt(j, 10);
-
-            __builtin_strncpy(p, s, strlen(s));
-            p += strlen(s);
-        } else if(*idx == 'l') {
-            if(*(idx + 1) == 'd' || *(idx + 1) == 'u') {
+        switch(*idx) {
+        case 'd':
+            emit_int(&b, va_arg(arg, int32_t));
+            break;
+        case 'u':
+            emit_uint(&b, va_arg(arg, uint32_t), 10);
+            break;
+        case 'x':
+        case 'p':
+            emit_uint(&b, va_arg(arg, uint64_t), 16);
+            break;
+        case 'l':
+        case 'z':
+            /* An optional d or u may follow, both are 64 bit */
+            if(*(idx + 1) == 'u') {
                 idx++;
+                emit_uint(&b, va_arg(arg, uint64_t), 10);
+            } else {
+                if(*(idx + 1) == 'd') {
+                    idx++;
+                }
+
+                emit_int(&b, va_arg(arg, int64_t));
             }
 
-            i = va_arg(arg, int64_t);
-
-            if(0 > i) {
-                i = -i;
-                *p = '-';
-                p++;
-            }
-
-            s = (char *) _fmt(i, 10);
-
-            __builtin_strncpy(p, s, strlen(s));
-            p += strlen(s);
-        } else if(*idx == 's') {
-            s = va_arg(arg, char *);
-
-            if(s == NULL) {
-                break;
-            }
-
-            __builtin_strncpy(p, s, strlen(s));
-            p += strlen(s);
+            break;
+        case 's': {
+            const char *s = va_arg(arg, const char *);
+            emit_str(&b, (s != NULL) ? s : "(null)");
+            break;
+        }
+        case '%':
+            emit_char(&b, '%');
+            break;
+        default:
+            /* Unknown conversion, print it verbatim and
+             * consume no argument */
+            emit_char(&b, '%');
+            emit_char(&b, *idx);
+            break;
         }
     }
 
-    (void) !write(fd, out, strlen(out));
     va_end(arg);
+    (void) !write(fd, out, b.len);
 }
