@@ -122,12 +122,26 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
             }
         }
 #endif
-        uint64_t mask = (uint64_t) bm[i] & CANARY_BIT_VECTOR;
+        const uint64_t bits = (uint64_t) bm[i];
+        uint64_t mask = bits & CANARY_BIT_VECTOR;
         while(mask) {
             int j = __builtin_ctzll(mask);
             mask &= mask - 1;
             bit_slot = ((bit_slot_t) i << BITS_PER_QWORD_SHIFT) + j;
             const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
+
+            /* A canary chunk (both bits set) on a page the free
+             * list has never reached has no canary written yet.
+             * Nothing on that page was ever handed out so it must
+             * still hold the zeroes the kernel mapped it with */
+            if(((bits >> (j - 1)) & 1) != 0 && canary_page_materialized(zone, ((size_t) (p - zone->user_pages_start)) >> g_page_size_shift) == false) {
+                if(UNLIKELY(*(const uint64_t *) p != 0 || *(const uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)) != 0)) {
+                    LOG_AND_ABORT("Untouched canary chunk 0x%p in zone[%d] has been written to", p, zone->index);
+                }
+
+                continue;
+            }
+
             check_canary(zone, p);
         }
         i++;

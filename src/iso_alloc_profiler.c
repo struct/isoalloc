@@ -171,14 +171,22 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
             bit_slot_t bit_slot = ((bitmap_index_t) i * BITS_PER_QWORD) + j;
             const void *leak = (zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
 
-            if(bit_two == 1 && (check_canary_no_abort(zone, leak) != ERR)) {
-                continue;
-            } else {
-                in_use++;
+            /* A chunk with both bits set is a canary. Its canary
+             * is only written once the free list reaches its page,
+             * so on a page that never got that far there is nothing
+             * to verify and it is certainly not a leak */
+            if(bit_two == 1) {
+                const size_t page = ((size_t) (leak - zone->user_pages_start)) >> g_page_size_shift;
 
-                if(profile == false) {
-                    LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %d)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
+                if(canary_page_materialized(zone, page) == false || check_canary_no_abort(zone, leak) != ERR) {
+                    continue;
                 }
+            }
+
+            in_use++;
+
+            if(profile == false) {
+                LOG("Leaked chunk (%d) in zone[%d] of %d bytes detected at 0x%p (bit position = %d)", in_use, zone->index, zone->chunk_size, leak, bit_slot);
             }
         }
         i++;

@@ -12,7 +12,7 @@
 #include <linux/random.h>
 #include <sys/syscall.h>
 #elif __APPLE__
-#include <Security/SecRandom.h>
+#include <stdlib.h>
 #elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__
 #include <sys/random.h>
 #elif __NetBSD__
@@ -56,7 +56,11 @@ INTERNAL_HIDDEN INLINE uint64_t rand_uint64(void) {
 #if OLD_GLIBC
     ret = syscall(SYS_getrandom, &val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __APPLE__
-    ret = SecRandomCopyBytes(kSecRandomDefault, sizeof(val), &val);
+    /* libSystems ChaCha20 based CSPRNG, reseeded from the
+     * kernel. It never fails and costs a fraction of a call
+     * into the Security framework, which matters because the
+     * seed is refreshed on every free list refill */
+    arc4random_buf(&val, sizeof(val));
 #elif __FreeBSD__ || __DragonFly__ || __linux__ || __ANDROID__ || __sun
     ret = getrandom(&val, sizeof(val), GRND_NONBLOCK) != sizeof(val);
 #elif __NetBSD__

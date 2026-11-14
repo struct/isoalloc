@@ -27,9 +27,47 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n) {
 
     for(int32_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
+        uint8_t *const zone_start = UNMASK_USER_PTR(zone);
+        uint8_t *const zone_end = zone_start + ZONE_USER_SIZE;
+        size_t page = 0;
+        const size_t pages = (ZONE_USER_SIZE >> g_page_size_shift);
 
-        search = UNMASK_USER_PTR(zone);
-        end = search + ZONE_USER_SIZE;
+    next_run:
+#if !ENABLE_ASAN && !DISABLE_CANARY
+        /* A chunk is only handed out once the canaries on its
+         * page were materialized, so a page whose bit is clear
+         * has never held user data and cannot contain n. Scan
+         * each run of materialized pages, widened by 7 bytes
+         * on either side so a value straddling into a zero
+         * page is still seen */
+        while(page < pages && canary_page_materialized(zone, page) == false) {
+            page++;
+        }
+
+        if(page >= pages) {
+            continue;
+        }
+
+        search = zone_start + (page << g_page_size_shift);
+
+        while(page < pages && canary_page_materialized(zone, page) == true) {
+            page++;
+        }
+
+        end = zone_start + (page << g_page_size_shift);
+
+        if(search > zone_start) {
+            search -= (sizeof(uint64_t) - 1);
+        }
+
+        if(end < zone_end) {
+            end += (sizeof(uint64_t) - 1);
+        }
+#else
+        search = zone_start;
+        end = zone_end;
+        page = pages;
+#endif
 
 #if USE_NEON
         /* A u64 at byte position k can match n only if bytes[k] == n[0]
@@ -64,6 +102,10 @@ INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n) {
                 return search;
             }
             search++;
+        }
+
+        if(page < pages) {
+            goto next_run;
         }
     }
 

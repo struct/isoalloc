@@ -27,41 +27,60 @@ typedef uint8_t free_bit_slot_t;
 #define FREE_LIST_SHF 8
 #endif
 
+/* Entries in the per zone free bit slot cache. A bit slot
+ * is at most (ZONE_USER_SIZE / SMALLEST_CHUNK_SZ) * 2 which
+ * fits in 32 bits, halving the size of the cache compared
+ * to storing bit_slot_t. BAD_BIT_SLOT is stored as all ones */
+typedef uint32_t bit_slot_cache_t;
+
+/* One bit per page of user memory that records whether the
+ * canary chunks on that page have been written. Sized for
+ * the smallest supported page size of 4096 bytes */
+#define CANARY_PAGE_BITMAP_QWORDS 16
+
 typedef struct {
-    /* Hot fields: all fit within the first 64-byte cache line.
-     * These are accessed on every alloc/free operation, so keeping
-     * them colocated avoids extra cache misses */
+    /* Hot fields: everything touched by every allocation
+     * fits in the first 64 byte cache line. The struct is
+     * 64 byte aligned so this holds for every zone in the
+     * zones array */
     void *user_pages_start;                /* Start of the pages backing this zone */
     void *bitmap_start;                    /* Start of the bitmap */
     int64_t next_free_bit_slot;            /* The last bit slot returned by get_next_free_bit_slot */
     uint64_t canary_secret;                /* Each zone has its own canary secret */
     uint64_t pointer_mask;                 /* Each zone has its own pointer protection secret */
-    uint16_t max_bitmap_idx;               /* Max bitmap index for this bitmap */
     uint32_t chunk_size;                   /* Size of chunks managed by this zone */
+    uint32_t chunk_div_magic;              /* Reciprocal of chunk_size, see iso_free_chunk_from_zone */
+    uint32_t af_count;                     /* Increment/Decrement with each alloc/free operation */
+    uint32_t alloc_count;                  /* Total number of lifetime allocations */
+    uint16_t max_bitmap_idx;               /* Max bitmap index for this bitmap */
     free_bit_slot_t free_bit_slots_usable; /* The oldest members of the free cache are served first */
     free_bit_slot_t free_bit_slots_index;  /* Tracks how many entries in the cache are filled */
     bool is_full;                          /* Flags whether this zone is full to avoid bit slot searches */
     bool internal;                         /* Zones can be managed by iso_alloc or private */
+    /* Warm fields: touched on the free path */
+    uint8_t chunk_div_shift;        /* Shift that pairs with chunk_div_magic */
+    int8_t preallocated_bitmap_idx; /* The bitmap is preallocated and its index */
 #if MEMORY_TAGGING
     bool tagged; /* Zone supports memory tagging */
 #endif
-    int8_t preallocated_bitmap_idx; /* The bitmap is preallocated and its index */
 #if CPU_PIN
     uint8_t cpu_core; /* What CPU core this zone is pinned to */
 #endif
-    /* Warm/cold fields: accessed less frequently */
     uint16_t bitmap_size; /* Size of the bitmap in bytes */
-    uint32_t af_count;    /* Increment/Decrement with each alloc/free operation */
     uint32_t chunk_count; /* Total number of chunks in this zone */
-    uint32_t alloc_count; /* Total number of lifetime allocations */
 #if MEMORY_TAGGING
     uint32_t tags_refreshed_at; /* Value of alloc_count at the last whole zone tag refresh */
 #endif
     uint16_t index;         /* Zone index */
     uint16_t next_sz_index; /* What is the index of the next zone of this size */
+    /* Cold: which user pages have had their canary chunks
+     * written. Canary chunks are only written when the free
+     * list first reaches their page so an untouched zone
+     * stays unmapped, see materialize_canaries */
+    uint64_t canary_pages[CANARY_PAGE_BITMAP_QWORDS];
     /* Large cold array: only accessed when refilling the free list */
-    bit_slot_t free_bit_slots[ZONE_FREE_LIST_SZ]; /* A cache of bit slots that point to freed chunks */
-} __attribute__((packed, aligned(sizeof(int64_t)))) iso_alloc_zone_t;
+    bit_slot_cache_t free_bit_slots[ZONE_FREE_LIST_SZ]; /* A cache of bit slots that point to freed chunks */
+} __attribute__((packed, aligned(64))) iso_alloc_zone_t;
 
 /* Meta data for big allocations are allocated near the
  * user pages themselves but separated via guard pages.
@@ -122,7 +141,14 @@ typedef struct {
      * to a zone index. Misses are gracefully handled and
      * more common with a higher RSS and more mappings. */
     chunk_lookup_table_t *chunk_lookup_table;
-    uintptr_t *chunk_quarantine;
+#if THREAD_SUPPORT
+    /* Every thread that has quarantined a chunk links its
+     * quarantine here so a zone can be destroyed safely,
+     * see flush_all_quarantines. Guarded by the root lock */
+    struct iso_quarantine_t *quarantines;
+#else
+    struct iso_quarantine_t *chunk_quarantine;
+#endif
     iso_alloc_big_zone_t *big_zone_free;
     iso_alloc_big_zone_t *big_zone_used;
 #if NO_ZERO_ALLOCATIONS
@@ -148,7 +174,6 @@ typedef struct {
     uint64_t big_zone_next_mask;
     uint64_t big_zone_canary_secret;
     uint64_t seed;
-    size_t chunk_quarantine_count;
     size_t zones_size;
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
@@ -184,3 +209,33 @@ typedef struct {
     size_t chunk_size;
     iso_alloc_zone_t *zone;
 } __attribute__((aligned(sizeof(int64_t)))) _tzc;
+
+/* The zone cache is a ring. Entry i in age order lives at
+ * entries[(head + i) & (ZONE_CACHE_SZ - 1)] so the most
+ * recently used zone is at head + count - 1. Evicting the
+ * oldest entry only advances head, the other entries are
+ * never moved. Keeping the count in the same object as the
+ * entries means one thread local address computation per
+ * access rather than two */
+typedef struct {
+    size_t count;
+    size_t head;
+    _tzc entries[ZONE_CACHE_SZ];
+} __attribute__((aligned(sizeof(int64_t)))) iso_zone_cache_t;
+
+/* Chunks passed to iso_free wait here until the quarantine
+ * is full, then they are freed in one batch under the root
+ * lock. With THREAD_SUPPORT each thread owns one of these in
+ * thread local storage so the common free path never takes
+ * the root lock. The busy flag serializes the owning thread
+ * against another thread flushing this quarantine when it
+ * destroys a zone, see flush_all_quarantines */
+typedef struct iso_quarantine_t {
+    uintptr_t chunks[CHUNK_QUARANTINE_SZ];
+    uint32_t count;
+#if THREAD_SUPPORT
+    bool registered;
+    atomic_flag busy;
+    struct iso_quarantine_t *next;
+#endif
+} __attribute__((aligned(sizeof(int64_t)))) iso_quarantine_t;

@@ -306,6 +306,7 @@ extern uint32_t g_page_size_shift;
 
 static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
 static_assert(SMALL_SIZE_MAX <= 131072, "SMALL_SIZE_MAX is too big, cannot exceed 131072");
+static_assert((ZONE_USER_SIZE / 4096 / BITS_PER_QWORD) == CANARY_PAGE_BITMAP_QWORDS, "canary_pages must cover a zone at the smallest page size");
 
 /* bitmap_size = (ZONE_USER_SIZE / SMALLEST_CHUNK_SZ) * BITS_PER_CHUNK / BITS_PER_BYTE
  * max_bitmap_idx = bitmap_size / sizeof(uint64_t)
@@ -371,6 +372,25 @@ extern pthread_mutex_t root_busy_mutex;
 #define UNLOCK_BIG_ZONE_USED()
 #endif
 
+/* A thread quarantine is only ever contended when another
+ * thread flushes it while destroying a zone, so a spin on
+ * an atomic flag is enough. Lock order is root then
+ * quarantine, a thread never takes the root lock while it
+ * holds its quarantine */
+#if THREAD_SUPPORT
+#define LOCK_QUARANTINE(q) \
+    do {                   \
+    } while(atomic_flag_test_and_set_explicit(&(q)->busy, memory_order_acquire));
+
+#define UNLOCK_QUARANTINE(q) \
+    atomic_flag_clear_explicit(&(q)->busy, memory_order_release);
+#else
+#define LOCK_QUARANTINE(q)
+#define UNLOCK_QUARANTINE(q)
+#endif
+
+static_assert((ZONE_CACHE_SZ & (ZONE_CACHE_SZ - 1)) == 0, "ZONE_CACHE_SZ must be a power of 2");
+
 /* The global root */
 extern iso_alloc_root *_root;
 
@@ -384,7 +404,8 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN INLINE void flush_chunk_quarantine(void);
+INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q);
+INTERNAL_HIDDEN void flush_all_quarantines(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove);
 INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
@@ -405,6 +426,8 @@ INTERNAL_HIDDEN void _iso_alloc_refresh_chunk_tag(void *p, iso_alloc_zone_t *zon
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void materialize_canaries(iso_alloc_zone_t *zone, bitmap_index_t first_qword, bitmap_index_t last_qword);
+INTERNAL_HIDDEN INLINE bool canary_page_materialized(const iso_alloc_zone_t *zone, size_t page);
 INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
