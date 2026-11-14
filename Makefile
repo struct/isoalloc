@@ -58,6 +58,15 @@ THREAD_SUPPORT = -DTHREAD_SUPPORT=1 -pthread
 ## IsoAlloc will use a C11 atomic spinlock
 USE_SPINLOCK = -DUSE_SPINLOCK=0
 
+## The thread zone cache and chunk quarantine live in thread
+## local storage. On Linux the library is built with the
+## initial-exec TLS model so each access is a single load
+## instead of a call into the dynamic linker, see PERFORMANCE.md.
+## A library built this way can be linked or LD_PRELOADed but a
+## dlopen() of it after startup can fail if the static TLS
+## reserve is exhausted. Clear this if you need to dlopen it
+TLS_MODEL =
+
 ## This tells IsoAlloc to only start with 4 default zones.
 ## If you set it to 0 IsoAlloc will startup with 10. The
 ## performance penalty for setting it to 0 is a one time
@@ -256,7 +265,7 @@ LIBNAME = libisoalloc.so
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-OS_FLAGS = -framework Security
+OS_FLAGS =
 LIBNAME = libisoalloc.dylib
 ifeq ($(MEMCPY_SANITY), -DMEMCPY_SANITY=1)
 CFLAGS += -D_FORTIFY_SOURCE=0
@@ -269,6 +278,7 @@ endif
 ifeq ($(UNAME), Linux)
 STRIP = strip -s $(BUILD_DIR)/$(LIBNAME)
 SCHED_GETCPU = -DSCHED_GETCPU
+TLS_MODEL = -ftls-model=initial-exec
 endif
 
 ifeq ($(UNAME), FreeBSD)
@@ -339,7 +349,7 @@ CXXFLAGS = $(COMMON_CFLAGS) -DCPP_SUPPORT=1 -std=$(STDCXX) $(SANITIZER_SUPPORT) 
 EXE_CFLAGS = -fPIE
 GDB_FLAGS = -g -ggdb3 -fno-omit-frame-pointer
 PERF_FLAGS = -pg -DPERF_TEST_BUILD=1
-LIBRARY = -fPIC -shared
+LIBRARY = -fPIC -shared $(TLS_MODEL)
 SRC_DIR = src
 C_SRCS = $(filter-out $(SRC_DIR)/malloc_hook.c, $(wildcard $(SRC_DIR)/*.c))
 CXX_SRCS = $(SRC_DIR)/*.cpp

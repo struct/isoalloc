@@ -120,7 +120,26 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
          * pointer created before the refresh can verify
          * against the new tags. One random qword provides
          * the entropy for 8 consecutive tags */
-        for(size_t o = 0; o < s; o += sizeof(uint64_t)) {
+        size_t o = 0;
+
+#if USE_NEON
+        /* Sixteen tags per step. rnd % 255 is rnd unless rnd
+         * is 255, where it is 0, so clear the lanes that equal
+         * 255 and then add old + 1, same as _new_mem_tag */
+        const uint8x16_t ones = vdupq_n_u8(1);
+        const uint8x16_t all = vdupq_n_u8(0xff);
+
+        for(; o + 16 <= s; o += 16) {
+            const uint64_t r0 = us_rand_uint64(&_root->seed);
+            const uint64_t r1 = us_rand_uint64(&_root->seed);
+            const uint8x16_t rnd = vreinterpretq_u8_u64(vcombine_u64(vcreate_u64(r0), vcreate_u64(r1)));
+            const uint8x16_t mod = vbicq_u8(rnd, vceqq_u8(rnd, all));
+            const uint8x16_t old = vld1q_u8(_mtp + o);
+            vst1q_u8(_mtp + o, vaddq_u8(vaddq_u8(old, ones), mod));
+        }
+#endif
+
+        for(; o < s; o += sizeof(uint64_t)) {
             uint64_t r = us_rand_uint64(&_root->seed);
 
             for(size_t b = 0; b < sizeof(uint64_t); b++) {

@@ -32,6 +32,8 @@ When enabled `USE_SPINLOCK` will use spinlocks via `atomic_flag` instead of a pt
 
 If you know your program will not require multi-threaded access to IsoAlloc you can disable threading support by setting the `THREAD_SUPPORT` define to 0 in the Makefile. This will remove all atomic/mutex lock/unlock operations from the allocator, which will result in significant performance gains in some programs. If you do require thread support then you may want to profile your program to determine what default zone sizes will benefit performance.
 
+The thread zone cache and the chunk quarantine live in thread local storage, which every allocation and free touches. On Linux the library is built with `-ftls-model=initial-exec` (see `TLS_MODEL` in the Makefile) so each access is one load relative to the thread pointer rather than a call into the dynamic linker. This is worth about 10% on a single thread and more under contention. A library built this way works when linked at startup or loaded with `LD_PRELOAD`, but a `dlopen()` after startup can fail with `cannot allocate memory in static TLS block` if the static TLS reserve has been used up by other libraries. Clear `TLS_MODEL` if you need to `dlopen()` IsoAlloc. macOS always reaches thread local storage through `_tlv_get_addr` so the option does not apply there.
+
 `DISABLE_CANARY` can be set to 1 to disable the creation and verification of canary chunks. This removes a useful security feature but will significantly improve performance and RSS.
 
 `MASK_PTRS` is enabled by default and causes the `user_pages_start` and `bitmap_start` pointers stored in every zone's metadata to be XOR'd with a per-zone random secret between alloc and free operations. This protects against attackers who can read or corrupt zone metadata. Each alloc and free pays a small cost for these XOR operations. Setting `MASK_PTRS=0` removes this overhead at the cost of this security property.
@@ -53,6 +55,8 @@ Hugepagesize:       2048 kB
 
 If necessary you can adjust the value of `HUGE_PAGE_SZ` in `conf.h` to reflect the size on your system.
 
+IsoAlloc touches the pages of a zone sparsely by design, so on a Linux kernel with transparent huge pages set to `always` the first allocation from a zone can make up to 2 MB of it resident. If you set `HUGE_PAGES` to 0 IsoAlloc advises the kernel with `MADV_NOHUGEPAGE` on zone user pages so that a barely used zone only costs the pages it touches. The array of zone meta data is always mapped this way because only the structures of zones in use are ever touched.
+
 ## Caches and Memoization
 
 There are a few important caches and memoization techniques used in IsoAlloc. These significantly improve the performance of alloc/free hot paths and keep the design as simple as possible.
@@ -71,7 +75,7 @@ It is not uncommon to write a program that uses multiple threads for different p
 
 ### Thread Chunk Quarantine
 
-This thread local cache speeds up the free hot path by quarantining chunks until a threshold has been met. Until that threshold is reached free's are very cheap. When the cache is emptied and the chunks free'd its still faster because we take advantage of keeping the zone meta data in a CPU cache line.
+Each thread keeps a quarantine of the chunks it has freed in thread local storage. `iso_free` appends to it without taking the root lock, so until it holds `CHUNK_QUARANTINE_SZ` chunks (64 by default) frees are very cheap. When it is full the thread takes the root lock once and frees all of them in a batch, which also keeps the zone meta data in a CPU cache line while it works. A chunk therefore stays unusable for a while after it is freed, which turns a use after free into a crash or a detected canary corruption rather than a silent reuse. Every thread's quarantine is registered with the root so that destroying a zone flushes all of them first, and a thread's quarantine is flushed when the thread exits. `iso_flush_caches()` flushes the calling thread's quarantine on demand. Without `THREAD_SUPPORT` there is a single quarantine on its own guarded pages.
 
 ### Zone Lookup Table
 
@@ -79,7 +83,7 @@ Zones are linked by their `next_sz_index` member which tells the allocator where
 
 ## ARM NEON
 
-IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. This code requires AArch64 as it uses across vector reductions that do not exist on 32 bit ARM. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile. When `UAF_PTR_PAGE` is enabled the Neon version of the dangling pointer scan is fast enough that it runs 4x as often as the portable version, see `UAF_PTR_PAGE_ODDS` in `conf.h`.
+IsoAlloc tries to use ARM Neon instructions to make loops in the hot path faster. This code requires AArch64 as it uses across vector reductions that do not exist on 32 bit ARM. If you want to disable any of this code at compile time and rely instead on more portable, but potentially slower code just set `DONT_USE_NEON` to 1 in the Makefile. When `UAF_PTR_PAGE` is enabled the Neon version of the dangling pointer scan is fast enough that it runs 4x as often as the portable version, see `UAF_PTR_PAGE_ODDS` in `conf.h`. That scan also skips the pages of a zone that have never held a chunk, so its cost tracks the memory actually in use rather than the number of zones. When `MEMORY_TAGGING` is enabled the whole zone tag refresh rewrites sixteen tags per step with Neon. The free list refill skips pairs of fully used bitmap qwords with a single 64 bit and, which is as fast as a vector compare, so it does not use Neon.
 
 ## Tests
 
