@@ -35,7 +35,9 @@ INTERNAL_HIDDEN void verify_all_zones(void) {
 
 INTERNAL_HIDDEN void verify_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
+    LOCK_ZONE(zone);
     _verify_zone(zone);
+    UNLOCK_ZONE(zone);
     UNLOCK_ROOT();
 }
 
@@ -75,11 +77,13 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     for(uint16_t i = 0; i < zones_used; i++) {
         iso_alloc_zone_t *zone = &_root->zones[i];
 
-        if(zone->bitmap_start == NULL || zone->user_pages_start == NULL) {
+        if(zone->chunk_size == 0) {
             break;
         }
 
+        LOCK_ZONE(zone);
         _verify_zone(zone);
+        UNLOCK_ZONE(zone);
     }
 
     /* Root is locked already */
@@ -87,9 +91,10 @@ INTERNAL_HIDDEN void _verify_all_zones(void) {
     _verify_big_zone_list(_root->big_zone_free);
 }
 
+/* The caller holds the root lock and the zone lock */
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
-    UNMASK_ZONE_PTRS(zone);
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
+    const void *user_pages_start = UNMASK_USER_PTR(zone);
     bit_slot_t bit_slot;
 
     if(zone->next_sz_index > _root->zones_used) {
@@ -97,7 +102,7 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
     }
 
     if(zone->next_sz_index != 0) {
-        iso_alloc_zone_t *zt = &_root->zones[zone->next_sz_index];
+        iso_alloc_zone_t *zt = &_root->zones[ZONE_CHAIN_INDEX(zone->next_sz_index)];
         if(zone->chunk_size != zt->chunk_size) {
             LOG_AND_ABORT("Inconsistent chunk sizes for zones %d,%d with chunk sizes %d,%d", zone->index, zt->index, zone->chunk_size, zt->chunk_size);
         }
@@ -128,13 +133,23 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
             int j = __builtin_ctzll(mask);
             mask &= mask - 1;
             bit_slot = ((bit_slot_t) i << BITS_PER_QWORD_SHIFT) + j;
+
+            /* Bits past the last chunk are set but have no chunk */
+            if((size_t) (bit_slot >> BITS_PER_CHUNK_SHIFT) >= zone->chunk_count) {
+                continue;
+            }
+
             const void *p = POINTER_FROM_BITSLOT(zone, bit_slot);
 
+#if !DISABLE_CANARY
             /* A canary chunk (both bits set) on a page the free
              * list has never reached has no canary written yet.
              * Nothing on that page was ever handed out so it must
-             * still hold the zeroes the kernel mapped it with */
-            if(((bits >> (j - 1)) & 1) != 0 && canary_page_materialized(zone, ((size_t) (p - zone->user_pages_start)) >> g_page_size_shift) == false) {
+             * still hold the zeroes the kernel mapped it with.
+             * Without canaries no page is ever marked, and the
+             * only chunks with both bits set were freed for good
+             * and poisoned, so there is nothing to check */
+            if(((bits >> (j - 1)) & 1) != 0 && canary_page_materialized(zone, ((size_t) (p - user_pages_start)) >> g_page_size_shift) == false) {
                 if(UNLIKELY(*(const uint64_t *) p != 0 || *(const uint64_t *) (p + zone->chunk_size - sizeof(uint64_t)) != 0)) {
                     LOG_AND_ABORT("Untouched canary chunk 0x%p in zone[%d] has been written to", p, zone->index);
                 }
@@ -143,11 +158,13 @@ INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone) {
             }
 
             check_canary(zone, p);
+#else
+            (void) p;
+            (void) user_pages_start;
+#endif
         }
         i++;
     }
-
-    MASK_ZONE_PTRS(zone);
 }
 #endif
 
@@ -232,15 +249,15 @@ INTERNAL_HIDDEN void *_page_fault_thread_handler(void *unused) {
         n = read(_uf_fd, &umsg, sizeof(struct uffd_msg));
 
         if(n == OK) {
-            LOG_AND_ABORT("Got EOF on userfaultfd file descriptor")
+            LOG_AND_ABORT("Got EOF on userfaultfd file descriptor");
         }
 
         if(n == ERR) {
-            LOG_AND_ABORT("Failed to read from userfaultfd file descriptor")
+            LOG_AND_ABORT("Failed to read from userfaultfd file descriptor");
         }
 
         if(umsg.event != UFFD_EVENT_PAGEFAULT) {
-            LOG_AND_ABORT("Received non-page-fault event from userfaultfd")
+            LOG_AND_ABORT("Received non-page-fault event from userfaultfd");
         }
 
         LOCK_SANITY_CACHE();
@@ -527,23 +544,17 @@ INTERNAL_HIDDEN INLINE void *__iso_memcpy(void *restrict dest, const void *restr
 INTERNAL_HIDDEN void *_iso_alloc_memcpy(void *restrict dest, const void *restrict src, size_t n) {
 #if MEMCPY_SANITY
     if(n > SMALLEST_CHUNK_SZ) {
-        /* We don't want to add too much overhead here so we only
-         * check the chunk-to-zone cache for zone data and we don't
-         * need to lock the root for that. Its possible for a cache
-         * miss to mean a security check doesn't happen here but
-         * this feature is more for catching bugs than it is for
-         * mitigating them */
-        iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
-        void *user_pages_start = UNMASK_USER_PTR(zone);
+        /* The zone map lookup takes no lock. A pointer that is
+         * not in any zone is not checked */
+        iso_alloc_zone_t *zone = iso_find_zone_range(dest);
 
-        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
+        if(zone != NULL && MEM_SANITY_CHK(dest, UNMASK_USER_PTR(zone), zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds write memcpy: dest=0x%p (%d bytes) src=0x%p size=%d", dest, zone->chunk_size, src, n);
         }
 
-        zone = search_chunk_lookup_table(src);
-        user_pages_start = UNMASK_USER_PTR(zone);
+        zone = iso_find_zone_range((void *) src);
 
-        if(MEM_SANITY_CHK(src, user_pages_start, zone->chunk_size)) {
+        if(zone != NULL && MEM_SANITY_CHK(src, UNMASK_USER_PTR(zone), zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds read memcpy: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
         }
     }
@@ -590,23 +601,17 @@ INTERNAL_HIDDEN INLINE void *__iso_memmove(void *dest, const void *src, size_t n
 INTERNAL_HIDDEN void *_iso_alloc_memmove(void *dest, const void *src, size_t n) {
 #if MEMCPY_SANITY
     if(n > SMALLEST_CHUNK_SZ) {
-        /* We don't want to add too much overhead here so we only
-         * check the chunk-to-zone cache for zone data and we don't
-         * need to lock the root for that. Its possible for a cache
-         * miss to mean a security check doesn't happen here but
-         * this feature is more for catching bugs than it is for
-         * mitigating them */
-        iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
-        void *user_pages_start = UNMASK_USER_PTR(zone);
+        /* The zone map lookup takes no lock. A pointer that is
+         * not in any zone is not checked */
+        iso_alloc_zone_t *zone = iso_find_zone_range(dest);
 
-        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
+        if(zone != NULL && MEM_SANITY_CHK(dest, UNMASK_USER_PTR(zone), zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds write memmove: dest=0x%p (%d bytes) src=0x%p size=%d", dest, zone->chunk_size, src, n);
         }
 
-        zone = search_chunk_lookup_table(src);
-        user_pages_start = UNMASK_USER_PTR(zone);
+        zone = iso_find_zone_range((void *) src);
 
-        if(MEM_SANITY_CHK(src, user_pages_start, zone->chunk_size)) {
+        if(zone != NULL && MEM_SANITY_CHK(src, UNMASK_USER_PTR(zone), zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds read memmove: dest=0x%p src=0x%p (%d bytes) size=%d", dest, src, zone->chunk_size, n);
         }
     }
@@ -640,10 +645,9 @@ INTERNAL_HIDDEN INLINE void *__iso_memset(void *dest, int b, size_t n) {
 INTERNAL_HIDDEN void *_iso_alloc_memset(void *dest, int b, size_t n) {
 #if MEMSET_SANITY
     if(n > SMALLEST_CHUNK_SZ) {
-        iso_alloc_zone_t *zone = search_chunk_lookup_table(dest);
-        void *user_pages_start = UNMASK_USER_PTR(zone);
+        iso_alloc_zone_t *zone = iso_find_zone_range(dest);
 
-        if(MEM_SANITY_CHK(dest, user_pages_start, zone->chunk_size)) {
+        if(zone != NULL && MEM_SANITY_CHK(dest, UNMASK_USER_PTR(zone), zone->chunk_size)) {
             LOG_AND_ABORT("Detected an out of bounds write memset: dest=0x%p (%d bytes) size=%d", dest, zone->chunk_size, n);
         }
     }

@@ -42,7 +42,7 @@ See the [PERFORMANCE](PERFORMANCE.md) documentation for more information.
 
 ## Thread Safety
 
-IsoAlloc is thread safe by way of protecting the root structure with a global lock built with either a pthread mutex, or a C11 `atomic_flag` when `USE_SPINLOCK` is enabled. This means every thread that wants to allocate a chunk needs to wait until it can take ownership of the lock. Frees are cheaper: a freed chunk goes into the calling thread's quarantine and the lock is only taken when that quarantine is full and flushed in a batch. This design choice has some tradeoffs. It can negatively impact performance of multi threaded programs that perform a lot of allocations. This is because every thread shares the same set of global zones. The benefit of this is that you can allocate and free any chunk from any thread with no additional complexity required. In order to help alleviate contention on this lock each thread has a zone cache built using thread local storage (TLS). This is implemented as a simple FILO cache of the most recently used zones by that thread. It's size is 8 by default but can be increased modifying the `ZONE_CACHE_SZ` define in the internal header file. Making this cache too large can lead to negative performance implications for certain allocation patterns. For example, if a thread allocates multiple 32 byte chunks in a row then the cache may be populated entirely by the same zone that holds 32 byte chunks. Now when the thread goes to allocate a 64 byte chunk it iterates through the entire cache, does not find a usable zone, and then has to take the slow path which iterates through all zones again. This cache is also used when thread support is disabled but it does not live in TLS and is instead allocated on its own set of pages. See the [PERFORMANCE](PERFORMANCE.md) documentation for more information on the various caches in use in IsoAlloc.
+IsoAlloc is thread safe. Every zone has its own lock, a C11 `atomic_flag`, and allocating from or freeing into a zone takes only that lock. A global root lock, built with either a pthread mutex or an `atomic_flag` when `USE_SPINLOCK` is enabled, is taken only to find a zone for a size class the thread has not used before, to create or destroy zones, and for the sampled debugging features. Frees are cheaper still: a freed chunk goes into the calling thread's quarantine and the zone lock is only taken when that quarantine is full and flushed in a batch. Which zone owns a pointer is answered without any lock through a hash map of zone addresses. You can allocate and free any chunk from any thread with no additional complexity required. Each thread remembers the zone it last used for each size class in a per thread table, so a thread that keeps allocating the same sizes takes the same zone locks every time. When several threads contend for one zone the losers move to another zone of the same class, creating one if the class has fewer than twice as many zones as the machine has CPUs, after which the table keeps them apart. The per thread state is a block the allocator maps for each thread on its first use, surrounded by guard pages, and releases when the thread exits. Without thread support there is a single such block for the process. See the [PERFORMANCE](PERFORMANCE.md) documentation for more information on the various caches in use in IsoAlloc.
 
 When enabled, the `CPU_PIN` feature will restrict allocations from a given zone to the CPU core that created that zone. Free operations are not restricted in this way. This mode is compatible with and without thread support, but is only available on Linux, and will introduce a negative performance hit to the hot path and may increase memory usage. On MacOS the current core cannot be read from user space so pinning is silently disabled. The benefit of this mode is that it introduces an isolation mechanism based on CPU core with no configuration beyond enabling the `CPU_PIN` define in the Makefile.
 
@@ -79,11 +79,14 @@ When enabled, the `CPU_PIN` feature will restrict allocations from a given zone 
 * When `ABORT_ON_UNOWNED_PTR` is enabled (default) IsoAlloc will abort whenever it is passed a pointer it does not own.
 * When `ABORT_NO_ENTROPY` is enabled IsoAlloc will abort when it can't gather enough entropy.
 * When `RANDOMIZE_FREELIST` is enabled IsoAlloc will randomize the free list upon creation. May have a perf hit.
-* Zones are retired and replaced after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`.
+* Zones are retired after they've allocated and freed a specific number of chunks. This is calculated as `ZONE_ALLOC_RETIRE * max_chunk_count_for_zone`. A retired zone is reset in place: its pages are returned to the kernel and it gets new secrets, canary positions, free list order and a new offset for its first chunk.
+* A zone that has had no chunks in use for `ZONE_PURGE_DELAY_MS` is reset the same way, so freed memory goes back to the kernel and is zero when it is reused.
+* Every zone starts its chunks at a random, alignment preserving offset into its pages so chunks of one size do not share cache sets across zones and their addresses differ between zones.
+* Every request is served from a zone whose chunk size is exactly its size class, never from a zone of a larger class.
 * Big zones are retired after being allocated and freed a total of `BIG_ZONE_ALLOC_RETIRE` times.
 * `MEMORY_TAGGING` When enabled IsoAlloc will create a 1 byte tag for each chunk in private zones. See the [MEMORY_TAGGING.md](MEMORY_TAGGING.md) documentation, or [this test](tests/tagged_ptr_test.cpp) for an example of how to use it.
 * `MEMCPY_SANITY` and `MEMSET_SANITY` Configures the allocator will hook all calls to `memcpy`/`memset` and check for out of bounds r/w operations when either src or dst points to a chunk allocated by IsoAlloc
-* `STRONG_SIZE_ISOLATION` Enables a policy that enforces stronger memory isolation by size
+* `STRONG_SIZE_ISOLATION` Makes every 16 byte size its own class instead of grouping sizes above 256 bytes into four classes per power of two
 * `PROTECT_FREE_BIG_ZONES` Marks big zones on the free list as `PROT_NONE` when not in use
 * `BIG_ZONE_META_DATA_GUARD` Enables guard pages for big zone meta data
 * `BIG_ZONE_GUARD` Enables guard pages for big zone user pages
@@ -156,7 +159,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `void *iso_alloc(size_t size)` - Equivalent to `malloc`. Returns a pointer to a chunk of memory that is size bytes in size. To free this chunk just pass it to `iso_free`.
 
-`void *iso_calloc(size_t nmemb, size_t size)` - Equivalent to `calloc`. Allocates a chunk big enough for an array of nmemb elements of size bytes. The array is zeroized.
+`void *iso_calloc(size_t nmemb, size_t size)` - Equivalent to `calloc`. Allocates a chunk big enough for an array of nmemb elements of size bytes. A chunk that has never been handed out is already zero and is not cleared again. The array is zeroized.
 
 `void *iso_realloc(void *p, size_t size)` - Equivalent to `realloc`. Reallocates a new chunk, if necessary, to be size bytes big and copies the contents of p to it.
 
@@ -198,7 +201,7 @@ If all else fails please file an issue on the [github project](https://github.co
 
 `uint8_t iso_alloc_get_mem_tag(void *p, iso_alloc_zone_handle *zone)` - Retrieves the 1 byte tag for an untagged pointer if `MEMORY_TAGGING` is enabled.
 
-`void iso_alloc_protect_root()` - Temporarily protects the `iso_alloc` root structure by marking it unreadable.
+`void iso_alloc_protect_root()` - Temporarily protects the `iso_alloc` root structure by marking it unreadable. Allocation and free fast paths do not take the root lock, so another thread that uses the allocator while the root is protected faults immediately rather than waiting.
 
 `void iso_alloc_unprotect_root()` - Undoes the operation performed by `iso_alloc_protect_root`.
 

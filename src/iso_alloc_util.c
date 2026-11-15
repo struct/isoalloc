@@ -99,6 +99,8 @@ void *mmap_guarded_rw_mte_pages(size_t size, bool populate, const char *name) {
 }
 #endif
 
+static void *mmap_pages_hint(void *p, size_t size, bool populate, const char *name, int32_t prot);
+
 void *mmap_rw_pages(size_t size, bool populate, const char *name) {
     return mmap_pages(size, populate, name, PROT_READ | PROT_WRITE);
 }
@@ -109,15 +111,64 @@ void *mmap_rw_mte_pages(size_t size, bool populate, const char *name) {
 }
 #endif
 
-void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
+/* A random page aligned address to pass to mmap as a hint so
+ * mappings land at unpredictable addresses */
+static INLINE uint64_t random_mmap_hint(void) {
 #if !ENABLE_ASAN
-    /* Produce a random page address as a hint for mmap */
     uint64_t hint = ROUND_DOWN_PAGE(rand_uint64());
-    hint &= 0x3FFFFFFFF000;
-    void *p = (void *) hint;
+    return (hint & 0x3FFFFFFFF000);
 #else
-    void *p = NULL;
+    return 0;
 #endif
+}
+
+/* Maps the pages that back a zone such that the user pages,
+ * which start user_offset bytes into the mapping, are aligned
+ * to ZONE_USER_SIZE. That alignment makes the 4 MB window a
+ * pointer lies in name its zone, see iso_find_zone_range. The
+ * hint is aligned first so the kernel usually honours it and
+ * the mapping costs one call. If it does not, a mapping one
+ * zone larger is trimmed down to an aligned one */
+void *mmap_zone_pages(size_t size, size_t user_offset, const char *name, int32_t prot) {
+    const size_t sz = ROUND_UP_PAGE(size);
+
+    if(UNLIKELY(sz < size || user_offset >= sz)) {
+        return NULL;
+    }
+
+    uint64_t hint = (random_mmap_hint() & ~((uint64_t) ZONE_USER_SIZE - 1));
+    hint = (hint >= user_offset) ? (hint - user_offset) : 0;
+    void *p = mmap_pages_hint((void *) hint, sz, false, name, prot);
+
+    if(LIKELY((((uintptr_t) p + user_offset) & (ZONE_USER_SIZE - 1)) == 0)) {
+        return p;
+    }
+
+    munmap(p, sz);
+
+    const size_t over = (sz + ZONE_USER_SIZE);
+    uint8_t *base = (uint8_t *) mmap_pages_hint((void *) random_mmap_hint(), over, false, name, prot);
+    const uintptr_t user = ((((uintptr_t) base + user_offset) + (ZONE_USER_SIZE - 1)) & ~((uintptr_t) ZONE_USER_SIZE - 1));
+    uint8_t *start = (uint8_t *) (user - user_offset);
+    const size_t head = (size_t) (start - base);
+    const size_t tail = (over - head - sz);
+
+    if(head != 0) {
+        munmap(base, head);
+    }
+
+    if(tail != 0) {
+        munmap(start + sz, tail);
+    }
+
+    return start;
+}
+
+void *mmap_pages(size_t size, bool populate, const char *name, int32_t prot) {
+    return mmap_pages_hint((void *) random_mmap_hint(), size, populate, name, prot);
+}
+
+static void *mmap_pages_hint(void *p, size_t size, bool populate, const char *name, int32_t prot) {
     size_t sz = ROUND_UP_PAGE(size);
 
     if(sz < size) {
@@ -197,6 +248,51 @@ void dont_need_pages(void *p, size_t size) {
     while(madvise(p, size, MADV_FREE_REUSE) == -1 && errno == EAGAIN) {
     }
 #endif
+}
+
+/* Returns the pages of a zone to the OS so they read as zero
+ * the next time they are touched, while the mapping and its
+ * guard pages stay in place. The zone keeps its address and
+ * every reference to it, which is what makes resetting a zone
+ * cheap compared to unmapping and mapping another. The zero
+ * guarantee matters: a reset zone has an all zero bitmap and no
+ * canaries written, and calloc trusts that a never used chunk
+ * is zero */
+void decommit_zone_pages(void *p, size_t size, int32_t prot) {
+#if __linux__
+    /* Private anonymous pages dropped this way are zero filled
+     * on the next fault. Huge page mappings may refuse it */
+    if(madvise(p, size, MADV_DONTNEED) == 0) {
+        return;
+    }
+#endif
+
+    /* Replace the range with a fresh mapping. MAP_FIXED over an
+     * existing mapping is atomic so the range is never unmapped.
+     * On macOS MADV_FREE_REUSABLE would not guarantee zeroes */
+    void *r = mmap(p, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+
+    if(UNLIKELY(r != p)) {
+        LOG_AND_ABORT("Failed to decommit zone pages @ 0x%p (%s)", p, strerror(errno));
+    }
+
+#if __linux__ && !HUGE_PAGES && defined(MADV_NOHUGEPAGE)
+    madvise(p, size, MADV_NOHUGEPAGE);
+#endif
+}
+
+/* A cheap, coarse monotonic clock in milliseconds for the idle
+ * zone purge. Precision of a few milliseconds is plenty */
+uint64_t coarse_now_ms(void) {
+    struct timespec ts;
+#if __APPLE__
+    clock_gettime(CLOCK_MONOTONIC_RAW_APPROX, &ts);
+#elif defined(CLOCK_MONOTONIC_COARSE)
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+#else
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+#endif
+    return ((uint64_t) ts.tv_sec * 1000) + ((uint64_t) ts.tv_nsec / 1000000);
 }
 
 void mprotect_pages(void *p, size_t size, int32_t protection) {

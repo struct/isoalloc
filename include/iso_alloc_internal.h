@@ -40,6 +40,8 @@ assert(sizeof(size_t) >= 64)
 #include <stdarg.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sched.h>
+#include <time.h>
 #include <sys/types.h>
 
 #if MEM_USAGE
@@ -81,20 +83,20 @@ assert(sizeof(size_t) >= 64)
 #if ENABLE_ASAN
 #include <sanitizer/asan_interface.h>
 
-#define POISON_ZONE(zone)                                                     \
-    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) == 0) {      \
-        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE);    \
-    }                                                                         \
-    if(IS_POISONED_RANGE(zone->bitmap_start, zone->bitmap_size) == 0) {       \
-        ASAN_POISON_MEMORY_REGION(zone->user_pages_start, zone->bitmap_size); \
+#define POISON_ZONE(zone)                                                      \
+    if(IS_POISONED_RANGE(UNMASK_USER_PTR(zone), ZONE_USER_SIZE) == 0) {        \
+        ASAN_POISON_MEMORY_REGION(UNMASK_USER_PTR(zone), ZONE_USER_SIZE);      \
+    }                                                                          \
+    if(IS_POISONED_RANGE(UNMASK_BITMAP_PTR(zone), zone->bitmap_size) == 0) {   \
+        ASAN_POISON_MEMORY_REGION(UNMASK_BITMAP_PTR(zone), zone->bitmap_size); \
     }
 
-#define UNPOISON_ZONE(zone)                                                  \
-    if(IS_POISONED_RANGE(zone->user_pages_start, ZONE_USER_SIZE) != 0) {     \
-        ASAN_UNPOISON_MEMORY_REGION(zone->user_pages_start, ZONE_USER_SIZE); \
-    }                                                                        \
-    if(IS_POISONED_RANGE(zone->bitmap_start, zone->bitmap_size) != 0) {      \
-        ASAN_UNPOISON_MEMORY_REGION(zone->bitmap_start, zone->bitmap_size);  \
+#define UNPOISON_ZONE(zone)                                                      \
+    if(IS_POISONED_RANGE(UNMASK_USER_PTR(zone), ZONE_USER_SIZE) != 0) {          \
+        ASAN_UNPOISON_MEMORY_REGION(UNMASK_USER_PTR(zone), ZONE_USER_SIZE);      \
+    }                                                                            \
+    if(IS_POISONED_RANGE(UNMASK_BITMAP_PTR(zone), zone->bitmap_size) != 0) {     \
+        ASAN_UNPOISON_MEMORY_REGION(UNMASK_BITMAP_PTR(zone), zone->bitmap_size); \
     }
 
 #define POISON_ZONE_CHUNK(zone, ptr)                      \
@@ -145,9 +147,13 @@ assert(sizeof(size_t) >= 64)
 #define LOG(msg, ...)
 #endif
 
-#define LOG_AND_ABORT(msg, ...)                                                                                                      \
-    _iso_alloc_printf(STDOUT_FILENO, "[ABORTING][%d](%s:%d %s()) " msg "\n", getpid(), __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
-    abort();
+/* Every abort goes through one cold, out of line function.
+ * Expanding the formatting call at each site put the format
+ * arguments and a call sequence for every check into the
+ * allocation and free hot paths, which cost icache and
+ * register pressure, see _iso_alloc_abort */
+#define LOG_AND_ABORT(msg, ...) \
+    _iso_alloc_abort(__FILE__, __LINE__, __func__, msg, ##__VA_ARGS__)
 
 /* The number of bits in the bitmap that correspond
  * to a user chunk. We use 2 bits:
@@ -173,8 +179,6 @@ assert(sizeof(size_t) >= 64)
 
 /* All chunks are 8 byte aligned */
 #define CHUNK_ALIGNMENT 8
-
-#define SZ_ALIGNMENT 32
 
 #define WHICH_BIT(bit_slot) \
     (bit_slot & (BITS_PER_QWORD - 1))
@@ -213,18 +217,14 @@ assert(sizeof(size_t) >= 64)
 #define ROUND_DOWN_PAGE(n) \
     ((n) & ~((__typeof__(n)) (g_page_size - 1)))
 
+/* The two pointers in a zone are stored masked for the whole
+ * life of the zone and every reader unmasks into a local. They
+ * used to be unmasked in place around the slow paths, which
+ * cannot coexist with the lock free pointer lookup in
+ * iso_find_zone_range reading them at any time */
 #if MASK_PTRS
-#define MASK_ZONE_PTRS(zone) \
-    MASK_BITMAP_PTRS(zone);  \
-    MASK_USER_PTRS(zone);
-
-#define UNMASK_ZONE_PTRS(zone) \
-    MASK_ZONE_PTRS(zone);
-
-#define MASK_BITMAP_PTRS(zone) \
-    zone->bitmap_start = (void *) ((uintptr_t) zone->bitmap_start ^ (uintptr_t) zone->pointer_mask);
-
-#define MASK_USER_PTRS(zone) \
+#define MASK_ZONE_PTRS_ONCE(zone)                                                                    \
+    zone->bitmap_start = (void *) ((uintptr_t) zone->bitmap_start ^ (uintptr_t) zone->pointer_mask); \
     zone->user_pages_start = (void *) ((uintptr_t) zone->user_pages_start ^ (uintptr_t) zone->pointer_mask);
 
 #define UNMASK_USER_PTR(zone) \
@@ -239,10 +239,7 @@ assert(sizeof(size_t) >= 64)
 #define UNMASK_BIG_ZONE_NEXT(bnp) \
     ((iso_alloc_big_zone_t *) ((uintptr_t) _root->big_zone_next_mask ^ (uintptr_t) bnp))
 #else
-#define MASK_ZONE_PTRS(zone)
-#define UNMASK_ZONE_PTRS(zone)
-#define MASK_BITMAP_PTRS(zone)
-#define MASK_USER_PTRS(zone)
+#define MASK_ZONE_PTRS_ONCE(zone)
 #define UNMASK_USER_PTR(zone) (void *) zone->user_pages_start
 #define UNMASK_BITMAP_PTR(zone) (void *) zone->bitmap_start
 #define MASK_BIG_ZONE_NEXT(bnp) bnp
@@ -253,9 +250,6 @@ assert(sizeof(size_t) >= 64)
 #define BIG_SZ_MAX 4294967296
 
 #define MIN_BITMAP_IDX 8
-
-#define WASTED_SZ_MULTIPLIER 8
-#define WASTED_SZ_MULTIPLIER_SHIFT 3
 
 #define BIG_ZONE_META_DATA_PAGE_COUNT 1
 #define BIG_ZONE_USER_PAGE_COUNT 2
@@ -278,9 +272,60 @@ assert(sizeof(size_t) >= 64)
 
 #define BAD_BIT_SLOT -1
 
+/* Maps a request size, already rounded up to SZ_ALIGNMENT and
+ * at least SMALLEST_CHUNK_SZ, to its size class. See the
+ * SIZE_CLASS defines in iso_alloc_ds.h */
+static inline size_t size_class(size_t size) {
+#if STRONG_SIZE_ISOLATION
+    return size;
+#else
+    if(size <= SIZE_CLASS_EXACT_MAX) {
+        return size;
+    }
+
+    /* The largest power of two below size, and a quarter of
+     * it as the step between classes */
+    const size_t p = ((size_t) 1 << (63 - __builtin_clzll(size - 1)));
+    const size_t step = (p / SIZE_CLASS_STEPS_PER_POW2);
+    return ((size + step - 1) & ~(step - 1));
+#endif
+}
+
+/* Maps a size class to its slot in the per thread class table,
+ * or SIZE_CLASS_NONE if the class has no slot */
+static inline size_t size_class_index(size_t cls) {
+#if STRONG_SIZE_ISOLATION
+    if(cls > SIZE_CLASS_CACHE_MAX) {
+        return SIZE_CLASS_NONE;
+    }
+
+    return ((cls / SZ_ALIGNMENT) - 1);
+#else
+    if(cls <= SIZE_CLASS_EXACT_MAX) {
+        return ((cls / SZ_ALIGNMENT) - 1);
+    }
+
+    /* Four slots per power of two above the exact classes.
+     * (cls - p) / (p / 4) is 1 through 4 for the classes in
+     * the doubling that starts at p */
+    const size_t lg = (63 - __builtin_clzll(cls - 1));
+    const size_t p = ((size_t) 1 << lg);
+    return (SIZE_CLASS_EXACT_COUNT + ((lg - __builtin_ctzll(SIZE_CLASS_EXACT_MAX)) * SIZE_CLASS_STEPS_PER_POW2) +
+            (((cls - p) * SIZE_CLASS_STEPS_PER_POW2) >> lg) - 1);
+#endif
+}
+
+static_assert(SIZE_CLASS_EXACT_MAX >= SMALLEST_CHUNK_SZ && (SIZE_CLASS_EXACT_MAX % SZ_ALIGNMENT) == 0, "SIZE_CLASS_EXACT_MAX must be a multiple of SZ_ALIGNMENT");
+static_assert((SIZE_CLASS_EXACT_MAX & (SIZE_CLASS_EXACT_MAX - 1)) == 0, "SIZE_CLASS_EXACT_MAX must be a power of 2");
+static_assert((SMALL_SIZE_MAX & (SMALL_SIZE_MAX - 1)) == 0 && SMALL_SIZE_MAX > SIZE_CLASS_EXACT_MAX, "SMALL_SIZE_MAX must be a power of 2 above SIZE_CLASS_EXACT_MAX");
+
 /* Calculate the user pointer given a zone and a bit slot */
 #define POINTER_FROM_BITSLOT(zone, bit_slot) \
-    ((void *) zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
+    ((void *) UNMASK_USER_PTR(zone) + zone->chunk_offset + ((bit_slot >> 1) * zone->chunk_size));
+
+/* Offsets of the first chunk are multiples of this at least so
+ * they move chunks across cache lines */
+#define CHUNK_OFFSET_UNIT 64
 
 /* This global is used by the page rounding macros.
  * The value stored in _root->system_page_size is
@@ -303,6 +348,20 @@ extern uint32_t g_page_size_shift;
  * adjusted or you will calculate chunks outside of
  * the zone user memory! */
 #define ZONE_USER_SIZE 4194304
+#define ZONE_USER_SIZE_SHIFT 22
+static_assert((1 << ZONE_USER_SIZE_SHIFT) == ZONE_USER_SIZE, "ZONE_USER_SIZE_SHIFT must match ZONE_USER_SIZE");
+
+/* Zone user pages are aligned to ZONE_USER_SIZE so the window
+ * a pointer falls in names its zone. Keys are the window plus
+ * one because the map treats 0 as empty */
+#define PTR_TO_ZONE_KEY(p) ((((uintptr_t) (p)) >> ZONE_USER_SIZE_SHIFT) + 1)
+
+/* The zone map holds one key per zone and never grows, this
+ * keeps it at most half full. The big zone map grows */
+#define ZONE_MAP_CAPACITY (MAX_ZONES * 2)
+#define BIG_ZONE_MAP_INITIAL_CAPACITY 256
+static_assert((MAX_ZONES & (MAX_ZONES - 1)) == 0, "MAX_ZONES must be a power of 2 for the zone map");
+static_assert((FREE_LIST_RESEED_REFILLS & (FREE_LIST_RESEED_REFILLS - 1)) == 0, "FREE_LIST_RESEED_REFILLS must be a power of 2");
 
 static_assert(SMALLEST_CHUNK_SZ >= 16, "SMALLEST_CHUNK_SZ is too small, must be at least 16");
 static_assert(SMALL_SIZE_MAX <= 131072, "SMALL_SIZE_MAX is too big, cannot exceed 131072");
@@ -310,11 +369,13 @@ static_assert((ZONE_USER_SIZE / 4096 / BITS_PER_QWORD) == CANARY_PAGE_BITMAP_QWO
 
 /* bitmap_size = (ZONE_USER_SIZE / SMALLEST_CHUNK_SZ) * BITS_PER_CHUNK / BITS_PER_BYTE
  * max_bitmap_idx = bitmap_size / sizeof(uint64_t)
- * Both fields are uint16_t in iso_alloc_zone_t, so verify they fit. */
-static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ) <= UINT16_MAX,
-              "bitmap_size overflows uint16_t: SMALLEST_CHUNK_SZ is too small (must be > 16)");
-static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ / sizeof(uint64_t)) <= UINT16_MAX,
-              "max_bitmap_idx overflows uint16_t: SMALLEST_CHUNK_SZ is too small");
+ * Both fields are uint32_t in iso_alloc_zone_t. With 16 byte
+ * chunks a zone has 262144 chunks and a 64 KB bitmap, which is
+ * what pushed them past 16 bits */
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ) <= UINT32_MAX,
+              "bitmap_size overflows uint32_t: SMALLEST_CHUNK_SZ is too small");
+static_assert((ZONE_USER_SIZE * BITS_PER_CHUNK / BITS_PER_BYTE / SMALLEST_CHUNK_SZ / sizeof(uint64_t)) <= UINT32_MAX,
+              "max_bitmap_idx overflows uint32_t: SMALLEST_CHUNK_SZ is too small");
 
 #if THREAD_SUPPORT
 #if USE_SPINLOCK
@@ -389,7 +450,41 @@ extern pthread_mutex_t root_busy_mutex;
 #define UNLOCK_QUARANTINE(q)
 #endif
 
-static_assert((ZONE_CACHE_SZ & (ZONE_CACHE_SZ - 1)) == 0, "ZONE_CACHE_SZ must be a power of 2");
+/* Each zone has its own lock. The allocation and free fast
+ * paths take only it, the root lock is for creating, destroying
+ * and finding zones. Lock order is root, then quarantine, then
+ * zone. A thread holding a zone lock never takes the root lock
+ * or a quarantine lock. Spins yield after a while so a thread
+ * that is descheduled while holding a zone does not burn the
+ * CPU of every waiter */
+#define ZONE_LOCK_SPINS 64
+
+#if THREAD_SUPPORT
+#define TRYLOCK_ZONE(zone) \
+    (atomic_flag_test_and_set_explicit(&(zone)->busy, memory_order_acquire) == false)
+
+#define UNLOCK_ZONE(zone) \
+    atomic_flag_clear_explicit(&(zone)->busy, memory_order_release);
+
+static inline void zone_lock_spin(iso_alloc_zone_t *zone) {
+    uint32_t spins = 0;
+
+    while(atomic_flag_test_and_set_explicit(&zone->busy, memory_order_acquire)) {
+        if(++spins > ZONE_LOCK_SPINS) {
+            sched_yield();
+            spins = 0;
+        }
+    }
+}
+
+#define LOCK_ZONE(zone) zone_lock_spin(zone);
+#else
+#define TRYLOCK_ZONE(zone) (true)
+#define LOCK_ZONE(zone)
+#define UNLOCK_ZONE(zone)
+#endif
+
+static_assert((sizeof(iso_alloc_zone_t) % 64) == 0, "iso_alloc_zone_t must be a whole number of cache lines");
 
 /* The global root */
 extern iso_alloc_root *_root;
@@ -404,18 +499,21 @@ INTERNAL_HIDDEN INLINE void iso_clear_user_chunk(uint8_t *p, size_t size);
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot);
 INTERNAL_HIDDEN INLINE void write_canary(iso_alloc_zone_t *zone, void *p);
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q);
+INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q, bool root_held);
 INTERNAL_HIDDEN void flush_all_quarantines(void);
 INTERNAL_HIDDEN INLINE void clear_zone_cache(void);
 INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove);
 INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size);
-INTERNAL_HIDDEN iso_alloc_zone_t *find_exact_fit_zone(size_t size);
-INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size);
+INTERNAL_HIDDEN iso_alloc_zone_t *acquire_zone_for_class(size_t cls);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_new_zone(size_t size, bool internal);
 INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int32_t index);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *p);
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *p);
-INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *p);
+INTERNAL_HIDDEN void iso_ptr_map_init(iso_ptr_map_t *map, uint64_t capacity, bool lock_free_readers);
+INTERNAL_HIDDEN void iso_ptr_map_destroy(iso_ptr_map_t *map);
+INTERNAL_HIDDEN void iso_ptr_map_insert(iso_ptr_map_t *map, uint64_t key, uint64_t value);
+INTERNAL_HIDDEN bool iso_ptr_map_remove(iso_ptr_map_t *map, uint64_t key, uint64_t *value);
+INTERNAL_HIDDEN bool iso_ptr_map_find(const iso_ptr_map_t *map, uint64_t key, uint64_t *value);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN INLINE bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone);
@@ -424,7 +522,7 @@ INTERNAL_HIDDEN bool is_pow2(uint64_t sz);
 INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _iso_alloc_refresh_chunk_tag(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone);
-INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone, bool root_held);
 INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void materialize_canaries(iso_alloc_zone_t *zone, bitmap_index_t first_qword, bitmap_index_t last_qword);
 INTERNAL_HIDDEN INLINE bool canary_page_materialized(const iso_alloc_zone_t *zone, size_t page);
@@ -432,7 +530,7 @@ INTERNAL_HIDDEN void flush_caches(void);
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *p, bool permanent);
 INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void);
-INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace);
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool replace);
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _verify_zone(iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _verify_all_zones(void);
@@ -450,10 +548,11 @@ INTERNAL_HIDDEN INLINE void dont_need_pages(void *p, size_t size);
 INTERNAL_HIDDEN void *_tag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void *_untag_ptr(void *p, iso_alloc_zone_t *zone);
 INTERNAL_HIDDEN void _free_big_zone_list(iso_alloc_big_zone_t *head);
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment, bool *fresh);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size);
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_core(iso_alloc_zone_t *zone, size_t size, bool *fresh);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alignment);
-INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone, bool *fresh);
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size);
 #if UAF_PTR_PAGE
 INTERNAL_HIDDEN void *_iso_alloc_ptr_search(void *n);
@@ -489,6 +588,13 @@ INTERNAL_HIDDEN void handle_signal(int sig, siginfo_t *si, void *ctx);
 INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start);
 #endif
 
+INTERNAL_HIDDEN void reset_zone_in_place(iso_alloc_zone_t *zone);
+INTERNAL_HIDDEN void randomize_chunk_offset(iso_alloc_zone_t *zone, uint64_t *seed);
+INTERNAL_HIDDEN void _iso_alloc_purge_idle_zones(void);
+
 #if UNIT_TESTING
 EXTERNAL_API iso_alloc_root *_get_root(void);
+/* Runs one idle zone purge pass without waiting for the delay.
+ * A zone is reset by the second pass after it became empty */
+EXTERNAL_API void _iso_alloc_purge_now(void);
 #endif

@@ -43,5 +43,7 @@ int main(int argc, char *argv[]) {
         iso_free(q);
     }
 
+    /* Without RANDOMIZE_FREELIST the count is only gathered */
+    (void) adj_count;
     return 0;
 }

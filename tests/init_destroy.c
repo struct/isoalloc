@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
     void *p = iso_alloc(1024);
 
     if(p == NULL) {
-        LOG_AND_ABORT("iso_alloc failed")
+        LOG_AND_ABORT("iso_alloc failed");
     }
 
     iso_free(p);

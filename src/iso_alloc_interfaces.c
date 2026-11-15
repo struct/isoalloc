@@ -259,7 +259,7 @@ EXTERNAL_API FLATTEN int32_t iso_alloc_name_zone(iso_alloc_zone_handle *zone, ch
     }
 
     iso_alloc_zone_t *_zone = (iso_alloc_zone_t *) zone;
-    return name_mapping(_zone->user_pages_start, ZONE_USER_SIZE, name);
+    return name_mapping(UNMASK_USER_PTR(_zone), ZONE_USER_SIZE, name);
 }
 
 EXTERNAL_API FLATTEN void iso_alloc_protect_root(void) {

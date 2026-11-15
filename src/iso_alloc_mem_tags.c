@@ -16,7 +16,11 @@ INTERNAL_HIDDEN uint8_t _iso_alloc_get_mem_tag(void *p, iso_alloc_zone_t *zone) 
     }
 
     uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-    const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+    const uint64_t chunk_offset = (uint64_t) (p - user_pages_start) - zone->chunk_offset;
+
+    if(UNLIKELY(chunk_offset >= ZONE_USER_SIZE || (chunk_offset / zone->chunk_size) >= zone->chunk_count)) {
+        LOG_AND_ABORT("Pointer %p is not a chunk of zone %d", p, zone->index);
+    }
 
     /* Ensure the pointer is a multiple of chunk size. Chunk
      * sizes are not always a power of 2 so we can't use a mask */
@@ -94,9 +98,11 @@ INTERNAL_HIDDEN void _iso_alloc_refresh_chunk_tag(void *p, iso_alloc_zone_t *zon
 #if MEMORY_TAGGING
     void *user_pages_start = UNMASK_USER_PTR(zone);
     uint8_t *_mtp = (user_pages_start - g_page_size - ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE));
-    const uint64_t chunk_offset = (uint64_t) (p - user_pages_start);
+    const uint64_t chunk_offset = (uint64_t) (p - user_pages_start) - zone->chunk_offset;
     _mtp += (chunk_offset / zone->chunk_size);
-    *_mtp = _new_mem_tag(*_mtp, (uint8_t) us_rand_uint64(&_root->seed));
+    uint64_t seed = zone->seed;
+    *_mtp = _new_mem_tag(*_mtp, (uint8_t) us_rand_uint64(&seed));
+    zone->seed = seed;
 #endif
 }
 
@@ -121,6 +127,7 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
          * against the new tags. One random qword provides
          * the entropy for 8 consecutive tags */
         size_t o = 0;
+        uint64_t seed = zone->seed;
 
 #if USE_NEON
         /* Sixteen tags per step. rnd % 255 is rnd unless rnd
@@ -130,8 +137,8 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
         const uint8x16_t all = vdupq_n_u8(0xff);
 
         for(; o + 16 <= s; o += 16) {
-            const uint64_t r0 = us_rand_uint64(&_root->seed);
-            const uint64_t r1 = us_rand_uint64(&_root->seed);
+            const uint64_t r0 = us_rand_uint64(&seed);
+            const uint64_t r1 = us_rand_uint64(&seed);
             const uint8x16_t rnd = vreinterpretq_u8_u64(vcombine_u64(vcreate_u64(r0), vcreate_u64(r1)));
             const uint8x16_t mod = vbicq_u8(rnd, vceqq_u8(rnd, all));
             const uint8x16_t old = vld1q_u8(_mtp + o);
@@ -140,13 +147,14 @@ INTERNAL_HIDDEN bool _refresh_zone_mem_tags(iso_alloc_zone_t *zone) {
 #endif
 
         for(; o < s; o += sizeof(uint64_t)) {
-            uint64_t r = us_rand_uint64(&_root->seed);
+            uint64_t r = us_rand_uint64(&seed);
 
             for(size_t b = 0; b < sizeof(uint64_t); b++) {
                 _mtp[o + b] = _new_mem_tag(_mtp[o + b], (uint8_t) (r >> (b * 8)));
             }
         }
 
+        zone->seed = seed;
         return true;
     }
 #endif

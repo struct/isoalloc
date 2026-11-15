@@ -25,6 +25,13 @@
  * must be enabled for this to be used */
 #define MIN_RAND_FREELIST 4
 
+/* Every zone shuffles its free list with its own wyrand
+ * stream. The stream is mixed with fresh entropy from the
+ * OS every this many refills, which is one system call per
+ * (this * ZONE_FREE_LIST_SZ) allocations. Must be a power
+ * of 2. 1 reseeds on every refill as older versions did */
+#define FREE_LIST_RESEED_REFILLS 16
+
 /* If you're compiling for Android and want custom names
  * for internal mappings that are viewable from procfs
  * (i.e. /proc/pid/maps) you can modify those names here */
@@ -59,9 +66,17 @@
 /* Zones can be retired after a certain number of
  * allocations. This is computed as the total count
  * of chunks the zone can hold multiplied by this
- * value. The zone is replaced at that point if all
- * of its current chunks are free */
+ * value. The zone is reset in place at that point if
+ * all of its current chunks are free: its pages go
+ * back to the OS, and it gets new secrets, canary
+ * positions and free list order */
 #define ZONE_ALLOC_RETIRE 32
+
+/* A zone that has had no chunks in use for at least this
+ * long is reset the same way, which returns its pages to
+ * the OS. The check runs from the free path at most once
+ * per this many milliseconds. 0 disables it */
+#define ZONE_PURGE_DELAY_MS 1000
 
 /* This byte value will overwrite the contents
  * of all free'd user chunks if -DSANITIZE_CHUNKS
@@ -76,9 +91,6 @@
 #if(__linux__ && MAP_HUGETLB) || (__APPLE__ && VM_FLAGS_SUPERPAGE_SIZE_2MB) || (__FreeBSD__ && MAP_HUGETLB) && HUGE_PAGES
 #define HUGE_PAGE_SZ 2097152
 #endif
-
-/* Size of the zone cache documented in PERFORMANCE.md */
-#define ZONE_CACHE_SZ 8
 
 /* Size of the chunk quarantine cache documented in PERFORMANCE.md */
 #define CHUNK_QUARANTINE_SZ 64
@@ -149,13 +161,14 @@
  * array. It's value should never be less than 16 */
 #if SMALL_MEM_STARTUP
 /* ZONE_USER_SIZE * sizeof(default_zones) = ~16 mb */
-/* SZ_ALIGNMENT = 32 */
+/* SZ_ALIGNMENT = 16 */
 #define SMALLEST_CHUNK_SZ SZ_ALIGNMENT
 const static uint64_t default_zones[] = {ZONE_64, ZONE_256, ZONE_512, ZONE_1024};
 #else
-/* ZONE_USER_SIZE * sizeof(default_zones) = ~40 mb */
+/* ZONE_USER_SIZE * sizeof(default_zones) = ~40 mb of address
+ * space. Only the pages a zone touches become resident */
 #define SMALLEST_CHUNK_SZ SZ_ALIGNMENT
-const static uint64_t default_zones[] = {ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
+const static uint64_t default_zones[] = {ZONE_16, ZONE_32, ZONE_64, ZONE_128, ZONE_256, ZONE_512,
                                          ZONE_1024, ZONE_2048, ZONE_4096, ZONE_8192};
 #endif
 
