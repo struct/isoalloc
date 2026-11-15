@@ -15,13 +15,13 @@ int main(int argc, char *argv[]) {
     void *p = iso_calloc(10, 2);
 
     if(p == NULL) {
-        LOG_AND_ABORT("iso_calloc failed")
+        LOG_AND_ABORT("iso_calloc failed");
     }
 
     p = iso_calloc(INT_MAX - 1, 4);
 
     if(p != NULL) {
-        LOG_AND_ABORT("iso_calloc over check failed")
+        LOG_AND_ABORT("iso_calloc over check failed");
     }
 
     iso_free(p);
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     p = iso_alloc(128);
 
     if(p == NULL) {
-        LOG_AND_ABORT("iso_alloc failed")
+        LOG_AND_ABORT("iso_alloc failed");
     }
 
     memset(p, 0x41, 128);
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     p = iso_realloc(p, 1024);
 
     if(p == NULL) {
-        LOG_AND_ABORT("iso_realloc failed")
+        LOG_AND_ABORT("iso_realloc failed");
     }
 
     /* Test iso_reallocarray */
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
     p = iso_reallocarray(p, 16, 16);
 
     if(p == NULL) {
-        LOG_AND_ABORT("iso_reallocarray failed")
+        LOG_AND_ABORT("iso_reallocarray failed");
     }
 
     iso_free(p);

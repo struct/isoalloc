@@ -152,20 +152,20 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
         current--;
 
         if(zone != NULL) {
-            UNMASK_ZONE_PTRS(zone);
+            void *user_pages_start = UNMASK_USER_PTR(zone);
+            void *bitmap_start = UNMASK_BITMAP_PTR(zone);
 
             /* Ensure the pointer is properly aligned */
             if(UNLIKELY(IS_ALIGNED((uintptr_t) p) != 0)) {
                 LOG_AND_ABORT("Chunk at 0x%p of zone[%d] is not %d byte aligned", p, zone->index, SZ_ALIGNMENT);
             }
 
-            uint64_t chunk_offset = (uint64_t) (p - (uint64_t *) zone->user_pages_start);
-            LOG("zone[%d] user_pages_start=%p value=%p %lu %d", zone->index, zone->user_pages_start, p, chunk_offset, zone->chunk_size);
+            uint64_t chunk_offset = ((uint64_t) ((uint8_t *) p - (uint8_t *) user_pages_start)) - zone->chunk_offset;
+            LOG("zone[%d] user_pages_start=%p value=%p %lu %d", zone->index, user_pages_start, p, chunk_offset, zone->chunk_size);
 
             /* Ensure the pointer is a multiple of chunk size */
             if(UNLIKELY((chunk_offset % zone->chunk_size) != 0)) {
                 LOG("Chunk at %p is not a multiple of zone[%d] chunk size %d. Off by %" PRIu64 " bits", p, zone->index, zone->chunk_size, (chunk_offset % zone->chunk_size));
-                MASK_ZONE_PTRS(zone);
                 continue;
             }
 
@@ -173,14 +173,13 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
             bit_slot_t bit_slot = (chunk_number * BITS_PER_CHUNK);
             bit_slot_t dwords_to_bit_slot = (bit_slot / BITS_PER_QWORD);
 
-            if(UNLIKELY((zone->bitmap_start + dwords_to_bit_slot) >= (zone->bitmap_start + zone->bitmap_size))) {
+            if(UNLIKELY((bitmap_start + dwords_to_bit_slot) >= (bitmap_start + zone->bitmap_size))) {
                 LOG("Cannot calculate this chunks location in the bitmap %p", p);
-                MASK_ZONE_PTRS(zone);
                 continue;
             }
 
             int64_t which_bit = (bit_slot % BITS_PER_QWORD);
-            bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+            bitmap_index_t *bm = (bitmap_index_t *) bitmap_start;
             bitmap_index_t b = bm[dwords_to_bit_slot];
 
             if(UNLIKELY((GET_BIT(b, which_bit)) == 0)) {
@@ -188,8 +187,6 @@ INTERNAL_HIDDEN void _iso_alloc_search_stack(uint8_t *stack_start) {
             } else {
                 LOG("Chunk at %p is free", p);
             }
-
-            MASK_ZONE_PTRS(zone);
         }
 
         zone = iso_find_zone_bitmap_range(p);

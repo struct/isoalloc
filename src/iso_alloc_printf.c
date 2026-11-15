@@ -89,19 +89,12 @@ static void emit_int(printf_buf_t *b, int64_t n) {
     emit_uint(b, magnitude, 10);
 }
 
-INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
-    if(UNLIKELY(f == NULL)) {
-        return;
-    }
-
-    char out[PRINTF_BUF_SZ];
-    printf_buf_t b = {.out = out, .len = 0, .max = sizeof(out)};
-    va_list arg;
-    va_start(arg, f);
-
+/* Formats f with the arguments in arg into b. Output that
+ * does not fit in the buffer is dropped */
+static void format_into(printf_buf_t *b, const char *f, va_list arg) {
     for(const char *idx = f; *idx != '\0'; idx++) {
         if(*idx != '%') {
-            emit_char(&b, *idx);
+            emit_char(b, *idx);
             continue;
         }
 
@@ -109,53 +102,99 @@ INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
 
         /* A lone trailing percent sign is printed as is */
         if(*idx == '\0') {
-            emit_char(&b, '%');
+            emit_char(b, '%');
             break;
         }
 
         switch(*idx) {
         case 'd':
-            emit_int(&b, va_arg(arg, int32_t));
+            emit_int(b, va_arg(arg, int32_t));
             break;
         case 'u':
-            emit_uint(&b, va_arg(arg, uint32_t), 10);
+            emit_uint(b, va_arg(arg, uint32_t), 10);
             break;
         case 'x':
         case 'p':
-            emit_uint(&b, va_arg(arg, uint64_t), 16);
+            emit_uint(b, va_arg(arg, uint64_t), 16);
             break;
         case 'l':
         case 'z':
             /* An optional d or u may follow, both are 64 bit */
             if(*(idx + 1) == 'u') {
                 idx++;
-                emit_uint(&b, va_arg(arg, uint64_t), 10);
+                emit_uint(b, va_arg(arg, uint64_t), 10);
             } else {
                 if(*(idx + 1) == 'd') {
                     idx++;
                 }
 
-                emit_int(&b, va_arg(arg, int64_t));
+                emit_int(b, va_arg(arg, int64_t));
             }
 
             break;
         case 's': {
             const char *s = va_arg(arg, const char *);
-            emit_str(&b, (s != NULL) ? s : "(null)");
+            emit_str(b, (s != NULL) ? s : "(null)");
             break;
         }
         case '%':
-            emit_char(&b, '%');
+            emit_char(b, '%');
             break;
         default:
             /* Unknown conversion, print it verbatim and
              * consume no argument */
-            emit_char(&b, '%');
-            emit_char(&b, *idx);
+            emit_char(b, '%');
+            emit_char(b, *idx);
             break;
         }
     }
+}
 
-    va_end(arg);
+INTERNAL_HIDDEN void _iso_alloc_vprintf(int32_t fd, const char *f, va_list arg) {
+    if(UNLIKELY(f == NULL)) {
+        return;
+    }
+
+    char out[PRINTF_BUF_SZ];
+    printf_buf_t b = {.out = out, .len = 0, .max = sizeof(out)};
+    format_into(&b, f, arg);
     (void) !write(fd, out, b.len);
+}
+
+INTERNAL_HIDDEN void _iso_alloc_printf(int32_t fd, const char *f, ...) {
+    va_list arg;
+    va_start(arg, f);
+    _iso_alloc_vprintf(fd, f, arg);
+    va_end(arg);
+}
+
+/* The body of LOG_AND_ABORT. It lives out of line and is
+ * marked cold so the hot paths carry only a compare and a
+ * call for each check instead of the formatting arguments
+ * for every message. The prefix and the message are built
+ * into one buffer so the log line is written in one piece */
+INTERNAL_HIDDEN void _iso_alloc_abort(const char *file, int32_t line, const char *func, const char *f, ...) {
+    char out[PRINTF_BUF_SZ];
+    printf_buf_t b = {.out = out, .len = 0, .max = sizeof(out)};
+    va_list arg;
+
+    va_start(arg, f);
+    emit_str(&b, "[ABORTING][");
+    emit_int(&b, getpid());
+    emit_str(&b, "](");
+    emit_str(&b, (file != NULL) ? file : "(null)");
+    emit_char(&b, ':');
+    emit_int(&b, line);
+    emit_char(&b, ' ');
+    emit_str(&b, (func != NULL) ? func : "(null)");
+    emit_str(&b, "()) ");
+
+    if(f != NULL) {
+        format_into(&b, f, arg);
+    }
+
+    emit_char(&b, '\n');
+    va_end(arg);
+    (void) !write(STDOUT_FILENO, out, b.len);
+    abort();
 }

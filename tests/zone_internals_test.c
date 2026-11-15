@@ -34,7 +34,8 @@ static uintptr_t local_page_size;
 #define SMALL_BITMAP_CHUNK_SZ SMALL_SIZE_MAX
 #define SMALL_BITMAP_ZONES 70
 
-static iso_alloc_zone_t *find_zone(iso_alloc_root *root, size_t chunk_size, bool internal) {
+/* Only the canary check uses these two */
+static __attribute__((unused)) iso_alloc_zone_t *find_zone(iso_alloc_root *root, size_t chunk_size, bool internal) {
     for(size_t i = 0; i < root->zones_used; i++) {
         iso_alloc_zone_t *zone = &root->zones[i];
 
@@ -46,7 +47,7 @@ static iso_alloc_zone_t *find_zone(iso_alloc_root *root, size_t chunk_size, bool
     return NULL;
 }
 
-static size_t count_canaries(iso_alloc_zone_t *zone) {
+static __attribute__((unused)) size_t count_canaries(iso_alloc_zone_t *zone) {
     const bitmap_index_t *bm = UNMASK_BITMAP_PTR(zone);
     size_t canaries = 0;
 

@@ -3,8 +3,8 @@
 # examples of code that should crash
 $(echo '' > test_output.txt)
 
-tests=("tests" "big_tests" "big_zone_chunksz" "zone_retirement" "strdup_test" "interfaces_test" "thread_tests" "pool_test"
-       "rand_freelist" "aligned_alloc_test" "zone_internals_test" "printf_test")
+tests=("tests" "big_tests" "big_zone_chunksz" "zone_retirement" "strdup_test" "interfaces_test" "thread_tests" "thread_exit_test" "zone_lock_test" "pool_test"
+       "rand_freelist" "aligned_alloc_test" "zone_internals_test" "size_class_test" "pointer_map_test" "zone_purge_test" "calloc_test" "printf_test")
 failure=0
 succeeded=0
 start=$SECONDS

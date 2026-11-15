@@ -11,15 +11,18 @@
 
 int main(int argc, char *argv[]) {
     /* Prime the allocator */
-    void *p = iso_alloc(ZONE_32);
-    iso_free_size(p, ZONE_32);
+    void *p = iso_alloc(SMALLEST_CHUNK_SZ);
+    iso_free_size(p, SMALLEST_CHUNK_SZ);
 
     iso_alloc_root *root = _get_root();
 
-    if(root == NULL || root->zones[0].chunk_size != ZONE_32) {
-        /* Default zone layout changed, this test needs updating */
+    if(root == NULL) {
         return ERR;
     }
+
+    /* Zone 0 is the first default zone. Retire whatever
+     * size it holds */
+    const size_t sz = root->zones[0].chunk_size;
 
     const uint64_t chunk_count = root->zones[0].chunk_count;
     const uint64_t cycles = (chunk_count << root->zone_retirement_shf) + chunk_count;
@@ -28,13 +31,13 @@ int main(int argc, char *argv[]) {
      * so af_count reaches 0 on every cycle and the zone retires
      * once alloc_count crosses the retirement threshold */
     for(uint64_t i = 0; i < cycles; i++) {
-        void *q = iso_alloc(ZONE_32);
+        void *q = iso_alloc(sz);
 
         if(q == NULL) {
             return ERR;
         }
 
-        iso_free_size(q, ZONE_32);
+        iso_free_size(q, sz);
     }
 
     /* Zone 0 should have been retired and replaced in place. If
@@ -49,12 +52,12 @@ int main(int argc, char *argv[]) {
         return ERR;
     }
 
-    /* The lookup table entry for this size must be empty (zone 0
-     * shares the value of the empty sentinel) or point at a zone
-     * holding chunks of this size */
-    uint16_t idx = root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(ZONE_32)];
+    /* The lookup table entry for this size must point at a zone
+     * holding chunks of this size. Entries are index plus one so
+     * zone 0 is reachable through the table */
+    uint16_t link = root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(sz)];
 
-    if(idx != 0 && root->zones[idx].chunk_size != ZONE_32) {
+    if(link == 0 || root->zones[ZONE_CHAIN_INDEX(link)].chunk_size != sz) {
         return ERR;
     }
 
@@ -63,7 +66,7 @@ int main(int argc, char *argv[]) {
      * index mislabeling bug this aborts in find_suitable_zone with
      * "Zone lookup table failed to match sizes" */
     void *big = iso_alloc(MAX_DEFAULT_ZONE_SZ + SZ_ALIGNMENT);
-    void *small = iso_alloc(ZONE_32);
+    void *small = iso_alloc(sz);
 
     if(big == NULL || small == NULL) {
         return ERR;

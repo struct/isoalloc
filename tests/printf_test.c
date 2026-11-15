@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include "iso_alloc.h"
 #include "iso_alloc_internal.h"
 
@@ -107,6 +109,37 @@ int main(int argc, char *argv[]) {
 
     if(strlen(got) >= sizeof(big)) {
         LOG_AND_ABORT("Repeated strings were not bounded");
+    }
+
+    /* LOG_AND_ABORT runs through one cold out of line function.
+     * It must print the same prefix the macro used to build at
+     * each call site, then the message, then abort. Run it in a
+     * child with stdout pointed at the pipe */
+    pid_t child = fork();
+
+    if(child < 0) {
+        LOG_AND_ABORT("fork failed");
+    }
+
+    if(child == 0) {
+        dup2(fds[1], STDOUT_FILENO);
+        _iso_alloc_abort("abort_test.c", 77, "abort_fn", "chunk 0x%x of %d bytes %s", (uint64_t) 0xbeef, 48, "corrupted");
+        _exit(0);
+    }
+
+    int status = 0;
+
+    if(waitpid(child, &status, 0) != child || WIFSIGNALED(status) == 0 || WTERMSIG(status) != SIGABRT) {
+        LOG_AND_ABORT("abort helper did not abort, status %d", status);
+    }
+
+    got = capture();
+    char expected[256];
+    snprintf(expected, sizeof(expected), "[ABORTING][%d](abort_test.c:77 abort_fn()) chunk 0xbeef of 48 bytes corrupted\n", child);
+
+    if(strcmp(got, expected) != 0) {
+        fprintf(stderr, "abort output\n  expected \"%s\"\n  got      \"%s\"\n", expected, got);
+        abort();
     }
 
     close(fds[0]);

@@ -15,44 +15,111 @@ atomic_flag root_busy_flag;
 #else
 pthread_mutex_t root_busy_mutex;
 #endif
-/* We cannot initialize these on thread creation so
- * we can't mmap them somewhere with guard pages but
- * they are thread local storage so their location
- * won't be as predictable as .bss
- * If a thread dies with the zone cache populated there
- * is no undefined behavior. The quarantine is flushed
- * by a pthread key destructor when the thread exits */
-static __thread iso_zone_cache_t zone_cache;
-static __thread iso_quarantine_t thread_quarantine;
-static pthread_key_t thread_quarantine_key;
-#define THREAD_ZONE_CACHE() (&zone_cache)
-#define THREAD_QUARANTINE() (&thread_quarantine)
-#else
-/* When not using thread local storage we can mmap
- * these pages somewhere safer than global memory
- * and surrounded by guard pages */
-static iso_zone_cache_t *zone_cache;
-#define THREAD_ZONE_CACHE() (zone_cache)
-#define THREAD_QUARANTINE() (_root->chunk_quarantine)
-#endif
 
 uint32_t g_page_size;
 uint32_t g_page_size_shift;
 iso_alloc_root *_root;
 
-#if THREAD_SUPPORT
-/* Runs when a thread exits with the thread quarantine
- * registered. Frees whatever it still holds and unlinks it
- * from the registry so flush_all_quarantines never walks
- * into freed thread local storage */
-static void thread_quarantine_dtor(void *arg) {
-    iso_quarantine_t *q = (iso_quarantine_t *) arg;
+/* Every thread owns one iso_thread_state_t holding its zone
+ * cache and quarantine. It is mapped by this allocator on the
+ * threads first use, surrounded by guard pages, and released
+ * by the pthread key destructor when the thread exits. It used
+ * to live in __thread storage, but on macOS that storage is
+ * malloc'd by dyld and torn down by a key destructor of its
+ * own, which can run before ours and left the quarantine flush
+ * reading freed memory. Owning the block makes its lifetime
+ * ours on every platform */
+static pthread_key_t thread_state_key;
 
-    LOCK_ROOT();
+/* Serializes the registry of thread states in the root. It is
+ * separate from the root lock so a thread can create its state
+ * from a path that already holds the root lock. Lock order is
+ * root, then registry, then a quarantine */
+static atomic_flag thread_registry_flag;
+
+#define LOCK_THREAD_REGISTRY() \
+    do {                       \
+    } while(atomic_flag_test_and_set_explicit(&thread_registry_flag, memory_order_acquire));
+
+#define UNLOCK_THREAD_REGISTRY() \
+    atomic_flag_clear_explicit(&thread_registry_flag, memory_order_release);
+
+#if __APPLE__
+/* On macOS the pthread specific values are an array of direct
+ * slots reached from the thread pointer register, so the state
+ * pointer is two loads instead of a call into dyld, which is
+ * what a __thread access costs in a dylib. The layout is
+ * verified once at startup and pthread_getspecific is used if
+ * it does not hold */
+static bool direct_tls_slots;
+
+static INLINE void **tls_slots(void) {
+#if __aarch64__
+    uint64_t tp;
+    __asm__("mrs %0, tpidrro_el0\n\tbic %0, %0, #7"
+            : "=r"(tp));
+    return (void **) tp;
+#elif __x86_64__
+    void **tp;
+    __asm__("movq %%gs:0, %0"
+            : "=r"(tp));
+    return tp;
+#else
+    return NULL;
+#endif
+}
+
+static INLINE iso_thread_state_t *thread_state_get(void) {
+    if(LIKELY(direct_tls_slots == true)) {
+        return (iso_thread_state_t *) tls_slots()[thread_state_key];
+    }
+
+    return (iso_thread_state_t *) pthread_getspecific(thread_state_key);
+}
+
+static INLINE void thread_state_set(iso_thread_state_t *ts) {
+    if(UNLIKELY(pthread_setspecific(thread_state_key, ts) != 0)) {
+        LOG_AND_ABORT("Failed to set the thread state key");
+    }
+}
+#else
+/* Elsewhere a __thread pointer is a single load with the
+ * initial exec TLS model and the storage outlives the key
+ * destructors, so it caches the pointer the key also holds */
+static __thread iso_thread_state_t *thread_state_tls;
+
+static INLINE iso_thread_state_t *thread_state_get(void) {
+    return thread_state_tls;
+}
+
+static INLINE void thread_state_set(iso_thread_state_t *ts) {
+    /* Publish to this thread before touching the key. Some libc
+     * implementations allocate inside pthread_setspecific and
+     * that allocation must find the state rather than create
+     * another one */
+    thread_state_tls = ts;
+
+    if(UNLIKELY(pthread_setspecific(thread_state_key, ts) != 0)) {
+        LOG_AND_ABORT("Failed to set the thread state key");
+    }
+}
+#endif
+
+/* Runs when a thread exits. Frees whatever its quarantine still
+ * holds, unlinks it from the registry so flush_all_quarantines
+ * never walks into unmapped memory, and releases the state. The
+ * key already reads as NULL here, so a free from a destructor
+ * that runs after this one creates a fresh state which pthread
+ * passes back to us in a later round */
+static void thread_state_dtor(void *arg) {
+    iso_thread_state_t *ts = (iso_thread_state_t *) arg;
+    iso_quarantine_t *q = &ts->quarantine;
+
     LOCK_QUARANTINE(q);
-    flush_quarantine(q);
+    flush_quarantine(q, false);
     UNLOCK_QUARANTINE(q);
 
+    LOCK_THREAD_REGISTRY();
     iso_quarantine_t **link = &_root->quarantines;
 
     while(*link != NULL && *link != q) {
@@ -63,27 +130,57 @@ static void thread_quarantine_dtor(void *arg) {
         *link = q->next;
     }
 
-    q->next = NULL;
-    q->registered = false;
-    UNLOCK_ROOT();
+    UNLOCK_THREAD_REGISTRY();
+
+#if !__APPLE__
+    thread_state_tls = NULL;
+#endif
+    unmap_guarded_pages(ts, sizeof(iso_thread_state_t));
 }
 
-/* Links this threads quarantine into the root registry the
- * first time the thread frees a chunk. The key is set before
- * taking the root lock because some libc implementations
- * allocate inside pthread_setspecific */
-static void register_thread_quarantine(iso_quarantine_t *q) {
-    if(pthread_setspecific(thread_quarantine_key, q) != 0) {
-        LOG_AND_ABORT("Failed to register the thread quarantine");
+/* Creates this threads state the first time it allocates or
+ * frees. Never takes the root lock, a caller may hold it */
+static iso_thread_state_t *thread_state_init(void) {
+    iso_thread_state_t *ts = (iso_thread_state_t *) mmap_guarded_rw_pages(sizeof(iso_thread_state_t), true, NULL);
+
+    if(UNLIKELY(ts == NULL)) {
+        LOG_AND_ABORT("Failed to map the thread state");
     }
 
-    LOCK_ROOT();
-    q->next = _root->quarantines;
-    _root->quarantines = q;
-    q->registered = true;
-    UNLOCK_ROOT();
+    thread_state_set(ts);
+
+    LOCK_THREAD_REGISTRY();
+    ts->quarantine.next = _root->quarantines;
+    _root->quarantines = &ts->quarantine;
+    UNLOCK_THREAD_REGISTRY();
+    return ts;
+}
+
+static INLINE iso_thread_state_t *thread_state(void) {
+    iso_thread_state_t *ts = thread_state_get();
+
+    if(UNLIKELY(ts == NULL)) {
+        ts = thread_state_init();
+    }
+
+    return ts;
+}
+#else
+uint32_t g_page_size;
+uint32_t g_page_size_shift;
+iso_alloc_root *_root;
+
+/* Without threads one state serves the process. It is mapped
+ * with guard pages at startup rather than living in .bss */
+static iso_thread_state_t *thread_state_single;
+
+static INLINE iso_thread_state_t *thread_state(void) {
+    return thread_state_single;
 }
 #endif
+
+#define THREAD_ZONE_CACHE() (&thread_state()->cache)
+#define THREAD_QUARANTINE() (&thread_state()->quarantine)
 
 INTERNAL_HIDDEN iso_alloc_root *iso_alloc_new_root(void) {
     iso_alloc_root *p = NULL;
@@ -129,6 +226,13 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
 #endif
 
     _root->zone_retirement_shf = _log2(ZONE_ALLOC_RETIRE);
+    _root->last_purge_ms = coarse_now_ms();
+
+    /* Threads that find every zone of a class busy get a new
+     * zone up to this many per class, so under contention they
+     * spread out instead of queueing on one lock */
+    long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+    _root->zones_per_class_cap = (ncpu > 2) ? (uint32_t) (ncpu * 2) : 4;
     _root->zones_size = (MAX_ZONES * sizeof(iso_alloc_zone_t));
     _root->zones_size += (g_page_size * 2);
     _root->zones_size = ROUND_UP_PAGE(_root->zones_size);
@@ -153,30 +257,34 @@ INTERNAL_HIDDEN void iso_alloc_initialize_global_root(void) {
     /* The destructor flushes a threads quarantine when it
      * exits so no chunk is left allocated. Created here so
      * both the constructor and the lazy init path have it */
-    if(pthread_key_create(&thread_quarantine_key, thread_quarantine_dtor) != 0) {
-        LOG_AND_ABORT("Failed to create the thread quarantine key");
+    if(pthread_key_create(&thread_state_key, thread_state_dtor) != 0) {
+        LOG_AND_ABORT("Failed to create the thread state key");
     }
+
+#if __APPLE__
+    /* Confirm the key indexes the direct slot array before the
+     * fast path relies on it. The probe value is cleared again
+     * so this thread starts with no state like every other */
+    void *probe = (void *) ((uintptr_t) &thread_state_key | 1);
+
+    if(pthread_setspecific(thread_state_key, probe) != 0) {
+        LOG_AND_ABORT("Failed to probe the thread state key");
+    }
+
+    direct_tls_slots = (thread_state_key < PTHREAD_KEYS_MAX && tls_slots() != NULL && tls_slots()[thread_state_key] == probe);
+    pthread_setspecific(thread_state_key, NULL);
+#endif
 #else
-    size_t c = ROUND_UP_PAGE(sizeof(iso_quarantine_t));
-    _root->chunk_quarantine = mmap_guarded_rw_pages(c, true, NULL);
+    size_t c = ROUND_UP_PAGE(sizeof(iso_thread_state_t));
+    thread_state_single = mmap_guarded_rw_pages(c, true, NULL);
 #if __APPLE__
-    darwin_reuse(_root->chunk_quarantine, c);
+    darwin_reuse(thread_state_single, c);
 #endif
-    MLOCK(_root->chunk_quarantine, c);
-
-    size_t z = ROUND_UP_PAGE(sizeof(iso_zone_cache_t));
-    zone_cache = mmap_guarded_rw_pages(z, true, NULL);
-#if __APPLE__
-    darwin_reuse(zone_cache, z);
-#endif
-    MLOCK(zone_cache, z);
+    MLOCK(thread_state_single, c);
 #endif
 
-    _root->chunk_lookup_table = mmap_guarded_rw_pages(CHUNK_TO_ZONE_TABLE_SZ, true, NULL);
-#if __APPLE__
-    darwin_reuse(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
-#endif
-    MLOCK(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
+    iso_ptr_map_init(&_root->zone_map, ZONE_MAP_CAPACITY, true);
+    iso_ptr_map_init(&_root->big_zone_map, BIG_ZONE_MAP_INITIAL_CAPACITY, false);
 
     for(int i = 0; i < DEFAULT_ZONE_COUNT; i++) {
         if((_iso_new_zone(default_zones[i], true, -1)) == NULL) {
@@ -268,55 +376,225 @@ __attribute__((constructor(FIRST_CTOR))) void iso_alloc_ctor(void) {
 
 INTERNAL_HIDDEN void _iso_alloc_destroy_zone(iso_alloc_zone_t *zone) {
     LOCK_ROOT();
-    _iso_alloc_destroy_zone_unlocked(zone, true, true);
+
+    /* Clearing this threads cache needs no lock but happens
+     * here so another thread cannot cache the zone we are
+     * about to unmap. Every threads quarantine is flushed so
+     * none of them holds a chunk from it, and that happens
+     * before the zone lock is taken because the flush frees
+     * chunks that may live in this very zone */
+    clear_zone_cache();
+    flush_all_quarantines();
+
+    LOCK_ZONE(zone);
+    _iso_alloc_destroy_zone_unlocked(zone, true);
+    UNLOCK_ZONE(zone);
     UNLOCK_ROOT();
 }
 
-INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool flush_caches, bool replace) {
-    if(flush_caches == true) {
-        /* We don't need a lock to clear the zone cache
-         * but we do it here because we don't want another
-         * thread to stick the zone we are about to delete
-         * into the cache for later. Every threads quarantine
-         * is flushed so none of them holds a chunk from the
-         * zone we are about to unmap */
-        clear_zone_cache();
-        flush_all_quarantines();
+/* Resets a zone that has no chunks in use as if it were newly
+ * created, keeping its mapping, index, chain links and zone map
+ * entry. The user pages go back to the OS and read as zero, the
+ * bitmap is cleared, and the zone draws new secrets, canary
+ * positions and free list order. Retiring a zone used to unmap
+ * it and map a replacement, which cost several system calls and
+ * a TLB shootdown, and an empty zone that never retired kept its
+ * memory forever. The caller holds the zone lock */
+INTERNAL_HIDDEN void reset_zone_in_place(iso_alloc_zone_t *zone) {
+    void *user_pages_start = UNMASK_USER_PTR(zone);
+    void *bitmap_start = UNMASK_BITMAP_PTR(zone);
+    int32_t prot = (PROT_READ | PROT_WRITE);
+
+    if(UNLIKELY(zone->af_count != 0)) {
+        LOG_AND_ABORT("Cannot reset zone[%d] with %d chunks in use", zone->index, zone->af_count);
     }
 
-    UNMASK_ZONE_PTRS(zone);
+#if ARM_MTE
+    if(_root->arm_mte_enabled == true) {
+        prot |= PROT_MTE;
+    }
+#endif
+
+    UNPOISON_ZONE(zone);
+    decommit_zone_pages(user_pages_start, ZONE_USER_SIZE, prot);
+    __iso_memset(bitmap_start, 0x0, zone->bitmap_size);
+    __iso_memset(zone->canary_pages, 0x0, sizeof(zone->canary_pages));
+
+    zone->seed = rand_uint64();
+    zone->refills = 0;
+    zone->alloc_count = 0;
+    zone->purge_snapshot = 0;
+    zone->is_full = false;
+    zone->next_free_bit_slot = BAD_BIT_SLOT;
+    zone->free_bit_slots_usable = 0;
+    zone->free_bit_slots_index = 0;
+
+    uint64_t seed = zone->seed;
+    zone->canary_secret = us_rand_uint64(&seed);
+    const uint64_t pointer_mask = us_rand_uint64(&seed);
+    zone->seed = seed;
+
+    /* New mask, same addresses. The two pointers are rewritten
+     * together with the mask they are masked by */
+    zone->pointer_mask = pointer_mask;
+    zone->user_pages_start = user_pages_start;
+    zone->bitmap_start = bitmap_start;
+    MASK_ZONE_PTRS_ONCE(zone);
+
+    /* A new offset for the first chunk, which may change the
+     * chunk count by a few */
+    seed = zone->seed;
+    randomize_chunk_offset(zone, &seed);
+    zone->seed = seed;
+
+#if MEMORY_TAGGING
+    if(zone->tagged == true) {
+        const size_t tag_mapping_size = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
+        uint64_t *_mtp = (uint64_t *) (user_pages_start - g_page_size - tag_mapping_size);
+        const uint64_t tms = (tag_mapping_size >> 3);
+        seed = zone->seed;
+
+        for(uint64_t o = 0; o < tms; o++) {
+            _mtp[o] = us_rand_uint64(&seed);
+        }
+
+        zone->seed = seed;
+        zone->tags_refreshed_at = 0;
+    }
+#endif
+
+    create_canary_chunks(zone);
+    fill_free_bit_slots(zone);
+    get_next_free_bit_slot(zone);
+    POISON_ZONE(zone);
+}
+
+/* One purge pass. A zone is reset when it has no chunks in use
+ * and has not allocated anything since the previous pass, which
+ * is read off its allocation counter so the free path keeps no
+ * state for this. Zones another thread holds are skipped, they
+ * are busy. Takes no lock but the zone locks, the zones array is
+ * never unmapped while the allocator lives */
+INTERNAL_HIDDEN void _iso_alloc_purge_idle_zones(void) {
+    const size_t zones_used = _root->zones_used;
+
+    for(size_t i = 0; i < zones_used; i++) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+
+        /* Unlocked reads as a filter, checked again under the lock.
+         * A zone that allocated since the last pass only gets a
+         * new snapshot, which needs no lock as the value is only
+         * ever compared against alloc_count by this pass */
+        const uint32_t alloc_count = zone->alloc_count;
+
+        if(zone->af_count != 0 || alloc_count == 0 || alloc_count != zone->purge_snapshot) {
+            zone->purge_snapshot = alloc_count;
+            continue;
+        }
+
+        if(TRYLOCK_ZONE(zone) == false) {
+            continue;
+        }
+
+        if(zone->af_count == 0 && zone->alloc_count != 0 && zone->alloc_count == zone->purge_snapshot) {
+            reset_zone_in_place(zone);
+        }
+
+        UNLOCK_ZONE(zone);
+    }
+}
+
+#if ZONE_PURGE_DELAY_MS > 0
+/* Called from the free path after a quarantine flush. Runs a
+ * purge pass when the delay has passed, one thread at a time */
+static void maybe_purge_idle_zones(void) {
+    const uint64_t now = coarse_now_ms();
+
+    if(LIKELY((now - _root->last_purge_ms) < ZONE_PURGE_DELAY_MS)) {
+        return;
+    }
+
+#if THREAD_SUPPORT
+    if(atomic_flag_test_and_set_explicit(&_root->purging, memory_order_acquire)) {
+        return;
+    }
+#endif
+
+    if((now - _root->last_purge_ms) >= ZONE_PURGE_DELAY_MS) {
+        _root->last_purge_ms = now;
+        _iso_alloc_purge_idle_zones();
+    }
+
+#if THREAD_SUPPORT
+    atomic_flag_clear_explicit(&_root->purging, memory_order_release);
+#endif
+}
+#endif
+
+#if UNIT_TESTING
+EXTERNAL_API void _iso_alloc_purge_now(void) {
+    _iso_alloc_purge_idle_zones();
+}
+#endif
+
+/* Unmaps a zone and optionally replaces it in place. The caller
+ * holds the root lock and the zone lock, and has made sure no
+ * quarantine still holds a chunk from the zone. The replacement
+ * is created with the lock still held so the slot is never seen
+ * half initialized */
+INTERNAL_HIDDEN void _iso_alloc_destroy_zone_unlocked(iso_alloc_zone_t *zone, bool replace) {
+    void *user_pages_start = UNMASK_USER_PTR(zone);
+    void *bitmap_start = UNMASK_BITMAP_PTR(zone);
     UNPOISON_ZONE(zone);
 
 #if MEMORY_TAGGING
     /* If the zone is tagged then unmap the page holding the tags */
     if(zone->tagged == true) {
         size_t s = ROUND_UP_PAGE(zone->chunk_count * MEM_TAG_SIZE);
-        void *_mtp = (zone->user_pages_start - s - g_page_size);
+        void *_mtp = (user_pages_start - s - g_page_size);
         munmap(_mtp, g_page_size + s);
         zone->tagged = false;
     }
 #endif
 
-    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(zone->user_pages_start)] = 0;
+    if(UNLIKELY(iso_ptr_map_remove(&_root->zone_map, PTR_TO_ZONE_KEY(user_pages_start), NULL) == false)) {
+        LOG_AND_ABORT("Zone[%d] is missing from the zone map", zone->index);
+    }
 
     if(zone->preallocated_bitmap_idx == -1) {
-        munmap(zone->bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
+        munmap(bitmap_start - g_page_size, (zone->bitmap_size + g_page_size * 2));
     } else {
         const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
 
         for(int i = 0; i < sbsi; i++) {
             if(zone->bitmap_size == _root->bitmaps[i].bucket) {
                 UNSET_BIT(_root->bitmaps[i].in_use, zone->preallocated_bitmap_idx);
-                __iso_memset(zone->bitmap_start, 0x0, zone->bitmap_size);
+                __iso_memset(bitmap_start, 0x0, zone->bitmap_size);
                 break;
             }
         }
     }
 
-    munmap(zone->user_pages_start - g_page_size, (ZONE_USER_SIZE + g_page_size * 2));
+    munmap(user_pages_start - g_page_size, (ZONE_USER_SIZE + g_page_size * 2));
 
     if(replace == true) {
-        _iso_new_zone(zone->chunk_size, true, zone->index);
+        const bool was_internal = zone->internal;
+        size_t size = zone->chunk_size;
+
+        /* A private zone can hold any size and is not on a lookup
+         * chain. Its replacement is an internal zone so it must
+         * hold a size class and be linked, otherwise nothing
+         * could ever find it and its slot would be wasted */
+        if(was_internal == false) {
+            size = size_class(size);
+        }
+
+        iso_alloc_zone_t *new_zone = _iso_new_zone(size, true, zone->index);
+
+        if(was_internal == false) {
+            new_zone->next_sz_index = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
+            _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = ZONE_CHAIN_LINK(new_zone->index);
+        }
     }
 }
 
@@ -336,6 +614,45 @@ INTERNAL_HIDDEN INLINE void clear_zone_cache(void) {
     __iso_memset(zc, 0x0, sizeof(iso_zone_cache_t));
 }
 
+/* Picks a random offset for the first chunk of a zone and sets
+ * chunk_count to the chunks that still fit. The bitmap covers
+ * the chunks of an offset of 0, the bits of any chunk past the
+ * new count are set to 11 so no scan can hand them out. The
+ * offset keeps every chunk aligned to the largest power of two
+ * that divides its size, which _iso_alloc_aligned relies on,
+ * and stays below a page so at most a page is given up. The
+ * caller holds the zone lock and the bitmap must be all zero */
+INTERNAL_HIDDEN void randomize_chunk_offset(iso_alloc_zone_t *zone, uint64_t *seed) {
+    const size_t chunk_size = zone->chunk_size;
+    const size_t lowbit = (chunk_size & (~chunk_size + 1));
+    const size_t unit = (lowbit > CHUNK_OFFSET_UNIT) ? lowbit : CHUNK_OFFSET_UNIT;
+    const size_t covered = ((size_t) zone->max_bitmap_idx << (BITS_PER_QWORD_SHIFT - BITS_PER_CHUNK_SHIFT));
+    size_t offset = 0;
+
+    if(unit < g_page_size) {
+        const size_t choices = (g_page_size / unit);
+        offset = ((us_rand_uint64(seed) % choices) * unit);
+    }
+
+    size_t count = ((ZONE_USER_SIZE - offset) / chunk_size);
+
+    if(count > covered) {
+        count = covered;
+    }
+
+    zone->chunk_offset = (uint16_t) offset;
+    zone->chunk_count = (uint32_t) count;
+
+    /* Chunks the bitmap covers but the zone no longer holds
+     * are marked as canaries, which nothing ever hands out */
+    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
+
+    for(size_t c = count; c < covered; c++) {
+        const bit_slot_t bit_slot = ((bit_slot_t) c << BITS_PER_CHUNK_SHIFT);
+        bm[bit_slot >> BITS_PER_QWORD_SHIFT] |= ((bitmap_index_t) 3 << WHICH_BIT(bit_slot));
+    }
+}
+
 /* Select a random number of chunks to be canaries. These
  * can be verified anytime by calling check_canary()
  * or check_canary_no_abort() */
@@ -350,9 +667,11 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
         return;
     }
 
-    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
 
-    const bitmap_index_t max_bitmap_idx = zone->max_bitmap_idx;
+    /* Only qwords whose first chunk exists, the tail past
+     * chunk_count is already marked, see randomize_chunk_offset */
+    const bitmap_index_t max_bitmap_idx = (zone->chunk_count >> (BITS_PER_QWORD_SHIFT - BITS_PER_CHUNK_SHIFT));
 
     /* Roughly %1 of the chunks in this zone will become a canary */
     const uint64_t canary_count = (zone->chunk_count >> CANARY_COUNT_DIV);
@@ -368,12 +687,16 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
      * will return the same index twice. We can live
      * with that collision as canary chunks only provide
      * a small probabilistic security guarantee */
+    /* The zone struct is packed so its seed is advanced in a
+     * local and written back, see fill_free_bit_slots */
+    uint64_t seed = zone->seed;
+
     for(uint64_t i = 0; i < canary_count; i++) {
         /* Any qword in the bitmap can hold a canary. Aligning
          * this index down to SZ_ALIGNMENT restricted canaries
          * to every 32nd qword which left most zones with only
          * a handful of possible canary positions */
-        const bitmap_index_t bm_idx = (us_rand_uint64(&_root->seed) % max_bitmap_idx);
+        const bitmap_index_t bm_idx = (us_rand_uint64(&seed) % max_bitmap_idx);
 
         /* We may have already chosen this index */
         if(GET_BIT(bm[bm_idx], 0)) {
@@ -388,6 +711,8 @@ INTERNAL_HIDDEN void create_canary_chunks(iso_alloc_zone_t *zone) {
         SET_BIT(bm[bm_idx], 0);
         SET_BIT(bm[bm_idx], 1);
     }
+
+    zone->seed = seed;
 #endif
 }
 
@@ -406,11 +731,10 @@ INTERNAL_HIDDEN INLINE bool canary_page_materialized(const iso_alloc_zone_t *zon
  * verifies the canaries of the chunks on either side of a chunk
  * being freed, so before a chunk can be handed out the canaries
  * of its qword and both neighbouring qwords must exist. Callers
- * pass one qword either side of the range they made allocatable.
- * The zone pointers must be unmasked */
+ * pass one qword either side of the range they made allocatable */
 INTERNAL_HIDDEN void materialize_canaries(iso_alloc_zone_t *zone, bitmap_index_t first_qword, bitmap_index_t last_qword) {
 #if !ENABLE_ASAN && !DISABLE_CANARY
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
     const size_t chunk_size = zone->chunk_size;
     const size_t chunk_count = zone->chunk_count;
 
@@ -434,8 +758,11 @@ INTERNAL_HIDDEN void materialize_canaries(iso_alloc_zone_t *zone, bitmap_index_t
         last_chunk = (chunk_count - 1);
     }
 
-    const size_t first_page = ((first_chunk * chunk_size) >> g_page_size_shift);
-    const size_t last_page = ((last_chunk * chunk_size) >> g_page_size_shift);
+    /* Pages are counted from the start of the user pages, the
+     * first chunk sits chunk_offset bytes in */
+    const size_t chunk_offset = zone->chunk_offset;
+    const size_t first_page = ((chunk_offset + (first_chunk * chunk_size)) >> g_page_size_shift);
+    const size_t last_page = ((chunk_offset + (last_chunk * chunk_size)) >> g_page_size_shift);
 
     for(size_t page = first_page; page <= last_page; page++) {
         uint64_t *word = &zone->canary_pages[page >> BITS_PER_QWORD_SHIFT];
@@ -450,8 +777,8 @@ INTERNAL_HIDDEN void materialize_canaries(iso_alloc_zone_t *zone, bitmap_index_t
         /* Chunks whose first qword lies on this page */
         const size_t page_start = (page << g_page_size_shift);
         const size_t page_end = (page_start + g_page_size);
-        size_t c = ((page_start + chunk_size - 1) / chunk_size);
-        size_t c_end = ((page_end + chunk_size - 1) / chunk_size);
+        size_t c = (page_start > chunk_offset) ? ((page_start - chunk_offset + chunk_size - 1) / chunk_size) : 0;
+        size_t c_end = (page_end > chunk_offset) ? ((page_end - chunk_offset + chunk_size - 1) / chunk_size) : 0;
 
         if(c_end > chunk_count) {
             c_end = chunk_count;
@@ -483,9 +810,7 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         return NULL;
     }
 
-    /* This is a good time to refresh the root rng seed
-     * because we will soon create memory tags, canary
-     * chunks, and other uses of us_rand_uint64 */
+    /* This is a good time to refresh the root rng seed */
     _root->seed = rand_uint64();
 
     /* Minimum chunk size */
@@ -504,8 +829,11 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         new_zone = &_root->zones[_root->zones_used];
     }
 
+    /* Everything but the lock is cleared. A replacement zone is
+     * being reinitialized by the thread that holds its lock and
+     * must stay locked throughout, see _iso_alloc_destroy_zone_unlocked */
     uint16_t next_sz_index = new_zone->next_sz_index;
-    __iso_memset(new_zone, 0x0, sizeof(iso_alloc_zone_t));
+    __iso_memset((uint8_t *) new_zone + ZONE_RESET_OFFSET, 0x0, sizeof(iso_alloc_zone_t) - ZONE_RESET_OFFSET);
 
     /* Restore next_sz_index */
     new_zone->next_sz_index = next_sz_index;
@@ -513,6 +841,14 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     new_zone->internal = internal;
     new_zone->is_full = false;
     new_zone->chunk_size = size;
+
+    /* 0 is a valid bit slot, the empty value is the sentinel */
+    new_zone->next_free_bit_slot = BAD_BIT_SLOT;
+
+    /* The zones own random stream. Everything random about
+     * this zone, its secrets, tags, canary positions and free
+     * list order, is drawn from it */
+    new_zone->seed = rand_uint64();
 
     new_zone->chunk_count = (ZONE_USER_SIZE / new_zone->chunk_size);
 
@@ -531,6 +867,17 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     uint32_t bitmap_size = (new_zone->chunk_count * BITS_PER_CHUNK) / BITS_PER_BYTE;
     new_zone->bitmap_size = (bitmap_size > sizeof(bitmap_index_t)) ? bitmap_size : sizeof(bitmap_index_t);
     new_zone->max_bitmap_idx = (new_zone->bitmap_size >> 3);
+
+    /* The bitmap is whole qwords of 32 chunks each. For chunk
+     * sizes that do not divide the zone evenly the division
+     * above truncates, so the last few chunks of the zone had
+     * no bits and could never be handed out, while the loops
+     * that walk chunk_count read one qword past the bitmap.
+     * Trim the count to what the bitmap covers so every chunk
+     * has its two bits and every bit has its chunk. The count
+     * drops a little more once the chunk offset is chosen */
+    new_zone->chunk_count = (new_zone->max_bitmap_idx << (BITS_PER_QWORD_SHIFT - BITS_PER_CHUNK_SHIFT));
+    new_zone->bitmap_size = (new_zone->max_bitmap_idx << 3);
 
     if(g_page_size >= new_zone->bitmap_size) {
         const int sbsi = (sizeof(small_bitmap_sizes) / sizeof(int)) - 1;
@@ -605,16 +952,29 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
     }
 #endif
     void *p = NULL;
+    int32_t prot = (PROT_READ | PROT_WRITE);
 
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
-        p = mmap_rw_mte_pages(total_size, false, name);
-    } else {
-        p = mmap_rw_pages(total_size, false, name);
+        prot |= PROT_MTE;
     }
-#else
-    p = mmap_rw_pages(total_size, false, name);
 #endif
+
+    /* The user pages must be aligned to their own size so the
+     * zone map can name this zone from any pointer into them */
+    size_t user_offset = g_page_size;
+
+#if MEMORY_TAGGING
+    if(new_zone->tagged == true) {
+        user_offset = (g_page_size + tag_mapping_size + g_page_size);
+    }
+#endif
+
+    p = mmap_zone_pages(total_size, user_offset, name, prot);
+
+    if(UNLIKELY(p == NULL)) {
+        LOG_AND_ABORT("Failed to map user pages for a new zone");
+    }
 
 #if(__ANDROID__ || KERNEL_VERSION_SEQ_5_17) && NAMED_MAPPINGS && MEMORY_TAGGING
     if(new_zone->tagged == false) {
@@ -634,9 +994,13 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         uint64_t tms = tag_mapping_size >> 3;
 
         /* Generate random tags */
+        uint64_t seed = new_zone->seed;
+
         for(uint64_t o = 0; o < tms; o++) {
-            _mtp[o] = us_rand_uint64(&_root->seed);
+            _mtp[o] = us_rand_uint64(&seed);
         }
+
+        new_zone->seed = seed;
     } else {
         new_zone->user_pages_start = (p + g_page_size);
     }
@@ -675,8 +1039,24 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
         new_zone->index = _root->zones_used;
     }
 
-    new_zone->canary_secret = us_rand_uint64(&_root->seed);
-    new_zone->pointer_mask = us_rand_uint64(&_root->seed);
+    if(UNLIKELY(((uintptr_t) new_zone->user_pages_start & (ZONE_USER_SIZE - 1)) != 0)) {
+        LOG_AND_ABORT("Zone[%d] user pages at 0x%p are not aligned to the zone size", new_zone->index, new_zone->user_pages_start);
+    }
+
+    iso_ptr_map_insert(&_root->zone_map, PTR_TO_ZONE_KEY(new_zone->user_pages_start), new_zone->index);
+
+    uint64_t seed = new_zone->seed;
+    new_zone->canary_secret = us_rand_uint64(&seed);
+    new_zone->pointer_mask = us_rand_uint64(&seed);
+    new_zone->seed = seed;
+
+    /* From here on the zone pointers are only ever read
+     * through UNMASK_USER_PTR and UNMASK_BITMAP_PTR */
+    MASK_ZONE_PTRS_ONCE(new_zone);
+
+    seed = new_zone->seed;
+    randomize_chunk_offset(new_zone, &seed);
+    new_zone->seed = seed;
 
     create_canary_chunks(new_zone);
 
@@ -693,32 +1073,21 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
 
     POISON_ZONE(new_zone);
 
-    _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(new_zone->user_pages_start)] = new_zone->index;
-
     /* The lookup table is never used for private zones.
      * Replacement zones (index >= 0) inherit their predecessors
      * place in the table and its next_sz_index chain which we
      * preserved above, so only brand new zones are inserted here.
-     * Note zone 0's table entry is indistinguishable from the
-     * empty sentinel value 0 so a replacement must not re-insert
-     * itself or it would orphan its preserved chain */
+     * Table entries and next_sz_index hold the zone index plus
+     * one so that 0 means empty, zone 0 used to be unreachable
+     * through the table because its index was the sentinel */
     if(LIKELY(internal == true) && index < 0) {
-        /* If no other zones of this size exist then set the
-         * index in the zone lookup table to its index */
-        if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
-            _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
-            new_zone->next_sz_index = 0;
-        } else {
-            /* Zones of this size already exist so we prepend this
-             * one to the start of the list ensuring it is checked
-             * first on the alloc path */
-            int32_t current_idx = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
-            _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = new_zone->index;
-            new_zone->next_sz_index = current_idx;
-        }
+        /* Prepend this zone to the chain for its size so it
+         * is checked first on the alloc path. An empty chain
+         * is a 0 entry, which is also what the new zone gets
+         * as its next pointer */
+        new_zone->next_sz_index = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
+        _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] = ZONE_CHAIN_LINK(new_zone->index);
     }
-
-    MASK_ZONE_PTRS(new_zone);
 
     /* We created a new zone, we did not replace a retired one */
     if(index < 0) {
@@ -742,49 +1111,53 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_new_zone(size_t size, bool internal, int3
  * user mapping. Theres no guarantee this function will
  * find any free slots. */
 INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
+    const bitmap_index_t max = zone->max_bitmap_idx;
 
-    /* This gives us an arbitrary spot in the bitmap to
-     * start searching but may mean we end up with a smaller
-     * cache. This may negatively affect performance but
-     * leads to a less predictable free list */
-    bitmap_index_t bm_idx = 0;
+    /* The free list order comes from the zones own wyrand
+     * stream. It used to reseed the shared root seed from the
+     * OS on every refill, a system call per 255 allocations
+     * that also wrote shared state. The stream is mixed with
+     * fresh OS entropy every FREE_LIST_RESEED_REFILLS refills
+     * so its state cannot be followed indefinitely */
+    zone->refills++;
+    uint64_t seed = zone->seed;
 
-    /* Refresh the random seed for wyrand. This only
-     * requires a single syscall to getrandom() */
-    _root->seed = rand_uint64();
+    if(UNLIKELY((zone->refills & (FREE_LIST_RESEED_REFILLS - 1)) == 0)) {
+        seed ^= rand_uint64();
+    }
 
-    /* The largest zone->max_bitmap_idx we will ever
-     * have is 8192 for SMALLEST_CHUNK_SZ. The
-     * smallest zone->max_bitmap_idx is 1 when chunk
-     * size is SMALL_SIZE_MAX because the bitmap_size
-     * is only 8 bytes. If our max bitmap index is
-     * small then it won't provide enough search
-     * space for a random list to be of value */
-    if(zone->max_bitmap_idx > MIN_BITMAP_IDX) {
-        bm_idx = ((uint32_t) us_rand_uint64(&_root->seed) & (zone->max_bitmap_idx - 1));
+    /* Start at a random qword so the free list is not biased
+     * towards the start of the zone, then walk the whole bitmap
+     * wrapping at the end. The walk used to stop at the end, so
+     * a start near it found few or no free chunks even in a
+     * zone full of them and every allocation then fell back to
+     * a scan of the bitmap. If our max bitmap index is small
+     * then it won't provide enough search space for a random
+     * list to be of value */
+    bitmap_index_t start = 0;
+
+    if(max > MIN_BITMAP_IDX) {
+        start = (bitmap_index_t) (us_rand_uint64(&seed) % (uint64_t) max);
     }
 
     bit_slot_cache_t *free_bit_slots = zone->free_bit_slots;
     __iso_memset(free_bit_slots, BAD_BIT_SLOT, sizeof(zone->free_bit_slots));
     zone->free_bit_slots_usable = 0;
-    free_bit_slot_t free_bit_slots_index;
-    const bitmap_index_t first_bm_idx = bm_idx;
+    free_bit_slot_t free_bit_slots_index = 0;
+    bitmap_index_t bm_idx = start;
+    bitmap_index_t visited = 0;
 
-    for(free_bit_slots_index = 0; free_bit_slots_index < ZONE_FREE_LIST_SZ; bm_idx++) {
-        /* Don't index outside of the bitmap or
-         * we will return inaccurate bit slots */
-        if(UNLIKELY(bm_idx >= zone->max_bitmap_idx)) {
-            break;
-        }
+    while(free_bit_slots_index < ZONE_FREE_LIST_SZ && visited < max) {
+        const bitmap_index_t next = ((bm_idx + 1 == max) ? 0 : (bm_idx + 1));
 
         /* Runs of fully used qwords are common in a busy zone.
          * Checking two at once with a single and skips them at
          * half the cost. A 64 bit and is as good as a vector
          * compare here, there is nothing for NEON to add */
-        if((bm_idx + 1) < zone->max_bitmap_idx &&
-           ((bm[bm_idx] & bm[bm_idx + 1] & USED_BIT_VECTOR) == USED_BIT_VECTOR)) {
-            bm_idx++;
+        if((visited + 1) < max && ((bm[bm_idx] & bm[next] & USED_BIT_VECTOR) == USED_BIT_VECTOR)) {
+            visited += 2;
+            bm_idx = ((next + 1 == max) ? 0 : (next + 1));
             continue;
         }
 
@@ -818,6 +1191,9 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
                 free_mask &= free_mask - 1; /* clear lowest set bit */
             }
         }
+
+        visited++;
+        bm_idx = next;
     }
 
 #if RANDOMIZE_FREELIST
@@ -832,7 +1208,7 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
 
         for(free_bit_slot_t i = free_bit_slots_index - 1; i > 0; i--) {
             if(draws_left == 0) {
-                r = us_rand_uint64(&_root->seed);
+                r = us_rand_uint64(&seed);
                 draws_left = (BITS_PER_QWORD / FREE_LIST_SHF);
             }
 
@@ -850,10 +1226,21 @@ INTERNAL_HIDDEN void fill_free_bit_slots(iso_alloc_zone_t *zone) {
 #endif
 
     zone->free_bit_slots_index = free_bit_slots_index;
+    zone->seed = seed;
 
     /* Every chunk in the qwords we just visited can now be
-     * handed out, so the canaries around them must exist */
-    materialize_canaries(zone, first_bm_idx - 1, bm_idx);
+     * handed out, so the canaries around them must exist. The
+     * visited range may wrap around the end of the bitmap, in
+     * which case it is two ranges. The bound one past the last
+     * visited qword covers the neighbour the free path checks */
+    const bitmap_index_t end = (start + visited);
+
+    if(end <= max) {
+        materialize_canaries(zone, start - 1, end);
+    } else {
+        materialize_canaries(zone, start - 1, max - 1);
+        materialize_canaries(zone, 0, end - max);
+    }
 }
 
 INTERNAL_HIDDEN INLINE void insert_free_bit_slot(iso_alloc_zone_t *zone, int64_t bit_slot) {
@@ -903,7 +1290,7 @@ INTERNAL_HIDDEN INLINE bit_slot_t get_next_free_bit_slot(iso_alloc_zone_t *zone)
 INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
 
 #if USE_NEON
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
     const bitmap_index_t max = (zone->max_bitmap_idx & ~(2 - 1));
 
     for(int i = 0; i < max; i += 2) {
@@ -917,7 +1304,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
         }
     }
 #elif __SIZEOF_INT128__
-    const __int128 *bm = (__int128 *) zone->bitmap_start;
+    const __int128 *bm = (__int128 *) UNMASK_BITMAP_PTR(zone);
     const size_t max = (zone->max_bitmap_idx >> 1);
     for(size_t i = 0; i < max; i++) {
         if(bm[i] == 0x0) {
@@ -925,7 +1312,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot(iso_alloc_zone_t *zone) {
         }
     }
 #else
-    const bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    const bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
     const bitmap_index_t max = zone->max_bitmap_idx;
 
     /* Iterate the entire bitmap a qword at a time */
@@ -947,7 +1334,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
     bitmap_index_t *bm;
 
 #if USE_NEON
-    bm = (bitmap_index_t *) zone->bitmap_start;
+    bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
     max = (zone->max_bitmap_idx & ~(2 - 1));
 
     for(bitmap_index_t i = 0; i < max; i += 2) {
@@ -972,7 +1359,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
         return BAD_BIT_SLOT;
     }
 #elif __SIZEOF_INT128__
-    const __int128 *ebm = (__int128 *) zone->bitmap_start;
+    const __int128 *ebm = (__int128 *) UNMASK_BITMAP_PTR(zone);
     max = (zone->max_bitmap_idx >> 1);
 
     for(size_t i = 0; i < max; i++) {
@@ -990,7 +1377,7 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
         }
     }
 #endif
-    bm = (bitmap_index_t *) zone->bitmap_start;
+    bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
 
     for(bitmap_index_t i = max; i < zone->max_bitmap_idx; i++) {
         uint64_t free_mask = ~(uint64_t) bm[i] & USED_BIT_VECTOR;
@@ -1002,6 +1389,9 @@ INTERNAL_HIDDEN bit_slot_t iso_scan_zone_free_slot_slow(iso_alloc_zone_t *zone) 
     return BAD_BIT_SLOT;
 }
 
+/* Returns zone with next_free_bit_slot primed if it can hand
+ * out a chunk of size, otherwise NULL. The caller holds the
+ * zone lock */
 INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone, size_t size) {
 #if CPU_PIN
     /* A negative value means this platform cannot report
@@ -1019,23 +1409,16 @@ INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone,
         return NULL;
     }
 
-#if STRONG_SIZE_ISOLATION
-    if(UNLIKELY(zone->internal == false && size != zone->chunk_size)) {
-        return NULL;
-    }
-#endif
-
-    /* This zone may fit this chunk but if the zone was
-     * created for chunks more than (N * larger) than the
-     * requested allocation size then we would be wasting
-     * a lot of memory by using it. We only do this for
-     * sizes larger than 1024 bytes. In other words we can
-     * live with some wasted space in zones that manage
-     * chunks smaller than ZONE_1024 */
-    if(size > ZONE_1024 && zone->chunk_size >= (size << WASTED_SZ_MULTIPLIER_SHIFT)) {
-        return NULL;
-    }
-    if(size <= ZONE_1024 && zone->chunk_size > ZONE_1024) {
+    /* Internal zones only ever serve their own size class, the
+     * caller passes the class. A zone used to be acceptable for
+     * any request up to 1024 bytes that fit, which let the thread
+     * cache put 32 byte requests into 1024 byte chunks. Private
+     * zones take anything that fits, the caller chose them */
+    if(zone->internal == true) {
+        if(zone->chunk_size != size) {
+            return NULL;
+        }
+    } else if(zone->chunk_size < size) {
         return NULL;
     }
 
@@ -1044,14 +1427,9 @@ INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone,
     }
 
     /* If the cache for this zone is empty we should
-     * refill it to make future allocations faster
-     * for all threads. Only the refill and the bitmap
-     * scans below read the zone pointers, so the common
-     * path of popping the free list leaves them masked */
+     * refill it to make future allocations faster */
     if(zone->free_bit_slots_usable >= zone->free_bit_slots_index) {
-        UNMASK_ZONE_PTRS(zone);
         fill_free_bit_slots(zone);
-        MASK_ZONE_PTRS(zone);
     }
 
     bit_slot_t bit_slot = get_next_free_bit_slot(zone);
@@ -1059,8 +1437,6 @@ INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone,
     if(LIKELY(bit_slot != BAD_BIT_SLOT)) {
         return zone;
     }
-
-    UNMASK_ZONE_PTRS(zone);
 
     /* Free list failed, use a fast search */
     bit_slot = iso_scan_zone_free_slot(zone);
@@ -1073,124 +1449,103 @@ INTERNAL_HIDDEN FLATTEN iso_alloc_zone_t *is_zone_usable(iso_alloc_zone_t *zone,
          * but mark this zone full so future allocations can
          * take a faster path */
         if(bit_slot == BAD_BIT_SLOT) {
-            MASK_ZONE_PTRS(zone);
             zone->is_full = true;
             return NULL;
         }
     }
 
     materialize_canaries(zone, (bit_slot >> BITS_PER_QWORD_SHIFT) - 1, (bit_slot >> BITS_PER_QWORD_SHIFT) + 1);
-    MASK_ZONE_PTRS(zone);
     zone->next_free_bit_slot = bit_slot;
     return zone;
 }
 
-/* Walks the lookup table chain for internal zones whose
- * chunk size is exactly size and returns the first usable
- * one, or NULL if none of them can hold another chunk */
-INTERNAL_HIDDEN iso_alloc_zone_t *find_exact_fit_zone(size_t size) {
-    int32_t i = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)];
-
-    if(i == 0) {
-        return NULL;
-    }
-
+/* Returns a zone that can hand out a chunk of size class cls
+ * with its lock held, creating one if it must. The caller holds
+ * the root lock. The chain for the class is walked with try
+ * locks: a zone another thread is busy in is skipped, and if
+ * only busy zones remain a new zone is created up to a cap per
+ * class so contending threads settle on zones of their own,
+ * after which their class table keeps them there */
+INTERNAL_HIDDEN iso_alloc_zone_t *acquire_zone_for_class(size_t cls) {
+    uint32_t link = _root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(cls)];
     const size_t zones_used = _root->zones_used;
+    iso_alloc_zone_t *busy = NULL;
+    uint32_t chain_length = 0;
 
-    for(; i < zones_used;) {
-        iso_alloc_zone_t *zone = &_root->zones[i];
+    while(link != 0) {
+        const uint32_t i = ZONE_CHAIN_INDEX(link);
 
-        if(zone->chunk_size != size) {
-            LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, size);
+        if(UNLIKELY(i >= zones_used)) {
+            LOG_AND_ABORT("Zone lookup chain for chunk size %d points at zone %d but only %d zones exist", cls, i, zones_used);
         }
 
-        if(zone->internal == false) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+
+        if(UNLIKELY(zone->chunk_size != cls)) {
+            LOG_AND_ABORT("Zone lookup table failed to match sizes for zone[%d](%d) for chunk size (%d)", zone->index, zone->chunk_size, cls);
+        }
+
+        if(UNLIKELY(zone->internal == false)) {
             LOG_AND_ABORT("Lookup table should never contain private zones");
         }
 
-        if(is_zone_usable(zone, size) != NULL) {
-            return zone;
+        chain_length++;
+
+        /* is_full is read without the lock as a hint, the zone
+         * is checked again once it is held */
+        if(zone->is_full == false) {
+            if(TRYLOCK_ZONE(zone)) {
+                if(is_zone_usable(zone, cls) != NULL) {
+                    return zone;
+                }
+
+                UNLOCK_ZONE(zone);
+            } else if(busy == NULL) {
+                busy = zone;
+            }
         }
 
-        if(zone->next_sz_index != 0) {
-            i = zone->next_sz_index;
-        } else {
-            /* We have reached the end of our linked zones */
-            break;
-        }
+        link = zone->next_sz_index;
     }
 
-    return NULL;
+    /* Every zone with room is in use by another thread. Wait
+     * for one if this class already has as many zones as the
+     * cap allows or no more zones can be created */
+    if(busy != NULL && (chain_length >= _root->zones_per_class_cap || zones_used >= MAX_ZONES)) {
+        LOCK_ZONE(busy);
+
+        if(is_zone_usable(busy, cls) != NULL) {
+            return busy;
+        }
+
+        /* It filled up while we waited */
+        UNLOCK_ZONE(busy);
+    }
+
+    iso_alloc_zone_t *zone = _iso_new_zone(cls, true, -1);
+
+    if(UNLIKELY(zone == NULL)) {
+        LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", cls);
+    }
+
+    /* Nothing else can reach a zone created under the root lock
+     * yet, so this never spins */
+    LOCK_ZONE(zone);
+
+    /* This is a brand new zone, so the fast path
+     * should always work. Abort if it doesn't */
+    if(UNLIKELY(zone->next_free_bit_slot == BAD_BIT_SLOT)) {
+        LOG_AND_ABORT("Allocated a new zone with no free bit slots");
+    }
+
+    return zone;
 }
 
-/* Finds a zone that can fit this allocation request */
-INTERNAL_HIDDEN iso_alloc_zone_t *find_suitable_zone(size_t size) {
-    iso_alloc_zone_t *zone = NULL;
-    int32_t i = 0;
-
-    size_t orig_size = size;
-    const size_t zones_used = _root->zones_used;
-
-#if !STRONG_SIZE_ISOLATION
-    /* If we are dealing with small zones then
-     * find the first zone in the lookup table that
-     * could possibly allocate this chunk. We only
-     * do this for sizes up to 1024 because we don't
-     * want 1) to waste memory and 2) weaken our
-     * isolation primitives */
-    while(size <= ZONE_1024) {
-        if(_root->zone_lookup_table[SZ_TO_ZONE_LOOKUP_IDX(size)] == 0) {
-            /* Step to the next size class. Adding the aligned
-             * size to itself grew the step geometrically and
-             * skipped over classes that already had a zone */
-            size = ALIGN_SZ_UP(size + 1);
-        } else {
-            break;
-        }
-    }
-#endif
-
-    /* Fast path via lookup table. If this fails to find a
-     * usable zone we fall through and iterate through all
-     * zones, including ones we may have skipped over, to
-     * find a suitable candidate instead of creating a new one */
-    zone = find_exact_fit_zone(size);
-
-    if(zone != NULL) {
-        return zone;
-    }
-
-#if SMALL_MEM_STARTUP
-    /* A simple optimization to find which default zone
-     * should fit this allocation. If we fail then a
-     * slower iterative approach is used. The longer a
-     * program runs the more likely we will fail this
-     * fast path as default zones may fill up */
-    if(orig_size >= ZONE_512 && orig_size <= MAX_DEFAULT_ZONE_SZ) {
-        i = DEFAULT_ZONE_COUNT >> 1;
-    } else if(orig_size > MAX_DEFAULT_ZONE_SZ) {
-        i = DEFAULT_ZONE_COUNT;
-    }
-#else
-    i = 0;
-#endif
-
-    for(; i < zones_used; i++) {
-        zone = &_root->zones[i];
-
-        if(zone->chunk_size < orig_size || zone->internal == false) {
-            continue;
-        }
-
-        if(is_zone_usable(zone, orig_size) != NULL) {
-            return zone;
-        }
-    }
-
-    return NULL;
-}
-
-INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone) {
+/* Hands out the chunk at bitslot. The caller holds the zone
+ * lock. fresh, if given, is set when the chunk had never been
+ * handed out since the zone was created or reset, which means
+ * its memory is still the zeroes the kernel mapped it with */
+INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slot_t bitslot, iso_alloc_zone_t *zone, bool *fresh) {
     const bitmap_index_t dwords_to_bit_slot = (bitslot >> BITS_PER_QWORD_SHIFT);
     const int64_t which_bit = WHICH_BIT(bitslot);
 
@@ -1199,8 +1554,13 @@ INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slo
      * never writes the real addresses back into the zone */
     void *user_pages_start = UNMASK_USER_PTR(zone);
     bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
-    void *p = user_pages_start + ((bitslot >> 1) * zone->chunk_size);
+    const size_t chunk_number = (bitslot >> 1);
+    void *p = user_pages_start + zone->chunk_offset + (chunk_number * zone->chunk_size);
     UNPOISON_ZONE_CHUNK(zone, p);
+
+    if(UNLIKELY(chunk_number >= zone->chunk_count)) {
+        LOG_AND_ABORT("Bit slot %lu names chunk %lu of zone[%d] which holds %d chunks", bitslot, chunk_number, zone->index, zone->chunk_count);
+    }
 
     /* Read out 64 bits from the bitmap. We will write
      * them back before we return. This reduces the
@@ -1230,6 +1590,13 @@ INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slo
     }
 #endif
 
+    /* Both bits clear is a chunk nothing has ever written to.
+     * Canaries are only written to canary chunks and a freed
+     * chunk always has its second bit set */
+    if(fresh != NULL) {
+        *fresh = (((b >> which_bit) & 3) == 0);
+    }
+
     zone->af_count++;
     zone->alloc_count++;
 
@@ -1247,32 +1614,18 @@ INTERNAL_HIDDEN INLINE ASSUME_ALIGNED void *_iso_alloc_bitslot_from_zone(bit_slo
 
 /* Does not require the root is locked */
 INTERNAL_HIDDEN INLINE void populate_zone_cache(iso_alloc_zone_t *zone) {
-    iso_zone_cache_t *zc = THREAD_ZONE_CACHE();
-    const size_t count = zc->count;
-
-    /* Don't cache this zone if it was recently cached */
-    if(count != 0 && zc->entries[(zc->head + count - 1) & (ZONE_CACHE_SZ - 1)].zone == zone) {
-        return;
-    }
-
     if(UNLIKELY(zone->internal == false)) {
         return;
     }
 
-    size_t slot;
+    /* Only a zone whose chunk size is a class belongs in the
+     * class table, every internal zone is created that way */
+    const size_t cls = zone->chunk_size;
+    const size_t idx = size_class_index(cls);
 
-    if(count < ZONE_CACHE_SZ) {
-        slot = (zc->head + count) & (ZONE_CACHE_SZ - 1);
-        zc->count = count + 1;
-    } else {
-        /* The ring is full. Overwrite the oldest entry and
-         * advance head so the next oldest takes its place */
-        slot = zc->head;
-        zc->head = (slot + 1) & (ZONE_CACHE_SZ - 1);
+    if(LIKELY(idx != SIZE_CLASS_NONE && size_class(cls) == cls)) {
+        THREAD_ZONE_CACHE()->by_class[idx] = zone;
     }
-
-    zc->entries[slot].zone = zone;
-    zc->entries[slot].chunk_size = zone->chunk_size;
 }
 
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
@@ -1289,7 +1642,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
         return NULL;
     }
 
-    void *p = _iso_alloc(NULL, res);
+    bool fresh = false;
+    void *p = _iso_alloc_core(NULL, res, &fresh);
 
     if(UNLIKELY(p == NULL)) {
         return NULL;
@@ -1303,13 +1657,60 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_calloc(size_t nmemb, size_t size) {
     }
 #endif
 
-    __iso_memset(p, 0x0, res);
+    /* A chunk that was never handed out, or a big zone that was
+     * just mapped, is still zero from the kernel. Only memory
+     * that has been used before needs clearing. The bitmap
+     * records which is which so this costs no extra state */
+    if(fresh == false) {
+        __iso_memset(p, 0x0, res);
+    }
+
     return p;
 }
 
+/* The lazy initialization path for a build without the
+ * constructor, or for a caller that beats it. Out of line
+ * and cold so _iso_alloc only carries the NULL test */
+static __attribute__((cold, noinline)) void initialize_root_slow(iso_alloc_zone_t *zone) {
+    LOCK_ROOT();
+
+    if(_root == NULL) {
+#if AUTO_CTOR_DTOR
+        if(UNLIKELY(zone != NULL)) {
+            LOG_AND_ABORT("_root was NULL but zone %p was not", zone);
+        }
+
+        g_page_size = sysconf(_SC_PAGESIZE);
+        g_page_size_shift = _log2(g_page_size);
+        iso_alloc_initialize_global_root();
+#else
+        LOG_AND_ABORT("Root never initialized!");
+#endif
+    }
+
+    UNLOCK_ROOT();
+}
+
 INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t size) {
+    return _iso_alloc_core(zone, size, NULL);
+}
+
+/* The allocation path. fresh, if given, is set when the memory
+ * returned is known to be zero already, see _iso_calloc */
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_core(iso_alloc_zone_t *zone, size_t size, bool *fresh) {
+    if(fresh != NULL) {
+        *fresh = false;
+    }
+
+    /* The thread state is read before the lock and needs the
+     * root, so the root is created first on the rare path
+     * where the constructor has not run */
+    if(UNLIKELY(_root == NULL)) {
+        initialize_root_slow(zone);
+    }
+
 #if NO_ZERO_ALLOCATIONS
-    if(UNLIKELY(size == 0 && _root != NULL)) {
+    if(UNLIKELY(size == 0)) {
         return _root->zero_alloc_page;
     }
 #endif
@@ -1324,142 +1725,100 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
         LOG_AND_ABORT("Private zone %d cannot hold chunks of size %d, only %d", zone->index, size, zone->chunk_size);
     }
 
-    /* Pre-lock hot path: scan the thread-local zone cache using only
-     * thread-local data (chunk_size comparison and pointer read). No
-     * zone struct fields are dereferenced here. Validation happens
-     * under the lock via is_zone_usable(). */
+    /* The request maps to one size class and the thread cache
+     * remembers the last zone used for it. Only thread local
+     * data is read here, the zone is validated under its lock
+     * by is_zone_usable */
     iso_alloc_zone_t *cached_zone = NULL;
+    size_t cls = size;
 
     if(LIKELY(zone == NULL && size <= SMALL_SIZE_MAX)) {
-        const iso_zone_cache_t *zc = THREAD_ZONE_CACHE();
-        const size_t head = zc->head;
+        cls = size_class(size);
+        const size_t idx = size_class_index(cls);
 
-        /* Most recently used zone first */
-        for(size_t i = zc->count; i-- > 0;) {
-            const _tzc *e = &zc->entries[(head + i) & (ZONE_CACHE_SZ - 1)];
-
-            if(e->chunk_size >= size) {
-                cached_zone = e->zone;
-                break;
-            }
+        if(LIKELY(idx != SIZE_CLASS_NONE)) {
+            cached_zone = THREAD_ZONE_CACHE()->by_class[idx];
         }
     }
 
-    LOCK_ROOT();
-
-    if(UNLIKELY(_root == NULL)) {
-#if AUTO_CTOR_DTOR
-        if(UNLIKELY(zone != NULL)) {
-            LOG_AND_ABORT("_root was NULL but zone %p was not", zone);
-        }
-
-        g_page_size = sysconf(_SC_PAGESIZE);
-        g_page_size_shift = _log2(g_page_size);
-        iso_alloc_initialize_global_root();
-
-#if NO_ZERO_ALLOCATIONS
-        /* In the unlikely event size is 0 but we hadn't
-         * initialized the root yet return the zero page */
-        if(UNLIKELY(size == 0)) {
-            UNLOCK_ROOT();
-            return _root->zero_alloc_page;
-        }
-#endif
-#else
-        LOG_AND_ABORT("Root never initialized!");
-#endif
-    }
-
+    /* Allocation requests of SMALL_SIZE_MAX bytes or larger are
+     * handled by the 'big allocation' path. */
+    if(LIKELY(size <= SMALL_SIZE_MAX)) {
 #if ALLOC_SANITY
-    /* We only sample if a zone was not directly passed */
-    if(zone == NULL) {
-        if(size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+        /* We only sample if a zone was not directly passed */
+        if(zone == NULL && size < g_page_size && _sane_sampled < MAX_SANE_SAMPLES) {
+            LOCK_ROOT();
+
             /* If we chose to sample this allocation then
              * _iso_alloc_sample will call UNLOCK_ROOT() */
             void *ps = _iso_alloc_sample(size);
 
             if(ps != NULL) {
+                /* The sampled page carries a canary pattern */
                 return ps;
             }
+
+            UNLOCK_ROOT();
         }
-    }
 #endif
 
 #if HEAP_PROFILER
-    _iso_alloc_profile(size);
+        LOCK_ROOT();
+        _iso_alloc_profile(size);
+        UNLOCK_ROOT();
 #endif
 
-    /* Allocation requests of SMALL_SIZE_MAX bytes or larger are
-     * handled by the 'big allocation' path. */
-    if(LIKELY(size <= SMALL_SIZE_MAX)) {
 #if FUZZ_MODE
+        LOCK_ROOT();
         _verify_all_zones();
+        UNLOCK_ROOT();
 #endif
+
         if(LIKELY(zone == NULL)) {
-            /* Hot Path: Validate the zone candidate selected pre-lock.
-             * The size comparison already happened outside the critical
-             * section; only the shared zone struct access (is_zone_usable)
-             * needs to be under the lock. */
-            if(cached_zone != NULL && is_zone_usable(cached_zone, size) != NULL) {
-                zone = cached_zone;
-            }
-        }
-
-        bit_slot_t free_bit_slot = BAD_BIT_SLOT;
-
-        /* Slow Path: This will iterate through all zones
-         * looking for a suitable one, this includes the
-         * zones we cached above */
-        if(zone == NULL) {
-            zone = find_suitable_zone(size);
-        }
-
-        if(LIKELY(zone != NULL)) {
-            /* We only need to check if the zone is usable
-             * if it's a private zone. If we chose this zone
-             * then its guaranteed to already be usable */
-            if(zone->internal == false) {
-                zone = is_zone_usable(zone, size);
-
-                if(zone == NULL) {
-                    UNLOCK_ROOT();
-#if ABORT_ON_NULL
-                    LOG_AND_ABORT("isoalloc configured to abort on NULL");
-#endif
-                    return NULL;
+            /* Hot Path: the zone this thread last used for the class.
+             * Only its own lock is taken. If another thread holds it
+             * or it is full we go through the root lock to find or
+             * create another zone, and it becomes the cached one */
+            if(cached_zone != NULL && TRYLOCK_ZONE(cached_zone)) {
+                if(is_zone_usable(cached_zone, cls) != NULL) {
+                    zone = cached_zone;
+                } else {
+                    UNLOCK_ZONE(cached_zone);
                 }
             }
 
-            free_bit_slot = zone->next_free_bit_slot;
-
-            if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
+            if(zone == NULL) {
+                LOCK_ROOT();
+                zone = acquire_zone_for_class(cls);
                 UNLOCK_ROOT();
+            }
+        } else {
+            /* A private zone chosen by the caller. It is never
+             * cached and must be checked for room */
+            LOCK_ZONE(zone);
+
+            if(is_zone_usable(zone, size) == NULL) {
+                UNLOCK_ZONE(zone);
 #if ABORT_ON_NULL
                 LOG_AND_ABORT("isoalloc configured to abort on NULL");
 #endif
                 return NULL;
             }
-        } else {
-            /* Extra Slow Path: We need a new zone in order
-             * to satisfy this allocation request */
-            zone = _iso_new_zone(size, true, -1);
+        }
 
-            if(UNLIKELY(zone == NULL)) {
-                LOG_AND_ABORT("Failed to create a zone for allocation of %zu bytes", size);
-            }
+        const bit_slot_t free_bit_slot = zone->next_free_bit_slot;
 
-            /* This is a brand new zone, so the fast path
-             * should always work. Abort if it doesn't */
-            free_bit_slot = zone->next_free_bit_slot;
-
-            if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
-                LOG_AND_ABORT("Allocated a new zone with no free bit slots");
-            }
+        if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
+            UNLOCK_ZONE(zone);
+#if ABORT_ON_NULL
+            LOG_AND_ABORT("isoalloc configured to abort on NULL");
+#endif
+            return NULL;
         }
 
         zone->next_free_bit_slot = BAD_BIT_SLOT;
-        void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
-        UNLOCK_ROOT();
+        void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone, fresh);
+        UNLOCK_ZONE(zone);
         populate_zone_cache(zone);
 
 #if ARM_MTE
@@ -1469,15 +1828,17 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc(iso_alloc_zone_t *zone, size_t s
 #endif
         return p;
     } else {
-        /* It's safe to unlock the root at this point because
-         * the big zone allocation path uses a different lock */
-        UNLOCK_ROOT();
-
         if(UNLIKELY(zone != NULL)) {
             LOG_AND_ABORT("Allocation size of %d is > %d and cannot use a private zone (%d)", size, SMALL_SIZE_MAX, zone->chunk_size);
         }
 
-        return _iso_big_alloc(size, g_page_size);
+#if HEAP_PROFILER
+        LOCK_ROOT();
+        _iso_alloc_profile(size);
+        UNLOCK_ROOT();
+#endif
+
+        return _iso_big_alloc(size, g_page_size, fresh);
     }
 }
 
@@ -1510,46 +1871,34 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alig
         return NULL;
     }
 
-    LOCK_ROOT();
-
     if(UNLIKELY(_root == NULL)) {
-#if AUTO_CTOR_DTOR
-        g_page_size = sysconf(_SC_PAGESIZE);
-        g_page_size_shift = _log2(g_page_size);
-        iso_alloc_initialize_global_root();
-#else
-        LOG_AND_ABORT("Root never initialized!");
-#endif
+        initialize_root_slow(NULL);
     }
 
 #if HEAP_PROFILER
+    LOCK_ROOT();
     _iso_alloc_profile(s);
+    UNLOCK_ROOT();
 #endif
 
     if(alignment > g_page_size || s > SMALL_SIZE_MAX) {
-        /* The big zone path uses a different lock */
-        UNLOCK_ROOT();
-
         /* Big zones must be at least SMALL_SIZE_MAX bytes. That
          * is a power of 2 so rounding up to it keeps the size a
          * multiple of any smaller alignment */
-        return _iso_big_alloc((s < SMALL_SIZE_MAX) ? SMALL_SIZE_MAX : s, alignment);
+        return _iso_big_alloc((s < SMALL_SIZE_MAX) ? SMALL_SIZE_MAX : s, alignment, NULL);
     }
 
-    iso_alloc_zone_t *zone = find_exact_fit_zone(s);
+    /* s is a multiple of a power of two alignment no larger
+     * than a page, which is always a size class, so aligned
+     * requests share zones with plain ones of that class */
+    LOCK_ROOT();
+    iso_alloc_zone_t *zone = acquire_zone_for_class(s);
+    UNLOCK_ROOT();
 
-    if(zone == NULL) {
-        zone = _iso_new_zone(s, true, -1);
-
-        if(UNLIKELY(zone == NULL)) {
-            LOG_AND_ABORT("Failed to create a zone for aligned allocation of %zu bytes", s);
-        }
-    }
-
-    bit_slot_t free_bit_slot = zone->next_free_bit_slot;
+    const bit_slot_t free_bit_slot = zone->next_free_bit_slot;
 
     if(UNLIKELY(free_bit_slot == BAD_BIT_SLOT)) {
-        UNLOCK_ROOT();
+        UNLOCK_ZONE(zone);
 #if ABORT_ON_NULL
         LOG_AND_ABORT("isoalloc configured to abort on NULL");
 #endif
@@ -1557,8 +1906,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alig
     }
 
     zone->next_free_bit_slot = BAD_BIT_SLOT;
-    void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone);
-    UNLOCK_ROOT();
+    void *p = _iso_alloc_bitslot_from_zone(free_bit_slot, zone, NULL);
+    UNLOCK_ZONE(zone);
     populate_zone_cache(zone);
 
 #if ARM_MTE
@@ -1569,52 +1918,15 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_alloc_aligned(size_t size, size_t alig
     return p;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *search_chunk_lookup_table(const void *restrict p) {
-    /* The chunk lookup table is the fastest way to find a
-     * zone given a pointer to a chunk so we check it first */
-    uint16_t zone_index = _root->chunk_lookup_table[ADDR_TO_CHUNK_TABLE(p)];
-
-    if(UNLIKELY(zone_index > _root->zones_used)) {
-        LOG_AND_ABORT("Pointer to zone lookup table corrupted at position %zu", ADDR_TO_CHUNK_TABLE(p));
-    }
-
-    /* Its possible that zone_index is 0 and this is
-     * actually a cache miss. In this case we return
-     * the first zone and let the caller figure it out */
-    return &_root->zones[zone_index];
-}
-
-/* iso_find_zone_bitmap_range and iso_find_zone_range are
- * logically identical functions that both return a zone
- * for a pointer. The only difference is where the pointer
- * addresses, a bitmap or user pages */
+/* Returns the zone that holds the bitmap p points into, or
+ * NULL. Only used by the experimental stack search so it
+ * simply walks every zone */
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restrict p) {
-    iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
-
-    void *bitmap_start = UNMASK_BITMAP_PTR(zone);
-
-    if(LIKELY(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p)) {
-        return zone;
-    }
-
-    /* Now we check the MRU thread zone cache */
-    const iso_zone_cache_t *zc = THREAD_ZONE_CACHE();
-
-    for(size_t i = zc->count; i-- > 0;) {
-        zone = zc->entries[(zc->head + i) & (ZONE_CACHE_SZ - 1)].zone;
-        bitmap_start = UNMASK_BITMAP_PTR(zone);
-
-        if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
-            return zone;
-        }
-    }
-
     const size_t zones_used = _root->zones_used;
 
-    /* Now we check all zones, this is the slowest path */
-    for(int64_t i = 0; i < zones_used; i++) {
-        zone = &_root->zones[i];
-        bitmap_start = UNMASK_BITMAP_PTR(zone);
+    for(size_t i = 0; i < zones_used; i++) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+        const void *bitmap_start = UNMASK_BITMAP_PTR(zone);
 
         if(bitmap_start <= p && (bitmap_start + zone->bitmap_size) > p) {
             return zone;
@@ -1624,46 +1936,38 @@ INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_bitmap_range(const void *restric
     return NULL;
 }
 
+/* Returns the zone whose user pages hold p, or NULL if no zone
+ * does. One probe of the zone map answers it: user pages are
+ * aligned to ZONE_USER_SIZE so the window p lies in is the key
+ * of exactly one zone. The lookup takes no lock, see
+ * iso_ptr_map_find. This used to hash the pointer into a table
+ * without a key check and fall back to a scan of every zone,
+ * which half of all pointers took because a zone straddled
+ * two windows and only one was in the table */
 INTERNAL_HIDDEN iso_alloc_zone_t *iso_find_zone_range(void *restrict p) {
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
         p = iso_mte_untag_ptr(p);
     }
 #endif
-    iso_alloc_zone_t *zone = search_chunk_lookup_table(p);
-    void *user_pages_start = UNMASK_USER_PTR(zone);
+    uint64_t index = 0;
 
-    /* The chunk_lookup_table has a high hit rate. Most
-     * calls to this function will return here. */
+    if(iso_ptr_map_find(&_root->zone_map, PTR_TO_ZONE_KEY(p), &index) == false) {
+        return NULL;
+    }
+
+    if(UNLIKELY(index >= _root->zones_used)) {
+        LOG_AND_ABORT("Zone map entry for 0x%p names zone %lu but only %d zones exist", p, index, _root->zones_used);
+    }
+
+    iso_alloc_zone_t *zone = &_root->zones[index];
+    const void *user_pages_start = UNMASK_USER_PTR(zone);
+
     if(LIKELY(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p)) {
         return zone;
     }
 
-    /* Now we check the MRU thread zone cache */
-    const iso_zone_cache_t *zc = THREAD_ZONE_CACHE();
-
-    for(size_t i = zc->count; i-- > 0;) {
-        zone = zc->entries[(zc->head + i) & (ZONE_CACHE_SZ - 1)].zone;
-        user_pages_start = UNMASK_USER_PTR(zone);
-
-        if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
-            return zone;
-        }
-    }
-
-    const size_t zones_used = _root->zones_used;
-
-    /* Now we check all zones, this is the slowest path */
-    for(int64_t i = 0; i < zones_used; i++) {
-        zone = &_root->zones[i];
-        user_pages_start = UNMASK_USER_PTR(zone);
-
-        if(user_pages_start <= p && (user_pages_start + ZONE_USER_SIZE) > p) {
-            return zone;
-        }
-    }
-
-    return NULL;
+    LOG_AND_ABORT("Zone map entry for 0x%p names zone[%d] whose user pages start at 0x%p", p, zone->index, user_pages_start);
 }
 
 /* Checking canaries under ASAN mode is not trivial. ASAN
@@ -1755,17 +2059,23 @@ INTERNAL_HIDDEN INLINE void check_canary(iso_alloc_zone_t *zone, const void *p) 
 
 INTERNAL_HIDDEN void iso_free_chunk_from_zone(iso_alloc_zone_t *zone, void *restrict p, bool permanent) {
 #if ARM_MTE
-    const uint64_t chunk_offset = (uint64_t) ((iso_mte_untag_ptr(p)) - UNMASK_USER_PTR(zone));
+    const uint64_t chunk_offset = (uint64_t) ((iso_mte_untag_ptr(p)) - UNMASK_USER_PTR(zone)) - zone->chunk_offset;
 #else
-    const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone));
+    const uint64_t chunk_offset = (uint64_t) (p - UNMASK_USER_PTR(zone)) - zone->chunk_offset;
 #endif
     const size_t chunk_size = zone->chunk_size;
     /* chunk_offset / chunk_size without a divide. The callers
      * verified p lies within the zones user pages so the offset
-     * is below ZONE_USER_SIZE and the reciprocal is exact */
+     * is below ZONE_USER_SIZE and the reciprocal is exact. A p
+     * below the first chunk wraps to a huge offset and fails the
+     * chunk count check */
     const size_t chunk_number = ((chunk_offset * zone->chunk_div_magic) >> zone->chunk_div_shift);
     const bit_slot_t bit_slot = (chunk_number << BITS_PER_CHUNK_SHIFT);
     const bit_slot_t dwords_to_bit_slot = (bit_slot >> BITS_PER_QWORD_SHIFT);
+
+    if(UNLIKELY(chunk_offset >= ZONE_USER_SIZE || chunk_number >= zone->chunk_count)) {
+        LOG_AND_ABORT("Chunk 0x%p is not one of the %d chunks of zone[%d]", p, zone->chunk_count, zone->index);
+    }
 
     /* Ensure the pointer is a multiple of chunk size. */
     if(UNLIKELY((chunk_number * chunk_size) != chunk_offset)) {
@@ -1878,9 +2188,7 @@ INTERNAL_HIDDEN void _iso_free_from_zone(void *p, iso_alloc_zone_t *zone, bool p
         LOG_AND_ABORT("Chunk at 0x%p does not belong to zone[%d] for chunk size %d", p, zone->index, zone->chunk_size);
     }
 
-    LOCK_ROOT();
-    _iso_free_internal_unlocked(p, permanent, zone);
-    UNLOCK_ROOT();
+    _iso_free_internal_unlocked(p, permanent, zone, false);
 }
 
 INTERNAL_HIDDEN void flush_caches(void) {
@@ -1890,20 +2198,19 @@ INTERNAL_HIDDEN void flush_caches(void) {
 
     iso_quarantine_t *q = THREAD_QUARANTINE();
 
-    LOCK_ROOT();
     LOCK_QUARANTINE(q);
-    flush_quarantine(q);
+    flush_quarantine(q, false);
     UNLOCK_QUARANTINE(q);
-    UNLOCK_ROOT();
 }
 
-/* Frees every chunk in the quarantine. The caller holds
- * the root lock and the quarantine */
-INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q) {
+/* Frees every chunk in the quarantine. The caller holds the
+ * quarantine lock and says whether it holds the root lock,
+ * which the free path must then not take again */
+INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q, bool root_held) {
     const uint32_t count = q->count;
 
     for(uint32_t i = 0; i < count; i++) {
-        _iso_free_internal_unlocked((void *) q->chunks[i], false, NULL);
+        _iso_free_internal_unlocked((void *) q->chunks[i], false, NULL, root_held);
     }
 
     __iso_memset(q->chunks, 0x0, sizeof(q->chunks));
@@ -1916,13 +2223,17 @@ INTERNAL_HIDDEN void flush_quarantine(iso_quarantine_t *q) {
  * threads quarantine and look like a foreign pointer */
 INTERNAL_HIDDEN void flush_all_quarantines(void) {
 #if THREAD_SUPPORT
+    LOCK_THREAD_REGISTRY();
+
     for(iso_quarantine_t *q = _root->quarantines; q != NULL; q = q->next) {
         LOCK_QUARANTINE(q);
-        flush_quarantine(q);
+        flush_quarantine(q, true);
         UNLOCK_QUARANTINE(q);
     }
+
+    UNLOCK_THREAD_REGISTRY();
 #else
-    flush_quarantine(_root->chunk_quarantine);
+    flush_quarantine(THREAD_QUARANTINE(), true);
 #endif
 }
 
@@ -1978,21 +2289,18 @@ INTERNAL_HIDDEN void _iso_free(void *p, bool permanent) {
 
     iso_quarantine_t *q = THREAD_QUARANTINE();
 
-#if THREAD_SUPPORT
-    if(UNLIKELY(q->registered == false)) {
-        register_thread_quarantine(q);
-    }
-#endif
-
     /* Only this thread ever grows the count and only a
      * flush shrinks it, so a full reading here is reliable
      * and a not full reading stays true until we push */
     if(UNLIKELY(q->count >= CHUNK_QUARANTINE_SZ)) {
-        LOCK_ROOT();
         LOCK_QUARANTINE(q);
-        flush_quarantine(q);
+        flush_quarantine(q, false);
         UNLOCK_QUARANTINE(q);
-        UNLOCK_ROOT();
+
+#if ZONE_PURGE_DELAY_MS > 0
+        /* Once per flush is often enough to check the clock */
+        maybe_purge_idle_zones();
+#endif
     }
 
     LOCK_QUARANTINE(q);
@@ -2043,34 +2351,27 @@ INTERNAL_HIDDEN void _iso_free_size(void *p, size_t size) {
         return;
     }
 
-    LOCK_ROOT();
-
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
 #if ABORT_ON_UNOWNED_PTR
         LOG_AND_ABORT("Could not find zone for 0x%p", p);
 #else
-        UNLOCK_ROOT();
         return;
 #endif
     }
 
-    /* We can't check for an exact size match because
-     * its possible we chose a larger zone to hold this
-     * chunk when we allocated it */
+    /* The chunk is at least as large as the request it
+     * served, its class may be larger */
     if(UNLIKELY(zone->chunk_size < size)) {
         LOG_AND_ABORT("Invalid size (expected %d, got %d) for chunk 0x%p", zone->chunk_size, size, p);
     }
 
-    _iso_free_internal_unlocked(p, false, zone);
-    UNLOCK_ROOT();
+    _iso_free_internal_unlocked(p, false, zone, false);
 }
 
 INTERNAL_HIDDEN void _iso_free_internal(void *p, bool permanent) {
-    LOCK_ROOT();
-    iso_alloc_zone_t *zone = _iso_free_internal_unlocked(p, permanent, NULL);
-    UNLOCK_ROOT();
+    iso_alloc_zone_t *zone = _iso_free_internal_unlocked(p, permanent, NULL, false);
 
     if(zone != NULL) {
         populate_zone_cache(zone);
@@ -2091,9 +2392,20 @@ INTERNAL_HIDDEN bool _is_zone_retired(iso_alloc_zone_t *zone) {
     return false;
 }
 
-INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone) {
+/* Frees p. zone is the zone that holds p if the caller knows
+ * it, otherwise it is looked up. root_held says whether the
+ * caller holds the root lock, which is only needed to retire a
+ * zone or run the pointer search and is taken here if not. The
+ * zone lock is taken for the free itself, see LOCK_ZONE */
+INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool permanent, iso_alloc_zone_t *zone, bool root_held) {
 #if FUZZ_MODE
-    _verify_all_zones();
+    if(root_held == true) {
+        _verify_all_zones();
+    } else {
+        LOCK_ROOT();
+        _verify_all_zones();
+        UNLOCK_ROOT();
+    }
 #endif
 
     if(LIKELY(zone == NULL)) {
@@ -2101,15 +2413,29 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
     }
 
     if(LIKELY(zone != NULL)) {
+        LOCK_ZONE(zone);
+
+        /* The lookup took no lock. A zone cannot be retired while
+         * it holds a live chunk, so a mismatch here means p was
+         * not a live chunk of this zone */
+        const void *user_pages_start = UNMASK_USER_PTR(zone);
+#if ARM_MTE
+        const void *up = (_root->arm_mte_enabled == true) ? iso_mte_untag_ptr(p) : p;
+#else
+        const void *up = p;
+#endif
+
+        if(UNLIKELY(up < user_pages_start || up >= (user_pages_start + ZONE_USER_SIZE))) {
+            LOG_AND_ABORT("Chunk at 0x%p does not belong to zone[%d] for chunk size %d", p, zone->index, zone->chunk_size);
+        }
+
         iso_free_chunk_from_zone(zone, p, permanent);
 
         /* If the zone has no active allocations, holds smaller chunks,
          * and has allocated and freed more than ZONE_ALLOC_RETIRE
          * chunks in its lifetime then we destroy and replace it with
          * a new zone */
-        if(UNLIKELY(_is_zone_retired(zone))) {
-            _iso_alloc_destroy_zone_unlocked(zone, false, true);
-        }
+        bool retire = _is_zone_retired(zone);
 
 #if MEMORY_TAGGING
         /* If there are no chunks allocated but this zone has seen
@@ -2127,8 +2453,30 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
 #endif
 
 #if UAF_PTR_PAGE
-        if(UNLIKELY((us_rand_uint64(&_root->seed) % UAF_PTR_PAGE_ODDS) == 1)) {
-            _iso_alloc_ptr_search(p);
+        uint64_t seed = zone->seed;
+        const bool search = ((us_rand_uint64(&seed) % UAF_PTR_PAGE_ODDS) == 1);
+        zone->seed = seed;
+#endif
+
+        /* A retired zone is reset in place. That touches only the
+         * zone and its pages so the zone lock is all it needs */
+        if(UNLIKELY(retire == true)) {
+            reset_zone_in_place(zone);
+        }
+
+        UNLOCK_ZONE(zone);
+
+#if UAF_PTR_PAGE
+        if(UNLIKELY(search == true)) {
+            /* The search reads every zone so it runs under the root
+             * lock, which keeps zones from being replaced under it */
+            if(root_held == true) {
+                _iso_alloc_ptr_search(p);
+            } else {
+                LOCK_ROOT();
+                _iso_alloc_ptr_search(p);
+                UNLOCK_ROOT();
+            }
         }
 #endif
 
@@ -2155,67 +2503,86 @@ INTERNAL_HIDDEN iso_alloc_zone_t *_iso_free_internal_unlocked(void *p, bool perm
 }
 
 /* Finds a big zone in the used list and optionally removes it */
+/* The key a big zone has in big_zone_map, its untagged first page */
+static INLINE uint64_t big_zone_key(const void *user_pages_start) {
+#if ARM_MTE
+    return ((uintptr_t) user_pages_start & TAGGED_PTR_MASK);
+#else
+    return (uintptr_t) user_pages_start;
+#endif
+}
+
+/* Pushes a big zone onto the head of the used list and into
+ * the map. The caller holds the big zone used lock */
+static void big_zone_used_push(iso_alloc_big_zone_t *big) {
+    iso_alloc_big_zone_t *head = _root->big_zone_used;
+
+    big->prev = NULL;
+    big->next = head;
+
+    if(head != NULL) {
+        UNMASK_BIG_ZONE_NEXT(head)->prev = MASK_BIG_ZONE_NEXT(big);
+    }
+
+    _root->big_zone_used = MASK_BIG_ZONE_NEXT(big);
+    _root->big_zone_used_count++;
+    iso_ptr_map_insert(&_root->big_zone_map, big_zone_key(big->user_pages_start), (uint64_t) MASK_BIG_ZONE_NEXT(big));
+}
+
+/* Unlinks a big zone from the used list and the map. The
+ * caller holds the big zone used lock */
+static void big_zone_used_unlink(iso_alloc_big_zone_t *big) {
+    if(big->prev != NULL) {
+        UNMASK_BIG_ZONE_NEXT(big->prev)->next = big->next;
+    } else {
+        _root->big_zone_used = big->next;
+    }
+
+    if(big->next != NULL) {
+        UNMASK_BIG_ZONE_NEXT(big->next)->prev = big->prev;
+    }
+
+    big->next = NULL;
+    big->prev = NULL;
+    _root->big_zone_used_count--;
+
+    if(UNLIKELY(iso_ptr_map_remove(&_root->big_zone_map, big_zone_key(big->user_pages_start), NULL) == false)) {
+        LOG_AND_ABORT("Big zone 0x%p is missing from the big zone map", big->user_pages_start);
+    }
+}
+
+/* Finds the big zone whose user pages start at p, optionally
+ * removing it from the used list. One map probe replaces a
+ * walk of every live big zone with a canary check per node */
 INTERNAL_HIDDEN iso_alloc_big_zone_t *iso_find_big_zone(void *p, bool remove) {
-    LOCK_BIG_ZONE_USED();
-
-    if(_root->big_zone_used == NULL) {
-        UNLOCK_BIG_ZONE_USED();
-        return NULL;
-    }
-
-    iso_alloc_big_zone_t *big_zone = _root->big_zone_used;
-    iso_alloc_big_zone_t *prev = NULL;
-
-    if(big_zone != NULL) {
-        big_zone = UNMASK_BIG_ZONE_NEXT(_root->big_zone_used);
-    }
-
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
         p = iso_mte_untag_ptr(p);
     }
 #endif
+    LOCK_BIG_ZONE_USED();
 
-    while(big_zone != NULL) {
-        check_big_canary(big_zone);
-        /* Only an exact match of the address is valid */
-        if(p == big_zone->user_pages_start) {
-            /* A lookup (remove == false) must not modify the list */
-            if(remove == true) {
-                if(prev != NULL) {
-                    prev->next = big_zone->next;
-                }
+    uint64_t value = 0;
 
-                _root->big_zone_used_count--;
+    if(iso_ptr_map_find(&_root->big_zone_map, big_zone_key(p), &value) == false) {
+        UNLOCK_BIG_ZONE_USED();
+        return NULL;
+    }
 
-                /* If this is our first iteration then we are returning the
-                 * used list head. Set its new value to the next entry */
-                if(prev == NULL) {
-                    _root->big_zone_used = big_zone->next;
-                }
+    iso_alloc_big_zone_t *big_zone = UNMASK_BIG_ZONE_NEXT((iso_alloc_big_zone_t *) value);
+    check_big_canary(big_zone);
 
-                big_zone->next = NULL;
-            }
+    /* Only an exact match of the address is valid */
+    if(UNLIKELY(big_zone_key(big_zone->user_pages_start) != big_zone_key(p))) {
+        LOG_AND_ABORT("Big zone map entry for 0x%p names a zone at 0x%p", p, big_zone->user_pages_start);
+    }
 
-            UNLOCK_BIG_ZONE_USED();
-            return big_zone;
-        }
-
-        if(UNLIKELY(p > big_zone->user_pages_start && p < (big_zone->user_pages_start + big_zone->size))) {
-            LOG_AND_ABORT("Invalid free of big zone allocation at 0x%p in mapping 0x%p", p, big_zone->user_pages_start);
-        }
-
-        if(big_zone->next != NULL) {
-            prev = big_zone;
-            big_zone = UNMASK_BIG_ZONE_NEXT(big_zone->next);
-        } else {
-            UNLOCK_BIG_ZONE_USED();
-            return NULL;
-        }
+    if(remove == true) {
+        big_zone_used_unlink(big_zone);
     }
 
     UNLOCK_BIG_ZONE_USED();
-    return NULL;
+    return big_zone;
 }
 
 INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool permanent) {
@@ -2242,6 +2609,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
         mprotect_pages(big_zone->user_pages_start, big_zone->size, PROT_NONE);
 #endif
 
+        big_zone->prev = NULL;
         big_zone->next = _root->big_zone_free;
         _root->big_zone_free = MASK_BIG_ZONE_NEXT(big_zone);
         _root->big_zone_free_count++;
@@ -2283,7 +2651,7 @@ INTERNAL_HIDDEN void iso_free_big_zone(iso_alloc_big_zone_t *big_zone, bool perm
 /* alignment must be a power of 2. Every big zone mapping is
  * page aligned so only alignments larger than a page need
  * any special handling */
-INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment) {
+INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignment, bool *fresh) {
     const size_t new_size = ROUND_UP_PAGE(size);
     const bool aligned = (alignment > g_page_size);
 
@@ -2343,13 +2711,8 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignmen
                 UNLOCK_BIG_ZONE_FREE();
 
                 LOCK_BIG_ZONE_USED();
-
-                /* Insert this big zone at the head of the used list */
-                big->next = _root->big_zone_used;
                 big->ttl++;
-                _root->big_zone_used = MASK_BIG_ZONE_NEXT(big);
-                _root->big_zone_used_count++;
-
+                big_zone_used_push(big);
                 UNLOCK_BIG_ZONE_USED();
 #if PROTECT_FREE_BIG_ZONES
                 mprotect_pages(big->user_pages_start, big->size, PROT_READ | PROT_WRITE);
@@ -2451,13 +2814,17 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignmen
      * offset is reduced into range first and aligned after,
      * aligning the raw random value before the reduction
      * left the final offset with no alignment at all */
-    const uint64_t random_offset = (uint32_t) us_rand_uint64(&_root->seed);
+    /* No lock is held here so the shared root seed cannot be
+     * used. A big allocation already costs a mapping, one more
+     * call for entropy does not matter */
+    const uint64_t random_offset = (uint32_t) rand_uint64();
     const size_t s = g_page_size - (sizeof(iso_alloc_big_zone_t) - 1);
     const size_t offset = ((random_offset * s) >> 32);
     new_big = (iso_alloc_big_zone_t *) ((void *) new_big + ALIGN_SZ_DOWN(offset));
     new_big->free = false;
     new_big->size = size;
     new_big->next = NULL;
+    new_big->prev = NULL;
     new_big->ttl++;
 
     /* Save a pointer to the user pages */
@@ -2469,17 +2836,20 @@ INTERNAL_HIDDEN ASSUME_ALIGNED void *_iso_big_alloc(size_t size, size_t alignmen
     new_big->canary_b = new_big->canary_a;
 
     LOCK_BIG_ZONE_USED();
-
-    new_big->next = _root->big_zone_used;
-    _root->big_zone_used = MASK_BIG_ZONE_NEXT(new_big);
-    _root->big_zone_used_count++;
-
+    big_zone_used_push(new_big);
     UNLOCK_BIG_ZONE_USED();
 #if ARM_MTE
     if(_root->arm_mte_enabled == true) {
         new_big->user_pages_start = iso_mte_set_tag_range(new_big->user_pages_start, new_big->size);
     }
 #endif
+
+    /* A new mapping is zero. A big zone reused from the free
+     * list is not, its pages were only advised away */
+    if(fresh != NULL) {
+        *fresh = true;
+    }
+
     return new_big->user_pages_start;
 }
 
@@ -2519,12 +2889,9 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
     UNLOCK_SANITY_CACHE();
 #endif
 
-    LOCK_ROOT();
-
     iso_alloc_zone_t *zone = iso_find_zone_range(p);
 
     if(UNLIKELY(zone == NULL)) {
-        UNLOCK_ROOT();
         iso_alloc_big_zone_t *big_zone = iso_find_big_zone(p, false);
 
         if(UNLIKELY(big_zone == NULL)) {
@@ -2538,7 +2905,8 @@ INTERNAL_HIDDEN size_t _iso_chunk_size(void *p) {
         return big_zone->size;
     }
 
-    UNLOCK_ROOT();
+    /* The chunk size of a zone never changes while it holds
+     * a live chunk */
     return zone->chunk_size;
 }
 
@@ -2617,14 +2985,21 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 
 #endif
 
+#if DEBUG || FUZZ_MODE || ISO_DTOR_CLEANUP
     for(uint16_t i = 0; i < zones_used; i++) {
+        iso_alloc_zone_t *zone = &_root->zones[i];
+        LOCK_ZONE(zone);
 #if DEBUG || FUZZ_MODE
-        _verify_zone(&_root->zones[i]);
+        _verify_zone(zone);
 #endif
 #if ISO_DTOR_CLEANUP
-        _iso_alloc_destroy_zone_unlocked(&_root->zones[i], false, false);
+        _iso_alloc_destroy_zone_unlocked(zone, false);
 #endif
+        UNLOCK_ZONE(zone);
     }
+#else
+    (void) zones_used;
+#endif
 
 #if ISO_DTOR_CLEANUP
     /* Unmap all zone structures */
@@ -2640,12 +3015,20 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
     UNLOCK_BIG_ZONE_FREE();
 
 #if ISO_DTOR_CLEANUP
-    unmap_guarded_pages(_root->chunk_lookup_table, CHUNK_TO_ZONE_TABLE_SZ);
-#if !THREAD_SUPPORT
-    /* With THREAD_SUPPORT the quarantine and zone cache are
-     * thread local storage and were never mapped by us */
-    unmap_guarded_pages(_root->chunk_quarantine, sizeof(iso_quarantine_t));
-    unmap_guarded_pages(zone_cache, sizeof(iso_zone_cache_t));
+    iso_ptr_map_destroy(&_root->zone_map);
+    iso_ptr_map_destroy(&_root->big_zone_map);
+#if THREAD_SUPPORT
+    /* Only this threads state can be released here. Other
+     * threads release theirs when they exit */
+    iso_thread_state_t *ts = thread_state_get();
+
+    if(ts != NULL) {
+        _root->quarantines = NULL;
+        thread_state_set(NULL);
+        unmap_guarded_pages(ts, sizeof(iso_thread_state_t));
+    }
+#else
+    unmap_guarded_pages(thread_state_single, sizeof(iso_thread_state_t));
 #endif
 
 #if THREAD_SUPPORT && !USE_SPINLOCK
@@ -2668,7 +3051,7 @@ INTERNAL_HIDDEN void _iso_alloc_destroy(void) {
 #if ISO_DTOR_CLEANUP && THREAD_SUPPORT
     /* The root is gone so a thread exiting after this must
      * not run the quarantine destructor against it */
-    pthread_key_delete(thread_quarantine_key);
+    pthread_key_delete(thread_state_key);
 #if !USE_SPINLOCK
 #if ALLOC_SANITY
     pthread_mutex_destroy(&sane_cache_mutex);

@@ -132,9 +132,11 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
         return 0;
     }
 
-    UNMASK_ZONE_PTRS(zone);
+    /* Callers hold the root lock */
+    LOCK_ZONE(zone);
 
-    bitmap_index_t *bm = (bitmap_index_t *) zone->bitmap_start;
+    bitmap_index_t *bm = (bitmap_index_t *) UNMASK_BITMAP_PTR(zone);
+    const void *user_pages_start = UNMASK_USER_PTR(zone);
     uint32_t was_used = 0;
     int64_t bms = zone->bitmap_size / sizeof(bitmap_index_t);
 
@@ -169,14 +171,20 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
 
             int64_t bit_two = GET_BIT(bts, (j + 1));
             bit_slot_t bit_slot = ((bitmap_index_t) i * BITS_PER_QWORD) + j;
-            const void *leak = (zone->user_pages_start + ((bit_slot >> 1) * zone->chunk_size));
+
+            /* Bits past the last chunk are set but have no chunk */
+            if((size_t) (bit_slot >> 1) >= zone->chunk_count) {
+                continue;
+            }
+
+            const void *leak = POINTER_FROM_BITSLOT(zone, bit_slot);
 
             /* A chunk with both bits set is a canary. Its canary
              * is only written once the free list reaches its page,
              * so on a page that never got that far there is nothing
              * to verify and it is certainly not a leak */
             if(bit_two == 1) {
-                const size_t page = ((size_t) (leak - zone->user_pages_start)) >> g_page_size_shift;
+                const size_t page = ((size_t) (leak - user_pages_start)) >> g_page_size_shift;
 
                 if(canary_page_materialized(zone, page) == false || check_canary_no_abort(zone, leak) != ERR) {
                     continue;
@@ -197,7 +205,7 @@ INTERNAL_HIDDEN uint64_t _iso_alloc_zone_leak_detector(iso_alloc_zone_t *zone, b
             was_used, (int32_t) (((float) was_used / zone->chunk_count) * 100), in_use);
     }
 
-    MASK_ZONE_PTRS(zone);
+    UNLOCK_ZONE(zone);
 #endif
 
 #if HEAP_PROFILER
